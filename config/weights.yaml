@@ -1,0 +1,17 @@
+
+extensions:
+  .py: 0.9
+  .md: 0.98
+  .rst: 0.85
+  .txt: 1.0
+  .yaml: 0.7
+  .yml: 0.7
+  .json: 0.7
+
+path_includes:
+  example: 1.2
+  tutorial: 1.2
+  tests: 1.05
+  build: 0.8
+  config: 0.8
+  README: 1.05

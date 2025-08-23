@@ -1,0 +1,11 @@
+<https://github.com/jluastro/PopSyCLE/blob/master/popsycle/__init__.py|__init__.py>,: 0.5
+<https://github.com/synthpop-galaxy/synthpop/blob/master/synthpop/modules/evolution/__init__.py|__init__.py>,: 0.5
+<https://github.com/synthpop-galaxy/synthpop/blob/master/synthpop/modules/initial_mass_function/__init__.py|__init__.py>,: 0.5
+<https://github.com/synthpop-galaxy/synthpop/blob/master/synthpop/modules/kinematics/__init__.py|__init__.py>,: 0.5
+<https://github.com/synthpop-galaxy/synthpop/blob/master/synthpop/modules/population_density/__init__.py|__init__.py>,: 0.5
+microlensing_tools/GCMicrolensing/GCMicrolensing/__init__.py,: 0.7
+microlensing_tools/RTModel/RTModel/templates/__init__.py,: 0.7
+microlensing_tools/eesunhong/docs/source/user_guides/useful_links_for_microlensing.md,: 0.5
+microlensing_tools/pyLIMA/pyLIMA/pyLIMASS/__init__.py,: 0.7
+microlensing_tools/synthpop/synthpop/modules/initial_mass_function/__init__.py,: 0.7
+microlensing_tools/synthpop/synthpop/modules/metallicity/__init__.py,: 0.7

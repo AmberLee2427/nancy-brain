@@ -1,0 +1,165 @@
+# Repository Configuration for Roman Galactic Exoplanet Survey Slack Bot
+# This file defines all repositories that should be cloned and maintained in the knowledge base
+
+microlens_submit:
+  - name: microlens-submit
+    url: https://github.com/rges-pit/microlens-submit.git
+    description: "Submission tool for the 2nd Roman microlensing data challenge"
+
+microlensing_tools:
+  - name: pyLIMA
+    url: https://github.com/ebachelet/pyLIMA.git
+    description: "pyLIMA is the first open source software for modeling microlensing events."
+    
+  - name: MulensModel
+    url: https://github.com/rpoleski/MulensModel.git
+    description: "MulensModel is package for modeling microlensing (or μ-lensing) events."
+    
+  - name: VBMicrolensing
+    url: https://github.com/valboz/VBMicrolensing.git
+    description: "Microlensing computation code, including single, binary and multiple lenses"
+
+  - name: RTModel
+    url: https://github.com/valboz/RTModel.git
+    description: "Microlensing modeling: fast and efficient exploration of the parameter space"
+
+  - name: gulls
+    url: https://github.com/gulls-microlensing/gulls.git
+    description: "A C++ microlensing simulation code optimized for space-based surveys, with a stand-alone image simulation component."
+
+  - name: BAGLE_Microlensing 
+    url: https://github.com/MovingUniverseLab/BAGLE_Microlensing.git
+    description: "BAGLE: Bayesian Analysis of Gravitational Lensing Events"
+
+  - name: synthpop
+    url: https://github.com/synthpop-galaxy/synthpop.git
+    description: "A modular Galactic population synthesis code"
+
+  - name: popclass
+    url: https://github.com/LLNL/popclass.git
+    description: "A python package that allows flexible, probabilistic classification of a microlensing event"
+
+  - name: triplelens
+    url: https://github.com/rkkuang/triplelens.git
+    description: "Calculating light curves for triple microlensing systems"
+
+  - name: PopSyCLE
+    url: https://github.com/jluastro/PopSyCLE.git
+    description: "Population Synthesis for Compact-object Lensing Events"
+
+  - name: eesunhong
+    url: https://github.com/golmschenk/eesunhong.git
+    description: "A Fortran microlensing modeling code"
+
+  - name: GCMicrolensing
+    url: https://github.com/GCMicrolensing-Org/GCMicrolensing.git
+    description: "Tools for simulating gravitational microlensing events with single, binary, and triple lens systems. This package is under active development."
+
+  - name: sfit_minimizer
+    url: https://github.com/jenniferyee/sfit_minimizer.git
+    description: "Minimization routine based on the algorithm A. Gould wrote in Fortran for minimizing chi2."
+
+general_tools:
+  - name: emcee
+    url: https://github.com/dfm/emcee.git
+    description: "The Python ensemble sampling toolkit for affine-invariant MCMC."
+
+  - name: dynesty
+    url: https://github.com/joshspeagle/dynesty.git
+    description: "A dynamic nested sampling package for computing Bayesian evidence"
+
+  - name: corner
+    url: https://github.com/dfm/corner.py.git
+    description: "The Python corner package: making corner plots in Python."
+
+  - name: spacekit
+    url: https://github.com/spacetelescope/spacekit.git
+    description: "Python package for astronomical machine learning and data science"
+
+  - name: variable_catalog_xmatch
+    url: https://github.com/rges-pit/variable_catalog_xmatch.git
+    description: "Code to cross-match between existing catalogs of variable stars in the Bulge"
+
+  - name: CMDFitter
+    url: https://github.com/MichaelDAlbrow/CMDFitter.git
+    description: "Fit a probabilistic generative model to a colour-magnitude diagram."
+
+  - name: pyDIA
+    url: https://github.com/MichaelDAlbrow/pyDIA.git
+    description: "pyDIA is a modular python package for performing star detection, difference imaging and photometry on astronomical images."
+
+  - name: webbpdf
+    url: https://github.com/spacetelescope/webbpsf.git
+    description: "James Webb Space Telescope PSF simulation tool"
+  
+  - name: soc_roman_tools
+    url: https://github.com/spacetelescope/soc_roman_tools.git
+    description: "Tools for the Nancy Grace Roman Space Telescope / Wide Field Instrument (WFI) Imaging Mode"
+    
+  - name: RomanISim-simulate
+    url: https://github.com/MichaelDAlbrow/RomanISim-simulate.git
+    description: "Scripts for simulating Roman images using synthpop and RomanISIM."
+
+  - name: romanisim
+    url: https://github.com/spacetelescope/romanisim.git
+    description: "Nancy Grace Roman Space Telescope WFI Data Simulator"
+
+  - name: romancal
+    url: https://github.com/spacetelescope/romancal.git
+    description: "Python library to process science observations from the Nancy Grace Roman Space Telescope"
+
+  - name: Dazzle
+    url: https://github.com/MichaelDAlbrow/Dazzle.git
+    description: "A python package for over-sampled image construction, difference-imaging, transient detection, and difference-image PSF photometry for the Nancy Grace Roman Space Telescope"
+
+jupyter_notebooks:
+  - name: minicourses
+    url: https://github.com/rges-pit/minicourses.git
+    description: "Repository for microlensing minicourse content"
+    
+  - name: microlensing-tutorials
+    url: https://github.com/ebachelet/MLHackSession2019.git
+    description: "pyLIMA tutorial. Learn how pyLIMA works by fitting an example"
+    
+  - name: TheMicrolensersGuideToTheGalaxy
+    url: https://github.com/AmberLee2427/TheMicrolensersGuideToTheGalaxy.git
+    description: "The goal of this project is to create an all-encompassing collection of Jupyter notebooks—your trusty companions for engaging exercises related to microlensing."
+
+  - name: roman_notebooks
+    url: https://github.com/spacetelescope/roman_notebooks.git
+    description: "Roman Research Nexus documentation and tools"
+
+  - name: mast_notebooks
+    url: https://github.com/spacetelescope/mast_notebooks.git
+    description: "A curated collection of Jupyter Notebooks, brought to you by the team at MAST."
+
+  - name: roman-data-workshop
+    url: https://github.com/spacetelescope/roman-data-workshop.git
+    description: "Notebooks for learning how to handle the Roman data"
+
+  - name: romancal-notebooks
+    url: https://github.com/spacetelescope/romancal-notebooks.git
+    description: "The notebooks in this repository demonstrate how to run the Roman pipeline (romancal), and related tasks such as creating reference files"
+
+  - name: roman_tools
+    url: https://github.com/spacetelescope/roman_tools.git
+    description: "Instructions and tutorials for Roman software tools distributed by STScI for the science community"
+
+web_resources:
+  - name: microlensing-online
+    url: https://github.com/rachel3834/microlensing-online.git
+    description: "Software behind the Microlensing-online website"
+    
+  - name: rges-pit.github.io
+    url: https://github.com/rges-pit/rges-pit.github.io.git
+    description: "RGES PIT (Roman Galactic Exoplanet Survey Project Infrastructure Team) official website."
+
+  - name: roman-technical-information
+    url: https://github.com/RomanSpaceTelescope/roman-technical-information.git
+    description: "This repository hosts technical information related to the Nancy Grace Roman Space Telescope (Roman), its Wide Field Instrument (WFI), and its Coronagraph technology demonstration (Coronagraph)."
+
+# Add your custom repositories here
+# custom_repos:
+#   - name: my-microlensing-tool
+#     url: https://github.com/your-username/your-repo
+#     description: "Your custom microlensing analysis tool"
