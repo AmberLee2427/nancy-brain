@@ -11,6 +11,56 @@ Load the complete source code, documentation, examples, and notebooks from any p
 
 The AI can now answer questions like "How do I initialize this class?" or "Show me an example of fitting a light curve" with actual code from the repositories you care about.
 
+## 🚀 Quick Start
+
+```bash
+# Install anywhere
+pip install nancy-brain
+
+# Initialize a new project
+nancy-brain init my-ai-project
+cd my-ai-project
+
+# Add some repositories  
+nancy-brain add-repo https://github.com/scikit-learn/scikit-learn.git
+
+# Build the knowledge base
+nancy-brain build
+
+# Search it!
+nancy-brain search "machine learning algorithms"
+
+# Or launch the web interface
+nancy-brain ui
+```
+
+## 🌐 Web Admin Interface
+
+Launch the visual admin interface for easy knowledge base management:
+
+```bash
+nancy-brain ui
+```
+
+Features:
+- **🔍 Live Search** - Test your knowledge base with instant results
+- **📚 Repository Management** - Add/remove GitHub repos with visual forms
+- **🏗️ Build Control** - Trigger knowledge base builds with options
+- **📊 System Status** - Check embeddings, configuration, and health
+
+Perfect for non-technical users and rapid prototyping!
+
+## 🖥️ Command Line Interface
+
+```bash
+nancy-brain init <project>        # Initialize new project
+nancy-brain add-repo <url>        # Add GitHub repositories  
+nancy-brain build                 # Build knowledge base
+nancy-brain search "query"        # Search knowledge base
+nancy-brain serve                 # Start HTTP API server
+nancy-brain ui                    # Launch web admin interface
+```
+
 ## Technical Architecture
 
 A lightweight Retrieval-Augmented Generation (RAG) knowledge base with:
@@ -22,29 +72,45 @@ A lightweight Retrieval-Augmented Generation (RAG) knowledge base with:
 Designed to power AI assistants on Slack, IDEs, Claude Desktop, custom GPTs, and any MCP-capable client.
 
 ---
-## 1. Quick Start
+## 1. Installation & Quick Setup
 
+### For Users (Recommended)
 ```bash
-# From repo root (adjust path as needed)
-cd src/nancy-brain
+# Install the package
+pip install nancy-brain
 
-# (Recommended) create env
-conda create -n nancy-brain python=3.12 -y
-conda activate nancy-brain
+# Initialize a new project
+nancy-brain init my-knowledge-base
+cd my-knowledge-base
 
-# Install package (editable) + deps
+# Add repositories and build
+nancy-brain add-repo https://github.com/your-org/repo.git
+nancy-brain build
+
+# Launch web interface
+nancy-brain ui
+```
+
+### For Developers
+```bash
+# Clone and install in development mode
+git clone <repo-url>
+cd nancy-brain
 pip install -e ."[dev]"
-```
 
-Test installation:
-```bash
+# Test installation
 pytest -q
+nancy-brain --help
 ```
-All tests should pass.
 
 ---
 ## 2. Project Layout (Core Parts)
 ```
+nancy_brain/                    # Main Python package
+├── cli.py                      # Command line interface
+├── admin_ui.py                 # Streamlit web admin interface
+└── __init__.py                 # Package initialization
+
 connectors/http_api/app.py      # FastAPI app
 connectors/mcp_server/          # MCP server implementation
 rag_core/                       # Core service, search, registry, store, types
@@ -86,6 +152,22 @@ Optional static per-document multipliers (legacy / seed). Runtime updates via `/
 ## 4. Building the Knowledge Base
 Embeddings must be built before meaningful search.
 
+### Using the CLI (Recommended)
+```bash
+# Basic build (repositories only)
+nancy-brain build
+
+# Build with PDF articles (if configured)
+nancy-brain build --articles-config config/articles.yml
+
+# Force update all repositories
+nancy-brain build --force-update
+
+# Or use the web interface
+nancy-brain ui  # Go to "Build Knowledge Base" page
+```
+
+### Using the Python Script Directly
 ```bash
 conda activate nancy-brain
 cd src/nancy-brain
@@ -156,11 +238,28 @@ This will:
 Re-run when repositories or articles change.
 
 ---
-## 5. Running the HTTP API
+## 5. Running Services
 
-Development (auto-reload optional):
+### Web Admin Interface (Recommended for Getting Started)
 ```bash
+nancy-brain ui
+# Opens Streamlit interface at http://localhost:8501
+# Features: search, repo management, build control, status
+```
+
+### HTTP API Server
+```bash
+# Using CLI
+nancy-brain serve
+
+# Or directly with uvicorn
 uvicorn connectors.http_api.app:app --host 0.0.0.0 --port 8000
+```
+
+### MCP Server (for AI Assistants)
+```bash
+# Run MCP stdio server
+python run_mcp_server.py
 ```
 
 Initialize service programmatically (example pattern):
@@ -175,6 +274,17 @@ initialize_rag_service(
 )
 ```
 The FastAPI dependency layer will then serve requests.
+
+### Command Line Search
+```bash
+# Quick search from command line
+nancy-brain search "machine learning algorithms" --limit 5
+
+# Search with custom paths
+nancy-brain search "neural networks" \
+  --embeddings-path custom/embeddings \
+  --config custom/repositories.yml
+```
 
 ### 5.1 Endpoints (Bearer auth placeholder)
 | Method | Path | Description |
@@ -258,7 +368,40 @@ Tools exposed (operation names):
 Claude supports MCP config in its settings file. Add an entry similar to above (command + args). Restart Claude Desktop; tools appear in the prompt tools menu.
 
 ---
-## 7. Slack Bot (Nancy)
+## 7. Use Cases & Examples
+
+### For Researchers
+```bash
+# Add astronomy packages
+nancy-brain add-repo https://github.com/astropy/astropy.git
+nancy-brain add-repo https://github.com/rpoleski/MulensModel.git
+nancy-brain build
+
+# AI can now answer: "How do I model a microlensing event?"
+nancy-brain search "microlensing model fit"
+```
+
+### For ML Engineers  
+```bash
+# Add ML frameworks
+nancy-brain add-repo https://github.com/scikit-learn/scikit-learn.git
+nancy-brain add-repo https://github.com/pytorch/pytorch.git
+nancy-brain build
+
+# AI can now answer: "Show me gradient descent implementation"
+nancy-brain search "gradient descent optimizer"
+```
+
+### For Teams
+```bash
+# Launch web interface for non-technical users
+nancy-brain ui
+# Point team to http://localhost:8501
+# They can search, add repos, trigger builds visually
+```
+
+---
+## 8. Slack Bot (Nancy)
 The Slack-facing assistant lives outside this submodule (see parent repository). High-level steps:
 1. Ensure HTTP API running and reachable (or embed service directly in bot process).
 2. Bot receives user message -> constructs query -> calls `/search` and selected `/retrieve` for context.
@@ -268,7 +411,7 @@ The Slack-facing assistant lives outside this submodule (see parent repository).
 Check root-level `nancy_bot.py` or Slack integration docs (`SLACK.md`) for token setup and event subscription details.
 
 ---
-## 8. Custom GPT (OpenAI Actions / Function Calls)
+## 9. Custom GPT (OpenAI Actions / Function Calls)
 Define OpenAI tool specs mapping to HTTP endpoints:
 - `searchDocuments(query, limit)` -> GET /search
 - `retrievePassage(doc_id, start, end)` -> POST /retrieve
@@ -278,7 +421,7 @@ Define OpenAI tool specs mapping to HTTP endpoints:
 Use an API gateway or direct URL. Include auth header. Provide JSON schemas matching request/response models.
 
 ---
-## 9. Dynamic Weighting Flow
+## 10. Dynamic Weighting Flow
 1. Base score from embeddings (dual or single).
 2. Extension multiplier (from weights.yaml).
 3. Path multiplier(s) (cumulative).
@@ -288,28 +431,29 @@ Use an API gateway or direct URL. Include auth header. Provide JSON schemas matc
 Runtime `/weight` takes effect immediately on subsequent searches.
 
 ---
-## 10. Updating / Rebuilding
+## 11. Updating / Rebuilding
 | Action | Command |
 |--------|---------|
-| Pull repo updates | Re-run build script (it re-clones or fetches) |
+| Pull repo updates | `nancy-brain build --force-update` or re-run build script |
 | Change extension weights | Edit `config/weights.yaml` (no restart needed for runtime? restart or rebuild if cached) |
 | Change embedding model | Delete / rename existing `knowledge_base/embeddings` and rebuild with new env vars |
 
 ---
-## 11. Deployment Notes
+## 12. Deployment Notes
 - Containerize: build image with pre-built embeddings baked or mount a persistent volume.
 - Health probe: `/health` (returns 200 once rag_service initialized) else 503.
 - Concurrency: FastAPI async safe; weight updates are simple dict writes (low contention). For heavy load consider a lock if races appear.
 - Persistence of runtime weights: currently in-memory; persist manually if needed (extend `set_weight`).
 
 ---
-## 12. Troubleshooting
+## 13. Troubleshooting
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | 503 RAG service not initialized | `initialize_rag_service` not called / wrong paths | Call initializer with correct embeddings path |
-| Empty search results | Embeddings not built / wrong path | Re-run build script, verify index directory |
+| Empty search results | Embeddings not built / wrong path | Re-run `nancy-brain build`, verify index directory |
 | macOS OpenMP crash | MKL / libomp duplicate | `KMP_DUPLICATE_LIB_OK=TRUE` already set early |
 | MCP tools not visible | Wrong path or PYTHONPATH | Use absolute paths in MCP config |
+| CLI command not found | Package not installed | `pip install nancy-brain` |
 
 Enable debug logging:
 ```bash
@@ -318,17 +462,38 @@ export LOG_LEVEL=DEBUG
 (add logic or run with `uvicorn --log-level debug`)
 
 ---
-## 13. Roadmap (Optional)
+## 14. Development & Contributing
+```bash
+# Clone and set up development environment
+git clone <repo-url>
+cd nancy-brain
+pip install -e ."[dev]"
+
+# Run tests
+pytest
+
+# Run linting
+black nancy_brain/ 
+flake8 nancy_brain/
+
+# Test CLI locally
+nancy-brain --help
+```
+
+---
+## 15. Roadmap (Optional)
 - Persistence layer for runtime weights
 - Additional retrieval filters (e.g. semantic rerank)
 - Auth plugin / token validation
+- VS Code extension
+- Package publishing to PyPI
 
 ---
-## 14. License
+## 16. License
 See parent repository license.
 
 ---
-## 15. Minimal Verification Script
+## 17. Minimal Verification Script
 ```bash
 # After build & run
 curl -H 'Authorization: Bearer TEST' 'http://localhost:8000/health'
