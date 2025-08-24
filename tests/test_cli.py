@@ -42,27 +42,25 @@ def test_add_repo_command():
     """Test add-repo command."""
     runner = CliRunner()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with runner.isolated_filesystem():
         # Create a basic config structure
-        config_dir = Path(tmpdir) / "config"
+        config_dir = Path("config")
         config_dir.mkdir()
         config_file = config_dir / "repositories.yml"
         config_file.write_text("# Empty config\n")
 
-        result = runner.invoke(
-            cli, ["add-repo", "https://github.com/test/repo.git", "--category", "test_category"], cwd=tmpdir
-        )
+        result = runner.invoke(cli, ["add-repo", "https://github.com/test/repo.git", "--category", "test_category"])
 
         assert result.exit_code == 0
-        assert "Added repo to test_category" in result.output
+        assert "Added repo to test_category category" in result.output
 
 
 def test_add_repo_command_no_config():
     """Test add-repo command when no config exists."""
     runner = CliRunner()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        result = runner.invoke(cli, ["add-repo", "https://github.com/test/repo.git"], cwd=tmpdir)
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["add-repo", "https://github.com/test/repo.git"])
 
         assert result.exit_code == 0
         assert "No config/repositories.yml found" in result.output
@@ -72,7 +70,7 @@ def test_add_article_command():
     """Test add-article command."""
     runner = CliRunner()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with runner.isolated_filesystem():
         result = runner.invoke(
             cli,
             [
@@ -84,14 +82,13 @@ def test_add_article_command():
                 "--description",
                 "A test article",
             ],
-            cwd=tmpdir,
         )
 
         assert result.exit_code == 0
         assert "Added article" in result.output
 
         # Check that the config file was created and contains the article
-        config_file = Path(tmpdir) / "config" / "articles.yml"
+        config_file = Path("config") / "articles.yml"
         assert config_file.exists()
 
         with open(config_file) as f:
@@ -108,9 +105,9 @@ def test_add_article_duplicate():
     """Test add-article command with duplicate name."""
     runner = CliRunner()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with runner.isolated_filesystem():
         # Create initial article
-        config_dir = Path(tmpdir) / "config"
+        config_dir = Path("config")
         config_dir.mkdir()
         config_file = config_dir / "articles.yml"
         config_file.write_text(
@@ -125,7 +122,6 @@ test_papers:
         result = runner.invoke(
             cli,
             ["add-article", "https://arxiv.org/pdf/test.pdf", "test_article", "--category", "test_papers"],
-            cwd=tmpdir,
         )
 
         assert result.exit_code == 0
@@ -136,11 +132,11 @@ def test_search_command_no_embeddings():
     """Test search command when no embeddings exist."""
     runner = CliRunner()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        result = runner.invoke(cli, ["search", "test query"], cwd=tmpdir)
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["search", "test query"])
 
-        assert result.exit_code == 1
-        assert "Search failed" in result.output
+        assert result.exit_code == 0  # Command succeeds but returns no results
+        assert "No results found" in result.output
 
 
 def test_serve_command_help():

@@ -112,26 +112,26 @@ def search(query, limit, embeddings_path, config, weights):
     import asyncio
 
     async def do_search():
-        try:
-            # Initialize service with proper paths
-            service = RAGService(
-                embeddings_path=Path(embeddings_path), config_path=Path(config), weights_path=Path(weights)
-            )
-            results = await service.search_docs(query, limit=limit)
+        # Initialize service with proper paths
+        service = RAGService(
+            embeddings_path=Path(embeddings_path), config_path=Path(config), weights_path=Path(weights)
+        )
+        results = await service.search_docs(query, limit=limit)
 
-            if not results:
-                click.echo("No results found.")
-                return
+        if not results:
+            click.echo("No results found.")
+            return
 
-            for i, result in enumerate(results, 1):
-                click.echo(f"\n{i}. {result['id']} (score: {result['score']:.3f})")
-                click.echo(f"   {result['text'][:200]}...")
-        except Exception as e:
-            click.echo(f"❌ Search failed: {e}")
-            sys.exit(1)
+        for i, result in enumerate(results, 1):
+            click.echo(f"\n{i}. {result['id']} (score: {result['score']:.3f})")
+            click.echo(f"   {result['text'][:200]}...")
 
     # Run the async search
-    asyncio.run(do_search())
+    try:
+        asyncio.run(do_search())
+    except Exception as e:
+        click.echo(f"❌ Search failed: {e}")
+        sys.exit(1)
 
 
 @cli.command()
@@ -182,9 +182,40 @@ def add_repo(repo_url, category):
     # Parse repo name from URL
     repo_name = repo_url.split("/")[-1].replace(".git", "")
 
-    # Add to config (basic implementation - could be more sophisticated)
-    click.echo(f"✅ Added {repo_name} to {category} category")
-    click.echo("📝 Run 'nancy-brain build --force-update' to fetch the new repository")
+    # Load existing config
+    try:
+        with open(config_file, "r") as f:
+            config = yaml.safe_load(f) or {}
+    except Exception as e:
+        click.echo(f"❌ Error reading {config_file}: {e}")
+        return
+
+    # Add category if it doesn't exist
+    if category not in config:
+        config[category] = []
+
+    # Create repo entry
+    repo_entry = {"name": repo_name, "url": repo_url}
+
+    # Check if repo already exists
+    existing = [r for r in config[category] if r.get("name") == repo_name]
+    if existing:
+        click.echo(f"❌ Repository '{repo_name}' already exists in category '{category}'")
+        return
+
+    # Add the new repository
+    config[category].append(repo_entry)
+
+    # Write back to file
+    try:
+        with open(config_file, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        click.echo(f"✅ Added {repo_name} to {category} category")
+        click.echo("📝 Run 'nancy-brain build --force-update' to fetch the new repository")
+
+    except Exception as e:
+        click.echo(f"❌ Error writing to {config_file}: {e}")
 
 
 @cli.command()
