@@ -42,6 +42,11 @@ def test_service_methods(tmp_path):
         return_value=[{"id": "cat1/repoA/file", "text": "sample text", "score": 0.8}]  # No .txt in id
     )
 
+    # Mock the general_embeddings for list_tree to work
+    mock_embeddings = Mock()
+    mock_embeddings.search = Mock(return_value=[{"id": "cat1/repoA/file"}])
+    service.search.general_embeddings = mock_embeddings
+
     # Test async methods
     import asyncio
 
@@ -347,6 +352,18 @@ def test_list_tree_structure(tmp_path):
             "cat1/repo1/README.md",
         ]
     )
+
+    # Mock the general_embeddings for list_tree to work
+    mock_embeddings = Mock()
+    mock_embeddings.search = Mock(
+        return_value=[
+            {"id": "cat1/repo1/src/main.py"},
+            {"id": "cat1/repo1/src/utils.py"},
+            {"id": "cat1/repo1/tests/test_main.py"},
+            {"id": "cat1/repo1/README.md"},
+        ]
+    )
+    service.search.general_embeddings = mock_embeddings
 
     import asyncio
 
