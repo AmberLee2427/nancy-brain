@@ -82,7 +82,8 @@ st.markdown("*Turn GitHub repos into AI-searchable knowledge bases*")
 # Sidebar navigation
 st.sidebar.title("Navigation")
 page = st.sidebar.selectbox(
-    "Choose a page:", ["🔍 Search", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"]
+    "Choose a page:",
+    ["🔍 Search", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"],
 )
 
 if page == "🔍 Search":
@@ -187,17 +188,25 @@ elif page == "📚 Repository Management":
             col1, col2 = st.columns(2)
             with col1:
                 article_category = st.text_input(
-                    "Category:", placeholder="e.g., foundational_papers", key="article_category"
+                    "Category:",
+                    placeholder="e.g., foundational_papers",
+                    key="article_category",
                 )
                 article_name = st.text_input(
-                    "Article Name:", placeholder="e.g., Paczynski_1986_microlensing", key="article_name"
+                    "Article Name:",
+                    placeholder="e.g., Paczynski_1986_microlensing",
+                    key="article_name",
                 )
             with col2:
                 article_url = st.text_input(
-                    "Article URL:", placeholder="https://arxiv.org/pdf/paper.pdf", key="article_url"
+                    "Article URL:",
+                    placeholder="https://arxiv.org/pdf/paper.pdf",
+                    key="article_url",
                 )
                 article_description = st.text_input(
-                    "Description:", placeholder="Brief description of the article", key="article_description"
+                    "Description:",
+                    placeholder="Brief description of the article",
+                    key="article_description",
                 )
 
             if st.form_submit_button("➕ Add Article"):

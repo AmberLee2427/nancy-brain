@@ -83,7 +83,10 @@ class NancyMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Search query for the knowledge base"},
+                            "query": {
+                                "type": "string",
+                                "description": "Search query for the knowledge base",
+                            },
                             "limit": {
                                 "type": "integer",
                                 "description": "Maximum number of results to return",
@@ -118,8 +121,15 @@ class NancyMCPServer:
                                 "type": "string",
                                 "description": "Document ID (e.g., 'microlensing_tools/MulensModel/README.md')",
                             },
-                            "start": {"type": "integer", "description": "Starting line number (0-based)", "default": 0},
-                            "end": {"type": "integer", "description": "Ending line number (exclusive)"},
+                            "start": {
+                                "type": "integer",
+                                "description": "Starting line number (0-based)",
+                                "default": 0,
+                            },
+                            "end": {
+                                "type": "integer",
+                                "description": "Ending line number (exclusive)",
+                            },
                         },
                         "required": ["doc_id"],
                     },
@@ -158,7 +168,11 @@ class NancyMCPServer:
                                 "description": "Path prefix to filter results (e.g., 'microlensing_tools/MulensModel')",
                                 "default": "",
                             },
-                            "max_depth": {"type": "integer", "description": "Maximum depth to traverse", "default": 3},
+                            "max_depth": {
+                                "type": "integer",
+                                "description": "Maximum depth to traverse",
+                                "default": 3,
+                            },
                         },
                     },
                 ),
@@ -196,7 +210,8 @@ class NancyMCPServer:
             if not self.rag_service:
                 return [
                     types.TextContent(
-                        type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                        type="text",
+                        text="❌ Nancy Brain service not initialized. Please check server configuration.",
                     )
                 ]
 
@@ -223,7 +238,8 @@ class NancyMCPServer:
         if not self.rag_service:
             return [
                 types.TextContent(
-                    type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                    type="text",
+                    text="❌ Nancy Brain service not initialized. Please check server configuration.",
                 )
             ]
 
@@ -234,7 +250,11 @@ class NancyMCPServer:
         threshold = args.get("threshold", 0.0)
 
         results = await self.rag_service.search_docs(
-            query=query, limit=limit, toolkit=toolkit, doctype=doctype, threshold=threshold
+            query=query,
+            limit=limit,
+            toolkit=toolkit,
+            doctype=doctype,
+            threshold=threshold,
         )
 
         if not results:
@@ -304,7 +324,7 @@ class NancyMCPServer:
 
         tree_data = await self.rag_service.list_tree(path, max_depth)
 
-        response_text = f"🌳 **Document Tree"
+        response_text = "🌳 **Document Tree"
         if path:
             response_text += f" (path: {path})"
         response_text += ":**\n\n"
@@ -334,7 +354,8 @@ class NancyMCPServer:
         if not self.rag_service:
             return [
                 types.TextContent(
-                    type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                    type="text",
+                    text="❌ Nancy Brain service not initialized. Please check server configuration.",
                 )
             ]
 
@@ -348,7 +369,7 @@ class NancyMCPServer:
         # Show the actual clamped weight
         clamped_weight = max(0.5, min(weight, 2.0))
 
-        response_text = f"⚖️ **Weight Updated:**\n"
+        response_text = "⚖️ **Weight Updated:**\n"
         response_text += f"Document: `{doc_id}`\n"
         response_text += f"Requested Weight: `{weight}`\n"
         if clamped_weight != weight:
@@ -382,13 +403,20 @@ class NancyMCPServer:
 
         return [types.TextContent(type="text", text=response_text)]
 
-    async def initialize(self, config_path: Path, embeddings_path: Path, weights_path: Optional[Path] = None):
+    async def initialize(
+        self,
+        config_path: Path,
+        embeddings_path: Path,
+        weights_path: Optional[Path] = None,
+    ):
         """Initialize the RAG service."""
         try:
             self.rag_service = RAGService(
-                config_path=config_path, embeddings_path=embeddings_path, weights_path=weights_path
+                config_path=config_path,
+                embeddings_path=embeddings_path,
+                weights_path=weights_path,
             )
-            print(f"✅ Nancy Brain MCP Server initialized successfully")
+            print("✅ Nancy Brain MCP Server initialized successfully")
             print(f"📂 Config: {config_path}")
             print(f"🔍 Embeddings: {embeddings_path}")
             if weights_path:
@@ -408,7 +436,8 @@ class NancyMCPServer:
                     server_name="nancy-brain",
                     server_version="1.0.0",
                     capabilities=self.server.get_capabilities(
-                        notification_options=NotificationOptions(), experimental_capabilities={}
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
                     ),
                 ),
             )

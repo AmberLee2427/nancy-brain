@@ -215,7 +215,11 @@ def test_health_response_schema():
 
 def test_error_response_schema():
     """Test ErrorResponseSchema validation."""
-    data = {"error": "Something went wrong", "trace_id": "trace-123", "detail": "More info"}
+    data = {
+        "error": "Something went wrong",
+        "trace_id": "trace-123",
+        "detail": "More info",
+    }
     response = ErrorResponseSchema(**data)
     assert response.error == "Something went wrong"
     assert response.trace_id == "trace-123"

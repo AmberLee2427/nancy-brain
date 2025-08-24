@@ -92,7 +92,13 @@ def test_save_articles_config():
         config_file = Path(tmpdir) / "config" / "articles.yml"
 
         config = {
-            "papers": [{"name": "test-paper", "url": "https://arxiv.org/pdf/test.pdf", "description": "A test paper"}]
+            "papers": [
+                {
+                    "name": "test-paper",
+                    "url": "https://arxiv.org/pdf/test.pdf",
+                    "description": "A test paper",
+                }
+            ]
         }
 
         save_articles_config(config, config_file)

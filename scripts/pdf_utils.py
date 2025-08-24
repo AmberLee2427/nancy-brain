@@ -67,7 +67,7 @@ def test_pdf_extraction(pdf_path: str) -> bool:
     # Extract text
     content = extract_pdf_text(pdf_path)
     if content:
-        logger.info(f"✅ PDF extraction test successful")
+        logger.info("✅ PDF extraction test successful")
         logger.info(f"📄 Content preview: {content[:200]}...")
         return True
     else:

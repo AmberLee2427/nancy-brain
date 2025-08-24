@@ -112,10 +112,19 @@ class ErrorResponseSchema(BaseModel):
 # OpenAPI examples for documentation
 SEARCH_EXAMPLE = {
     "summary": "Search for MulensModel documentation",
-    "value": {"query": "MulensModel PSPL parameters", "limit": 6, "toolkit": "mulensmodel", "doctype": "docs"},
+    "value": {
+        "query": "MulensModel PSPL parameters",
+        "limit": 6,
+        "toolkit": "mulensmodel",
+        "doctype": "docs",
+    },
 }
 
 RETRIEVE_EXAMPLE = {
     "summary": "Retrieve specific lines from a document",
-    "value": {"doc_id": "microlensing_tools/MulensModel/README.md", "start": 45, "end": 60},
+    "value": {
+        "doc_id": "microlensing_tools/MulensModel/README.md",
+        "start": 45,
+        "end": 60,
+    },
 }

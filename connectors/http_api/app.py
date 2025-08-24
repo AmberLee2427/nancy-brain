@@ -108,7 +108,10 @@ def reset_rag_service():
 def get_rag_service() -> RAGService:
     """Dependency to get RAG service instance."""
     if rag_service is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="RAG service not initialized")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG service not initialized",
+        )
     return rag_service
 
 
@@ -131,17 +134,28 @@ async def search(
     """Search the knowledge base for relevant documents."""
     trace_id = str(uuid.uuid4())
     try:
-        hits = await rag.search_docs(query=query, limit=limit, toolkit=toolkit, doctype=doctype, threshold=threshold)
+        hits = await rag.search_docs(
+            query=query,
+            limit=limit,
+            toolkit=toolkit,
+            doctype=doctype,
+            threshold=threshold,
+        )
         version_info = await rag.version()
         return SearchResponse(hits=hits, index_version=version_info["index_version"], trace_id=trace_id)
     except Exception as e:
         logger.error(f"Search failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Search failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Search failed: {str(e)}",
+        )
 
 
 @app.post("/retrieve", response_model=RetrieveResponse, operation_id="retrieve_passage")
 async def retrieve(
-    request: RetrieveRequest, rag: RAGService = Depends(get_rag_service), _token: str = Depends(verify_auth)
+    request: RetrieveRequest,
+    rag: RAGService = Depends(get_rag_service),
+    _token: str = Depends(verify_auth),
 ):
     """Retrieve a specific passage from a document."""
     trace_id = str(uuid.uuid4())
@@ -150,12 +164,21 @@ async def retrieve(
         return RetrieveResponse(passage=passage, trace_id=trace_id)
     except Exception as e:
         logger.error(f"Retrieve failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Retrieve failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Retrieve failed: {str(e)}",
+        )
 
 
-@app.post("/retrieve/batch", response_model=RetrieveBatchResponse, operation_id="retrieve_batch")
+@app.post(
+    "/retrieve/batch",
+    response_model=RetrieveBatchResponse,
+    operation_id="retrieve_batch",
+)
 async def retrieve_batch(
-    request: RetrieveBatchRequest, rag: RAGService = Depends(get_rag_service), _token: str = Depends(verify_auth)
+    request: RetrieveBatchRequest,
+    rag: RAGService = Depends(get_rag_service),
+    _token: str = Depends(verify_auth),
 ):
     """Retrieve multiple passages in batch."""
     trace_id = str(uuid.uuid4())
@@ -166,7 +189,8 @@ async def retrieve_batch(
     except Exception as e:
         logger.error(f"Batch retrieve failed: {e}", extra={"trace_id": trace_id})
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Batch retrieve failed: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch retrieve failed: {str(e)}",
         )
 
 
@@ -185,23 +209,34 @@ async def tree(
         return TreeResponse(entries=entries, trace_id=trace_id)
     except Exception as e:
         logger.error(f"Tree listing failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Tree listing failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tree listing failed: {str(e)}",
+        )
 
 
 @app.post("/weight", operation_id="set_weight")
 async def set_weight(
-    request: SetWeightRequest, rag: RAGService = Depends(get_rag_service), _token: str = Depends(verify_auth)
+    request: SetWeightRequest,
+    rag: RAGService = Depends(get_rag_service),
+    _token: str = Depends(verify_auth),
 ):
     """Set weighting for a document in search results."""
     trace_id = str(uuid.uuid4())
     try:
         await rag.set_weight(
-            doc_id=request.doc_id, multiplier=request.multiplier, namespace=request.namespace, ttl_days=request.ttl_days
+            doc_id=request.doc_id,
+            multiplier=request.multiplier,
+            namespace=request.namespace,
+            ttl_days=request.ttl_days,
         )
         return {"status": "success", "trace_id": trace_id}
     except Exception as e:
         logger.error(f"Set weight failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Set weight failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Set weight failed: {str(e)}",
+        )
 
 
 @app.get("/version", response_model=VersionResponse, operation_id="get_version")
@@ -213,7 +248,10 @@ async def version(rag: RAGService = Depends(get_rag_service), _token: str = Depe
         return VersionResponse(**version_info, trace_id=trace_id)
     except Exception as e:
         logger.error(f"Version check failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Version check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Version check failed: {str(e)}",
+        )
 
 
 @app.get("/health", response_model=HealthResponse, operation_id="health_check")
@@ -225,11 +263,17 @@ async def health(rag: RAGService = Depends(get_rag_service), _token: str = Depen
         return HealthResponse(status=health_info["status"], trace_id=trace_id)
     except Exception as e:
         logger.error(f"Health check failed: {e}", extra={"trace_id": trace_id})
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Health check failed: {str(e)}",
+        )
 
 
 def initialize_rag_service(
-    config_path: Path, embeddings_path: Path, weights_path: Path = None, use_dual_embedding: bool = True
+    config_path: Path,
+    embeddings_path: Path,
+    weights_path: Path = None,
+    use_dual_embedding: bool = True,
 ) -> RAGService:
     """Initialize the RAG service with given paths."""
     global rag_service

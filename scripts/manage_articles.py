@@ -211,7 +211,13 @@ class ArticleManager:
                 # Try to get metadata from the text (first few lines often contain title info)
                 text_preview = result["text"][:200] + "..." if len(result["text"]) > 200 else result["text"]
 
-                articles.append({"id": article_id, "preview": text_preview, "length": len(result["text"])})
+                articles.append(
+                    {
+                        "id": article_id,
+                        "preview": text_preview,
+                        "length": len(result["text"]),
+                    }
+                )
 
             return articles
 

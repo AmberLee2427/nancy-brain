@@ -28,7 +28,12 @@ async def test_search_extension_and_model_weights(tmp_path):
         # Config extension weights
         ext_cfg = {"extensions": {".py": 0.9, ".md": 0.98}}
         model_weights = {"file1.py": 2.0, "docs/readme.md": 0.5}
-        s = Search(tmp_path / "emb", dual=False, extension_weights=ext_cfg, model_weights=model_weights)
+        s = Search(
+            tmp_path / "emb",
+            dual=False,
+            extension_weights=ext_cfg,
+            model_weights=model_weights,
+        )
         # Inject fake embeddings returning base scores
         s.general_embeddings = FakeEmbeddings(
             [

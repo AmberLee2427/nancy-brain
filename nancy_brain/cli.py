@@ -57,7 +57,11 @@ def init(project_name):
 @cli.command()
 @click.option("--config", default="config/repositories.yml", help="Repository config file")
 @click.option("--articles-config", help="PDF articles config file")
-@click.option("--embeddings-path", default="knowledge_base/embeddings", help="Embeddings output path")
+@click.option(
+    "--embeddings-path",
+    default="knowledge_base/embeddings",
+    help="Embeddings output path",
+)
 @click.option("--force-update", is_flag=True, help="Force update all repositories")
 def build(config, articles_config, embeddings_path, force_update):
     """Build the knowledge base from configured repositories."""
@@ -114,7 +118,9 @@ def search(query, limit, embeddings_path, config, weights):
     async def do_search():
         # Initialize service with proper paths
         service = RAGService(
-            embeddings_path=Path(embeddings_path), config_path=Path(config), weights_path=Path(weights)
+            embeddings_path=Path(embeddings_path),
+            config_path=Path(config),
+            weights_path=Path(weights),
         )
         results = await service.search_docs(query, limit=limit)
 

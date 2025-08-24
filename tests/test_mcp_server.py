@@ -50,7 +50,10 @@ def mock_rag_service():
                     {
                         "name": "MulensModel",
                         "type": "directory",
-                        "children": [{"name": "README.md", "type": "file"}, {"name": "setup.py", "type": "file"}],
+                        "children": [
+                            {"name": "README.md", "type": "file"},
+                            {"name": "setup.py", "type": "file"},
+                        ],
                     }
                 ],
             }
@@ -63,7 +66,11 @@ def mock_rag_service():
         return {"status": "ok"}
 
     async def mock_version():
-        return {"index_version": "test-1.0", "build_sha": "abc123", "built_at": "2025-08-23T12:00:00Z"}
+        return {
+            "index_version": "test-1.0",
+            "build_sha": "abc123",
+            "built_at": "2025-08-23T12:00:00Z",
+        }
 
     mock.search_docs = mock_search_docs
     mock.retrieve = mock_retrieve
@@ -115,7 +122,12 @@ async def test_mcp_server_retrieve_batch_tool(mock_rag_service):
     server.rag_service = mock_rag_service
 
     # Test batch retrieve
-    args = {"items": [{"doc_id": "doc1.md", "start": 0, "end": 5}, {"doc_id": "doc2.md", "start": 10, "end": 15}]}
+    args = {
+        "items": [
+            {"doc_id": "doc1.md", "start": 0, "end": 5},
+            {"doc_id": "doc2.md", "start": 10, "end": 15},
+        ]
+    }
     result = await server._handle_retrieve_batch(args)
 
     assert len(result) == 1
@@ -147,7 +159,11 @@ async def test_mcp_server_weights_tool(mock_rag_service):
     server.rag_service = mock_rag_service
 
     # Test weight setting
-    args = {"doc_id": "microlensing_tools/MulensModel/README.md", "weight": 1.5, "namespace": "global"}
+    args = {
+        "doc_id": "microlensing_tools/MulensModel/README.md",
+        "weight": 1.5,
+        "namespace": "global",
+    }
     result = await server._handle_set_weights(args)
 
     assert len(result) == 1
@@ -221,5 +237,7 @@ async def test_mcp_server_initialization():
 
             assert server.rag_service is not None
             mock_rag_class.assert_called_once_with(
-                config_path=config_path, embeddings_path=embeddings_path, weights_path=weights_path
+                config_path=config_path,
+                embeddings_path=embeddings_path,
+                weights_path=weights_path,
             )

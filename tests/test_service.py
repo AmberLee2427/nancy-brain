@@ -104,8 +104,16 @@ def test_search_with_filters(tmp_path):
     # Mock search to return multiple results
     service.search.search = Mock(
         return_value=[
-            {"id": "microlensing_tools/MulensModel/README.md", "text": "MulensModel docs", "score": 0.9},
-            {"id": "microlensing_tools/pyLIMA/README.md", "text": "pyLIMA docs", "score": 0.8},
+            {
+                "id": "microlensing_tools/MulensModel/README.md",
+                "text": "MulensModel docs",
+                "score": 0.9,
+            },
+            {
+                "id": "microlensing_tools/pyLIMA/README.md",
+                "text": "pyLIMA docs",
+                "score": 0.8,
+            },
         ]
     )
 

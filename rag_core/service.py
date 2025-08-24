@@ -16,7 +16,11 @@ class RAGService:
     """RAG service for retrieving relevant context from the knowledge base."""
 
     def __init__(
-        self, embeddings_path: Path, config_path: Path, weights_path: Path, use_dual_embedding: Optional[bool] = None
+        self,
+        embeddings_path: Path,
+        config_path: Path,
+        weights_path: Path,
+        use_dual_embedding: Optional[bool] = None,
     ):
         """
         Initialize the RAG service.
@@ -191,7 +195,12 @@ class RAGService:
         return self.general_embeddings is not None
 
     async def search_docs(
-        self, query: str, limit: int = 6, toolkit: str = None, doctype: str = None, threshold: float = 0.0
+        self,
+        query: str,
+        limit: int = 6,
+        toolkit: str = None,
+        doctype: str = None,
+        threshold: float = 0.0,
     ) -> List[Dict]:
         """Search for documents with optional filtering."""
         # Before searching, push runtime weights into search.model_weights (backwards compatibility)
@@ -235,7 +244,12 @@ class RAGService:
         else:
             text = self.store.read_lines(doc_id, start, end)
         meta = self.registry.get_meta(doc_id)
-        return {"doc_id": doc_id, "text": text, "github_url": meta.github_url, "content_sha256": meta.content_sha256}
+        return {
+            "doc_id": doc_id,
+            "text": text,
+            "github_url": meta.github_url,
+            "content_sha256": meta.content_sha256,
+        }
 
     async def retrieve_batch(self, items: List[Dict]) -> List[Dict]:
         """Retrieve multiple text spans in batch."""
@@ -288,7 +302,13 @@ class RAGService:
 
         return tree_entries
 
-    async def set_weight(self, doc_id: str, multiplier: float, namespace: str = "global", ttl_days: int = None) -> None:
+    async def set_weight(
+        self,
+        doc_id: str,
+        multiplier: float,
+        namespace: str = "global",
+        ttl_days: int = None,
+    ) -> None:
         """Set model weight for a document (runtime only). Extra parameters ignored for backward compatibility."""
         if not hasattr(self, "_weights"):
             self._weights = {}
@@ -306,7 +326,11 @@ class RAGService:
     async def version(self) -> Dict:
         """Return index and build version info."""
         # TODO: Read from actual index metadata file
-        return {"index_version": "dev-0.1.0", "build_sha": "unknown", "built_at": "unknown"}
+        return {
+            "index_version": "dev-0.1.0",
+            "build_sha": "unknown",
+            "built_at": "unknown",
+        }
 
     async def health(self) -> Dict:
         """Return service health status."""

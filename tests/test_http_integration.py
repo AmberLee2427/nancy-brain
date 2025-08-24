@@ -19,7 +19,11 @@ def mock_rag_service():
         return {"status": "ok"}
 
     async def mock_version():
-        return {"index_version": "test", "build_sha": "test123", "built_at": "2024-01-01T00:00:00Z"}
+        return {
+            "index_version": "test",
+            "build_sha": "test123",
+            "built_at": "2024-01-01T00:00:00Z",
+        }
 
     async def mock_search_docs(query, limit=10, **kwargs):
         return [{"id": "cat1/repoA/test", "text": "test content", "score": 0.9}]
@@ -114,7 +118,11 @@ def test_http_with_rag_service(client_with_rag):
     assert len(data["hits"]) == 1
 
     # Retrieve
-    r = client_with_rag.post("/retrieve", headers=headers, json={"doc_id": "cat1/repoA/test", "start": 0, "end": 2})
+    r = client_with_rag.post(
+        "/retrieve",
+        headers=headers,
+        json={"doc_id": "cat1/repoA/test", "start": 0, "end": 2},
+    )
     assert r.status_code == 200
     data = r.json()
     assert data["passage"]["doc_id"] == "cat1/repoA/test"

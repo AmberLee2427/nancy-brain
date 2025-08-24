@@ -65,8 +65,6 @@ PDF_REQUEST_HEADERS = {
     "Accept": "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
 }
 
-import shutil
-
 # --- Fallback PDF extraction methods (original content) ---
 
 
@@ -158,7 +156,21 @@ def process_pdf_with_fallback(pdf_path, repo_info=None, article_info=None):
 
 def get_file_type_category(doc_id: str) -> str:
     path = Path(doc_id)
-    code_extensions = {".py", ".js", ".ts", ".cpp", ".java", ".go", ".rs", ".c", ".h", ".css", ".scss", ".jsx", ".tsx"}
+    code_extensions = {
+        ".py",
+        ".js",
+        ".ts",
+        ".cpp",
+        ".java",
+        ".go",
+        ".rs",
+        ".c",
+        ".h",
+        ".css",
+        ".scss",
+        ".jsx",
+        ".tsx",
+    }
     if path.suffix in code_extensions:
         return "code"
     if ".nb" in path.suffixes or ".nb.txt" in str(path):
@@ -190,7 +202,11 @@ def download_pdf_articles(
     session.headers.update(PDF_REQUEST_HEADERS)
     session.max_redirects = 15
     categories = [category] if category else list(config.keys())
-    failures = {"failed_downloads": [], "skipped_existing": [], "successful_downloads": []}
+    failures = {
+        "failed_downloads": [],
+        "skipped_existing": [],
+        "successful_downloads": [],
+    }
     for cat in categories:
         articles = config.get(cat)
         if not isinstance(articles, list):
@@ -273,7 +289,11 @@ def clone_repositories(
                         continue
                     try:
                         subprocess.run(
-                            ["git", "fetch", "--all"], cwd=str(dest_dir), check=True, capture_output=True, text=True
+                            ["git", "fetch", "--all"],
+                            cwd=str(dest_dir),
+                            check=True,
+                            capture_output=True,
+                            text=True,
                         )
                         result = subprocess.run(
                             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -303,7 +323,10 @@ def clone_repositories(
                 dest_dir.parent.mkdir(parents=True, exist_ok=True)
                 try:
                     subprocess.run(
-                        ["git", "clone", repo_url, str(dest_dir)], check=True, capture_output=True, text=True
+                        ["git", "clone", repo_url, str(dest_dir)],
+                        check=True,
+                        capture_output=True,
+                        text=True,
                     )
                     failures["successful_clones"].append(f"{cat}/{repo_name}")
                 except subprocess.CalledProcessError as e:
@@ -378,7 +401,11 @@ def build_txtai_index(
     embeddings_dir = Path(embeddings_path)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
     general_embeddings = Embeddings(
-        {"path": "sentence-transformers/all-MiniLM-L6-v2", "content": True, "backend": "faiss"}
+        {
+            "path": "sentence-transformers/all-MiniLM-L6-v2",
+            "content": True,
+            "backend": "faiss",
+        }
     )
     code_embeddings = None
     if use_dual_embedding:
@@ -441,13 +468,24 @@ def build_txtai_index(
                         continue
                     size = pf.stat().st_size
                     if size < MIN_PDF_BYTES:
-                        pdf_status[str(pf)] = {"status": "skipped", "reason": f"small({size})", "size": size}
+                        pdf_status[str(pf)] = {
+                            "status": "skipped",
+                            "reason": f"small({size})",
+                            "size": size,
+                        }
                         continue
                     filtered_pdf_files.append(pf)
                 except Exception:
                     continue
             pdf_files = filtered_pdf_files
-            skip_dirs = {".git", ".github", "__pycache__", "node_modules", ".pytest_cache", ".mypy_cache"}
+            skip_dirs = {
+                ".git",
+                ".github",
+                "__pycache__",
+                "node_modules",
+                ".pytest_cache",
+                ".mypy_cache",
+            }
             text_files = [f for f in text_files if not any(skip in f.parts for skip in skip_dirs)]
             pdf_files = [f for f in pdf_files if not any(skip in f.parts for skip in skip_dirs)]
             text_files = [f for f in text_files if "docs/build" not in str(f) and not str(f).endswith(".rst.txt")]
@@ -472,13 +510,23 @@ def build_txtai_index(
                         full_content = metadata + content
                         documents.append((doc_id, full_content))
                         failures["successful_pdf_files"] += 1
-                        pdf_status[doc_id] = {"status": "indexed", "size": size, "chars": len(content)}
+                        pdf_status[doc_id] = {
+                            "status": "indexed",
+                            "size": size,
+                            "chars": len(content),
+                        }
                     else:
                         failures["failed_pdf_files"].append(f"{pdf_path}: No meaningful text extracted")
-                        pdf_status[str(pdf_path)] = {"status": "failed_extract", "size": size}
+                        pdf_status[str(pdf_path)] = {
+                            "status": "failed_extract",
+                            "size": size,
+                        }
                 except Exception as e:
                     failures["failed_pdf_files"].append(f"{pdf_path}: {str(e)}")
-                    pdf_status[str(pdf_path)] = {"status": "error", "error": str(e)[:120]}
+                    pdf_status[str(pdf_path)] = {
+                        "status": "error",
+                        "error": str(e)[:120],
+                    }
     article_categories = [category] if category else list(articles_config.keys())
     for cat in article_categories:
         articles = articles_config.get(cat)
@@ -509,7 +557,10 @@ def build_txtai_index(
                         pdf_status[str(pdf_file)] = {"status": "failed_extract"}
                 except Exception as e:
                     failures["failed_pdf_files"].append(f"{pdf_file}: {str(e)}")
-                    pdf_status[str(pdf_file)] = {"status": "error", "error": str(e)[:120]}
+                    pdf_status[str(pdf_file)] = {
+                        "status": "error",
+                        "error": str(e)[:120],
+                    }
             else:
                 failures["failed_pdf_files"].append(f"{pdf_file}: No PDF processing available")
                 pdf_status[str(pdf_file)] = {"status": "no_processing"}
@@ -550,7 +601,9 @@ def build_txtai_index(
 
 
 def cleanup_pdf_articles(
-    articles_config_path: str, base_path: str = "knowledge_base/raw", category: str = None
+    articles_config_path: str,
+    base_path: str = "knowledge_base/raw",
+    category: str = None,
 ) -> None:
     """Clean up downloaded PDF articles after embeddings are built"""
     logger = logging.getLogger(__name__)
@@ -627,19 +680,41 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Build the knowledge base by cloning repositories, downloading PDFs, and creating txtai embeddings."
     )
-    parser.add_argument("--config", default="config/repositories.yml", help="Path to repository configuration file")
     parser.add_argument(
-        "--articles-config", default="config/articles.yml", help="Path to PDF articles configuration file"
+        "--config",
+        default="config/repositories.yml",
+        help="Path to repository configuration file",
     )
-    parser.add_argument("--base-path", default="knowledge_base/raw", help="Base path for repositories and PDFs")
-    parser.add_argument("--embeddings-path", default="knowledge_base/embeddings", help="Path for embeddings index")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument(
+        "--articles-config",
+        default="config/articles.yml",
+        help="Path to PDF articles configuration file",
+    )
+    parser.add_argument(
+        "--base-path",
+        default="knowledge_base/raw",
+        help="Base path for repositories and PDFs",
+    )
+    parser.add_argument(
+        "--embeddings-path",
+        default="knowledge_base/embeddings",
+        help="Path for embeddings index",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
     parser.add_argument("--category", help="Process only a specific category")
     parser.add_argument(
-        "--force-update", action="store_true", help="Update repositories and re-download PDFs if they already exist"
+        "--force-update",
+        action="store_true",
+        help="Update repositories and re-download PDFs if they already exist",
     )
     parser.add_argument(
-        "--dirty", action="store_true", help="Leave the raw repos and PDFs in place after embeddings are built"
+        "--dirty",
+        action="store_true",
+        help="Leave the raw repos and PDFs in place after embeddings are built",
     )
 
     args = parser.parse_args()
@@ -677,8 +752,10 @@ if __name__ == "__main__":
             indexing_failures = all_failures.get("indexing", {}) or {}
             if indexing_failures:
                 logger.info("\n🔍 INDEXING & EMBEDDING:")
-                logger.info(f"  ✅ Successfully indexed text files: {indexing_failures.get('successful_text_files',0)}")
-                logger.info(f"  ✅ Successfully indexed PDF files: {indexing_failures.get('successful_pdf_files',0)}")
+                logger.info(
+                    f"  ✅ Successfully indexed text files: {indexing_failures.get('successful_text_files', 0)}"
+                )
+                logger.info(f"  ✅ Successfully indexed PDF files: {indexing_failures.get('successful_pdf_files', 0)}")
                 if indexing_failures.get("skipped_articles"):
                     logger.info(f"  ⏭️  Skipped articles: {len(indexing_failures['skipped_articles'])}")
                 if indexing_failures.get("failed_pdf_files"):
@@ -712,7 +789,12 @@ if __name__ == "__main__":
                     articles_config_path, base_path, dry_run, category, force_update
                 )
             all_failures["indexing"] = build_txtai_index(
-                config_path, articles_config_path, base_path, embeddings_path, dry_run, category
+                config_path,
+                articles_config_path,
+                base_path,
+                embeddings_path,
+                dry_run,
+                category,
             )
             if not dirty and not dry_run:
                 cleanup_raw_repositories(config_path, base_path, category)

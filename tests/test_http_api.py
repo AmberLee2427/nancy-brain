@@ -52,7 +52,11 @@ def test_http_app_startup(tmp_path):
             return {"status": "ok"}
 
         async def mock_version():
-            return {"index_version": "test-1.0", "build_sha": "abc123", "built_at": "2025-08-23T12:00:00Z"}
+            return {
+                "index_version": "test-1.0",
+                "build_sha": "abc123",
+                "built_at": "2025-08-23T12:00:00Z",
+            }
 
         async def mock_search_docs(query, limit=6, toolkit=None, doctype=None, threshold=0.0):
             return [{"id": "cat1/repoA/test.md", "text": "test content", "score": 0.9}]
@@ -62,7 +66,7 @@ def test_http_app_startup(tmp_path):
         mock_rag.search_docs = mock_search_docs
 
         # Initialize the service
-        rag_service = initialize_rag_service(cfg_file, embeddings_path, weights_path)
+        initialize_rag_service(cfg_file, embeddings_path, weights_path)
 
         # Create test client
         client = TestClient(app)
@@ -161,7 +165,9 @@ def test_http_retrieve_endpoint(tmp_path):
 
         # Test single retrieve
         response = client.post(
-            "/retrieve", json={"doc_id": "cat1/repoA/test.md", "start": 0, "end": 2}, headers=headers
+            "/retrieve",
+            json={"doc_id": "cat1/repoA/test.md", "start": 0, "end": 2},
+            headers=headers,
         )
         assert response.status_code == 200
         data = response.json()

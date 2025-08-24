@@ -64,7 +64,10 @@ def test_registry_list_and_meta(tmp_path):
 )
 def test_list_ids_various(prefix, expected, tmp_path):
     # reuse same config
-    config = {"cat1": [{"name": "repoA", "url": "url"}], "cat2": [{"name": "repoB", "url": "url"}]}
+    config = {
+        "cat1": [{"name": "repoA", "url": "url"}],
+        "cat2": [{"name": "repoB", "url": "url"}],
+    }
     cfg_file = tmp_path / "repos.yml"
     cfg_file.write_text(yaml.safe_dump(config))
     registry = Registry(cfg_file)

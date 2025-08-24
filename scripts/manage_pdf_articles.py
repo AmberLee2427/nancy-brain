@@ -116,7 +116,7 @@ class PDFArticleManager:
                 total_success += success_count
                 total_articles += len(articles)
 
-        logger.info(f"\n=== Summary ===")
+        logger.info("\n=== Summary ===")
         logger.info(f"Total articles processed: {total_articles}")
         logger.info(f"Successful: {total_success}")
         logger.info(f"Failed: {total_articles - total_success}")
@@ -157,13 +157,25 @@ class PDFArticleManager:
 
 def main():
     parser = argparse.ArgumentParser(description="Manage PDF articles for the knowledge base")
-    parser.add_argument("--config", default="config/articles.yml", help="Path to PDF articles configuration file")
+    parser.add_argument(
+        "--config",
+        default="config/articles.yml",
+        help="Path to PDF articles configuration file",
+    )
     parser.add_argument("--base-path", default="knowledge_base/raw", help="Base path for PDF articles")
     parser.add_argument("--list", action="store_true", help="List all configured PDF articles")
     parser.add_argument("--clean", action="store_true", help="Remove PDF articles not in configuration")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
     parser.add_argument("--category", help="Process only a specific category")
-    parser.add_argument("--force-update", action="store_true", help="Re-download articles even if they exist")
+    parser.add_argument(
+        "--force-update",
+        action="store_true",
+        help="Re-download articles even if they exist",
+    )
     args = parser.parse_args()
 
     manager = PDFArticleManager(args.base_path)

@@ -48,7 +48,21 @@ def get_file_type_category(doc_id: str) -> str:
     path = Path(doc_id)
 
     # Direct code files
-    code_extensions = {".py", ".js", ".ts", ".cpp", ".java", ".go", ".rs", ".c", ".h", ".css", ".scss", ".jsx", ".tsx"}
+    code_extensions = {
+        ".py",
+        ".js",
+        ".ts",
+        ".cpp",
+        ".java",
+        ".go",
+        ".rs",
+        ".c",
+        ".h",
+        ".css",
+        ".scss",
+        ".jsx",
+        ".tsx",
+    }
     if path.suffix in code_extensions:
         return "code"
 

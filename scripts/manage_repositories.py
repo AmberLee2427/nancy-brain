@@ -77,7 +77,10 @@ class RepositoryManager:
 
             # Get current branch
             result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(repo_path), capture_output=True, text=True
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
             )
             current_branch = result.stdout.strip()
 
@@ -115,7 +118,7 @@ class RepositoryManager:
                 total_success += success_count
                 total_repos += len(repos)
 
-        logger.info(f"\n=== Summary ===")
+        logger.info("\n=== Summary ===")
         logger.info(f"Total repositories processed: {total_repos}")
         logger.info(f"Successful: {total_success}")
         logger.info(f"Failed: {total_repos - total_success}")
@@ -158,11 +161,19 @@ class RepositoryManager:
 
 def main():
     parser = argparse.ArgumentParser(description="Manage repositories for the knowledge base")
-    parser.add_argument("--config", default="config/repositories.yml", help="Path to repository configuration file")
+    parser.add_argument(
+        "--config",
+        default="config/repositories.yml",
+        help="Path to repository configuration file",
+    )
     parser.add_argument("--base-path", default="knowledge_base/raw", help="Base path for repositories")
     parser.add_argument("--list", action="store_true", help="List all configured repositories")
     parser.add_argument("--clean", action="store_true", help="Remove repositories not in configuration")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
     parser.add_argument("--category", help="Process only a specific category")
     args = parser.parse_args()
 
