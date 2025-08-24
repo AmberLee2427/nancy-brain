@@ -57,9 +57,11 @@ Issues = "https://github.com/AmberLee2427/nancy-brain/issues"
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
     "coverage>=7.0.0",
+    "pre-commit>=3.0.0",
     "ipykernel",
     "jupyter",
     "ipywidgets",

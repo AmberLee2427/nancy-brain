@@ -9,8 +9,4 @@ repos:
     rev: 7.0.0
     hooks:
       - id: flake8
-        additional_dependencies: []
-  - repo: https://github.com/pre-commit/mirrors-isort
-    rev: 5.13.2
-    hooks:
-      - id: isort 
+        additional_dependencies: [] 
