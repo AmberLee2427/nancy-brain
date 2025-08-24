@@ -34,11 +34,25 @@ def load_config(config_path: str = "config/repositories.yml"):
     except FileNotFoundError:
         return {}
 
+def load_articles_config(config_path: str = "config/articles.yml"):
+    """Load articles configuration."""
+    try:
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        return {}
+
 def save_config(config: dict, config_path: str = "config/repositories.yml"):
     """Save repository configuration."""
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
     with open(config_path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False)
+
+def save_articles_config(config: dict, config_path: str = "config/articles.yml"):
+    """Save articles configuration."""
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 def run_build_command(force_update: bool = False, articles: bool = False):
     """Run the knowledge base build command."""
@@ -101,56 +115,123 @@ if page == "🔍 Search":
 elif page == "📚 Repository Management":
     st.header("📚 Repository Management")
     
-    # Load current config
-    config = load_config()
+    # Create tabs for repositories and articles
+    tab1, tab2 = st.tabs(["📁 Repositories", "📄 Articles"])
     
-    # Add new repository
-    st.subheader("Add New Repository")
-    with st.form("add_repo"):
-        col1, col2 = st.columns(2)
-        with col1:
-            category = st.text_input("Category:", placeholder="e.g., microlensing_tools")
-            repo_name = st.text_input("Repository Name:", placeholder="e.g., MulensModel")
-        with col2:
-            repo_url = st.text_input("Repository URL:", placeholder="https://github.com/user/repo.git")
-            description = st.text_input("Description (optional):", placeholder="Brief description")
+    with tab1:
+        st.subheader("GitHub Repositories")
         
-        if st.form_submit_button("➕ Add Repository"):
-            if category and repo_name and repo_url:
-                if category not in config:
-                    config[category] = []
-                
-                new_repo = {"name": repo_name, "url": repo_url}
-                if description:
-                    new_repo["description"] = description
-                
-                config[category].append(new_repo)
-                save_config(config)
-                st.success(f"Added {repo_name} to {category}")
-                st.experimental_rerun()
-            else:
-                st.error("Please fill in category, name, and URL")
+        # Load current config
+        config = load_config()
+        
+        # Add new repository
+        st.markdown("#### Add New Repository")
+        with st.form("add_repo"):
+            col1, col2 = st.columns(2)
+            with col1:
+                category = st.text_input("Category:", placeholder="e.g., microlensing_tools")
+                repo_name = st.text_input("Repository Name:", placeholder="e.g., MulensModel")
+            with col2:
+                repo_url = st.text_input("Repository URL:", placeholder="https://github.com/user/repo.git")
+                description = st.text_input("Description (optional):", placeholder="Brief description")
+            
+            if st.form_submit_button("➕ Add Repository"):
+                if category and repo_name and repo_url:
+                    if category not in config:
+                        config[category] = []
+                    
+                    new_repo = {"name": repo_name, "url": repo_url}
+                    if description:
+                        new_repo["description"] = description
+                    
+                    config[category].append(new_repo)
+                    save_config(config)
+                    st.success(f"Added {repo_name} to {category}")
+                    st.experimental_rerun()
+                else:
+                    st.error("Please fill in category, name, and URL")
+        
+        # Display current repositories
+        st.markdown("#### Current Repositories")
+        if config:
+            for category, repos in config.items():
+                st.write(f"**{category}**")
+                for repo in repos:
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    with col1:
+                        st.write(f"• {repo['name']}")
+                    with col2:
+                        st.write(repo.get('description', ''))
+                    with col3:
+                        if st.button("🗑️", key=f"delete_repo_{category}_{repo['name']}"):
+                            config[category] = [r for r in config[category] if r['name'] != repo['name']]
+                            if not config[category]:
+                                del config[category]
+                            save_config(config)
+                            st.experimental_rerun()
+        else:
+            st.info("No repositories configured yet.")
     
-    # Display current repositories
-    st.subheader("Current Repositories")
-    if config:
-        for category, repos in config.items():
-            st.write(f"**{category}**")
-            for repo in repos:
-                col1, col2, col3 = st.columns([3, 2, 1])
-                with col1:
-                    st.write(f"• {repo['name']}")
-                with col2:
-                    st.write(repo.get('description', ''))
-                with col3:
-                    if st.button("🗑️", key=f"delete_{category}_{repo['name']}"):
-                        config[category] = [r for r in config[category] if r['name'] != repo['name']]
-                        if not config[category]:
-                            del config[category]
-                        save_config(config)
+    with tab2:
+        st.subheader("PDF Articles")
+        
+        # Load current articles config
+        articles_config = load_articles_config()
+        
+        # Add new article
+        st.markdown("#### Add New Article")
+        with st.form("add_article"):
+            col1, col2 = st.columns(2)
+            with col1:
+                article_category = st.text_input("Category:", placeholder="e.g., foundational_papers", key="article_category")
+                article_name = st.text_input("Article Name:", placeholder="e.g., Paczynski_1986_microlensing", key="article_name")
+            with col2:
+                article_url = st.text_input("Article URL:", placeholder="https://arxiv.org/pdf/paper.pdf", key="article_url")
+                article_description = st.text_input("Description:", placeholder="Brief description of the article", key="article_description")
+            
+            if st.form_submit_button("➕ Add Article"):
+                if article_category and article_name and article_url:
+                    if article_category not in articles_config:
+                        articles_config[article_category] = []
+                    
+                    # Check if article already exists
+                    existing = [a for a in articles_config[article_category] if a.get('name') == article_name]
+                    if existing:
+                        st.error(f"Article '{article_name}' already exists in category '{article_category}'")
+                    else:
+                        new_article = {"name": article_name, "url": article_url}
+                        if article_description:
+                            new_article["description"] = article_description
+                        
+                        articles_config[article_category].append(new_article)
+                        save_articles_config(articles_config)
+                        st.success(f"Added article '{article_name}' to category '{article_category}'")
                         st.experimental_rerun()
-    else:
-        st.info("No repositories configured yet.")
+                else:
+                    st.error("Please fill in category, name, and URL")
+        
+        # Display current articles
+        st.markdown("#### Current Articles")
+        if articles_config:
+            for category, articles in articles_config.items():
+                st.write(f"**{category}**")
+                for article in articles:
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    with col1:
+                        st.write(f"• {article['name']}")
+                        if 'url' in article:
+                            st.markdown(f"  [{article['url']}]({article['url']})")
+                    with col2:
+                        st.write(article.get('description', ''))
+                    with col3:
+                        if st.button("🗑️", key=f"delete_article_{category}_{article['name']}"):
+                            articles_config[category] = [a for a in articles_config[category] if a['name'] != article['name']]
+                            if not articles_config[category]:
+                                del articles_config[category]
+                            save_articles_config(articles_config)
+                            st.experimental_rerun()
+        else:
+            st.info("No articles configured yet.")
 
 elif page == "🏗️ Build Knowledge Base":
     st.header("🏗️ Build Knowledge Base")
@@ -184,6 +265,7 @@ elif page == "📊 Status":
     # Check if embeddings exist
     embeddings_path = Path("knowledge_base/embeddings")
     config_path = Path("config/repositories.yml")
+    articles_path = Path("config/articles.yml")
     weights_path = Path("config/weights.yaml")
     
     col1, col2, col3 = st.columns(3)
@@ -191,7 +273,8 @@ elif page == "📊 Status":
     with col1:
         st.subheader("Files")
         st.write("📁 Embeddings:", "✅" if embeddings_path.exists() else "❌")
-        st.write("⚙️ Config:", "✅" if config_path.exists() else "❌")
+        st.write("⚙️ Repositories Config:", "✅" if config_path.exists() else "❌")
+        st.write("📄 Articles Config:", "✅" if articles_path.exists() else "❌")
         st.write("⚖️ Weights:", "✅" if weights_path.exists() else "❌")
     
     with col2:
@@ -209,9 +292,15 @@ elif page == "📊 Status":
     with col3:
         st.subheader("Configuration")
         config = load_config()
+        articles_config = load_articles_config()
+        
         total_repos = sum(len(repos) for repos in config.values()) if config else 0
+        total_articles = sum(len(articles) for articles in articles_config.values()) if articles_config else 0
+        
         st.write(f"📚 Total repositories: {total_repos}")
-        st.write(f"📁 Categories: {len(config) if config else 0}")
+        st.write(f"� Total articles: {total_articles}")
+        st.write(f"📁 Repository categories: {len(config) if config else 0}")
+        st.write(f"�📁 Article categories: {len(articles_config) if articles_config else 0}")
 
 # Footer
 st.markdown("---")

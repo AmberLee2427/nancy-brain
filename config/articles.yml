@@ -14,7 +14,6 @@ journal_articles:
     microlenses
   name: Gould_Loeb_1992_ApJ_396_104
   url: https://ui.adsabs.harvard.edu/link_gateway/1992ApJ...396..104G/PUB_PDF
-
 microlensing_reviews:
 - description: Mao (2012) - Introduction to gravitational microlensing
   name: Mao_2012_RAA_12_947
@@ -22,7 +21,6 @@ microlensing_reviews:
 - description: Gaudi (2012) - Microlensing Surveys for Exoplanets
   name: Gaudi_2012_ARA&A_50_411
   url: https://ui.adsabs.harvard.edu/link_gateway/2012ARA%26A..50..411G/PUB_PDF
-
 roman_mission:
 - description: Spergel et al. (2015) - Wide-Field InfrarRed Survey Telescope-Astrophysics
     Focused Telescope Assets WFIRST-AFTA 2015 Report

@@ -45,6 +45,7 @@ nancy-brain ui
 Features:
 - **🔍 Live Search** - Test your knowledge base with instant results
 - **📚 Repository Management** - Add/remove GitHub repos with visual forms
+- **📄 Article Management** - Add/remove PDF articles with visual forms
 - **🏗️ Build Control** - Trigger knowledge base builds with options
 - **📊 System Status** - Check embeddings, configuration, and health
 
@@ -55,6 +56,7 @@ Perfect for non-technical users and rapid prototyping!
 ```bash
 nancy-brain init <project>        # Initialize new project
 nancy-brain add-repo <url>        # Add GitHub repositories  
+nancy-brain add-article <url> <name>  # Add PDF articles
 nancy-brain build                 # Build knowledge base
 nancy-brain search "query"        # Search knowledge base
 nancy-brain serve                 # Start HTTP API server
@@ -85,6 +87,7 @@ cd my-knowledge-base
 
 # Add repositories and build
 nancy-brain add-repo https://github.com/your-org/repo.git
+nancy-brain add-article "https://arxiv.org/pdf/paper.pdf" "paper_name" --description "Important paper"
 nancy-brain build
 
 # Launch web interface
@@ -375,6 +378,14 @@ Claude supports MCP config in its settings file. Add an entry similar to above (
 # Add astronomy packages
 nancy-brain add-repo https://github.com/astropy/astropy.git
 nancy-brain add-repo https://github.com/rpoleski/MulensModel.git
+
+# Add key research papers
+nancy-brain add-article \
+  "https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF" \
+  "Paczynski_1986_microlensing" \
+  --category "foundational_papers" \
+  --description "Paczynski (1986) - Gravitational microlensing by the galactic halo"
+
 nancy-brain build
 
 # AI can now answer: "How do I model a microlensing event?"
@@ -397,7 +408,9 @@ nancy-brain search "gradient descent optimizer"
 # Launch web interface for non-technical users
 nancy-brain ui
 # Point team to http://localhost:8501
-# They can search, add repos, trigger builds visually
+# They can search, add repos, manage articles, trigger builds visually
+# Repository Management tab: Add GitHub repos
+# Articles tab: Add PDF papers and documents
 ```
 
 ---

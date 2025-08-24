@@ -5,6 +5,7 @@ import click
 import os
 import sys
 import subprocess
+import yaml
 from pathlib import Path
 
 # Add the package root to sys.path to handle relative imports
@@ -171,6 +172,61 @@ def add_repo(repo_url, category):
     # Add to config (basic implementation - could be more sophisticated)
     click.echo(f"✅ Added {repo_name} to {category} category")
     click.echo("📝 Run 'nancy-brain build --force-update' to fetch the new repository")
+
+
+@cli.command()
+@click.argument('article_url')
+@click.argument('article_name')
+@click.option('--category', default='articles', help='Category to add article to')
+@click.option('--description', help='Description of the article')
+def add_article(article_url, article_name, category, description):
+    """Add a PDF article to the configuration."""
+    config_file = Path('config/articles.yml')
+    
+    # Create articles config if it doesn't exist
+    if not config_file.exists():
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        articles_config = {}
+    else:
+        try:
+            with open(config_file, 'r') as f:
+                articles_config = yaml.safe_load(f) or {}
+        except Exception as e:
+            click.echo(f"❌ Error reading {config_file}: {e}")
+            return
+    
+    # Add category if it doesn't exist
+    if category not in articles_config:
+        articles_config[category] = []
+    
+    # Create article entry
+    article_entry = {
+        'name': article_name,
+        'url': article_url
+    }
+    
+    if description:
+        article_entry['description'] = description
+    
+    # Check if article already exists
+    existing = [a for a in articles_config[category] if a.get('name') == article_name]
+    if existing:
+        click.echo(f"❌ Article '{article_name}' already exists in category '{category}'")
+        return
+    
+    # Add the new article
+    articles_config[category].append(article_entry)
+    
+    # Write back to file
+    try:
+        with open(config_file, 'w') as f:
+            yaml.dump(articles_config, f, default_flow_style=False, sort_keys=False)
+        
+        click.echo(f"✅ Added article '{article_name}' to category '{category}'")
+        click.echo(f"📝 Run 'nancy-brain build --articles-config {config_file}' to index the new article")
+        
+    except Exception as e:
+        click.echo(f"❌ Error writing to {config_file}: {e}")
 
 
 if __name__ == '__main__':
