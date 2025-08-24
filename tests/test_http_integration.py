@@ -77,7 +77,7 @@ def client_with_rag(tmp_path, mock_rag_service):
     (tmp_path / "weights.yaml").write_text("extensions: {}")
 
     import connectors.http_api.app as mod
-    from connectors.http_api.app import app, get_rag_service
+    from connectors.http_api.app import app, get_rag_service, verify_auth
 
     original = getattr(mod, "rag_service", None)
     mod.rag_service = mock_rag_service  # keep global for legacy access
@@ -89,8 +89,12 @@ def client_with_rag(tmp_path, mock_rag_service):
 
     client = TestClient(app)
     try:
-        with patch("connectors.http_api.app.verify_auth", return_value="mock_token"):
-            yield client
+        # Override dependency injection for testing
+        def mock_verify_auth():
+            return "mock_token"
+
+        app.dependency_overrides[verify_auth] = mock_verify_auth
+        yield client
     finally:
         app.dependency_overrides.clear()
         mod.rag_service = original

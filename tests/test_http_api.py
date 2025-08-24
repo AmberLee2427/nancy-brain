@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
-from connectors.http_api.app import app, initialize_rag_service
+from connectors.http_api.app import app, initialize_rag_service, get_rag_service
 
 
 @pytest.fixture(autouse=True)
@@ -27,47 +27,35 @@ def reset_app_state():
 def test_http_app_startup(tmp_path):
     """Test that the FastAPI app can start up with mocked RAG service."""
 
-    # Create minimal config and paths
-    config = {
-        "cat1": [
-            {"name": "repoA", "url": "https://github.com/user/repoA.git"},
-        ],
-    }
-    cfg_file = tmp_path / "repositories.yml"
-    cfg_file.write_text(yaml.safe_dump(config))
+    # Create a mock RAG service instance
+    mock_rag = Mock()
 
-    embeddings_path = tmp_path / "embeddings"
-    embeddings_path.mkdir()
-    weights_path = tmp_path / "weights.yaml"
-    weights_path.write_text("extensions: {}")
+    # Mock the async methods
+    async def mock_health():
+        return {"status": "ok"}
 
-    # Initialize the RAG service in the app
-    with patch("connectors.http_api.app.RAGService") as mock_rag_class:
-        # Create a mock RAG service instance
-        mock_rag = Mock()
-        mock_rag_class.return_value = mock_rag
+    async def mock_version():
+        return {
+            "index_version": "test-1.0",
+            "build_sha": "abc123",
+            "built_at": "2025-08-23T12:00:00Z",
+        }
 
-        # Mock the async methods
-        async def mock_health():
-            return {"status": "ok"}
+    async def mock_search_docs(query, limit=6, toolkit=None, doctype=None, threshold=0.0):
+        return [{"id": "cat1/repoA/test.md", "text": "test content", "score": 0.9}]
 
-        async def mock_version():
-            return {
-                "index_version": "test-1.0",
-                "build_sha": "abc123",
-                "built_at": "2025-08-23T12:00:00Z",
-            }
+    mock_rag.health = mock_health
+    mock_rag.version = mock_version
+    mock_rag.search_docs = mock_search_docs
 
-        async def mock_search_docs(query, limit=6, toolkit=None, doctype=None, threshold=0.0):
-            return [{"id": "cat1/repoA/test.md", "text": "test content", "score": 0.9}]
+    # Mock the dependency
+    def mock_get_rag_service():
+        return mock_rag
 
-        mock_rag.health = mock_health
-        mock_rag.version = mock_version
-        mock_rag.search_docs = mock_search_docs
+    # Use dependency override
+    app.dependency_overrides[get_rag_service] = mock_get_rag_service
 
-        # Initialize the service
-        initialize_rag_service(cfg_file, embeddings_path, weights_path)
-
+    try:
         # Create test client
         client = TestClient(app)
         headers = {"Authorization": "Bearer test-token"}
@@ -95,71 +83,83 @@ def test_http_app_startup(tmp_path):
         assert data["hits"][0]["id"] == "cat1/repoA/test.md"
         assert data["index_version"] == "test-1.0"
         assert "trace_id" in data
+    finally:
+        # Clean up dependency override
+        app.dependency_overrides.clear()
 
 
 def test_http_auth_required():
     """Test that endpoints require authentication."""
-    client = TestClient(app)
 
-    # Test without authorization header
-    response = client.get("/health")
-    assert response.status_code == 403  # Forbidden due to missing auth
+    # Create a mock RAG service for dependency injection
+    mock_rag = Mock()
 
-    response = client.get("/version")
-    assert response.status_code == 403
+    async def mock_health():
+        return {"status": "ok"}
 
-    response = client.get("/search?query=test")
-    assert response.status_code == 403
+    mock_rag.health = mock_health
+
+    def mock_get_rag_service():
+        return mock_rag
+
+    # Use dependency override
+    app.dependency_overrides[get_rag_service] = mock_get_rag_service
+
+    try:
+        client = TestClient(app)
+
+        # Test without authorization header - should get 403 because security dependency fails first
+        response = client.get("/health")
+        assert response.status_code == 403  # Forbidden due to missing auth
+
+        response = client.get("/version")
+        assert response.status_code == 403
+
+        response = client.get("/search?query=test")
+        assert response.status_code == 403
+    finally:
+        # Clean up dependency override
+        app.dependency_overrides.clear()
 
 
 def test_http_retrieve_endpoint(tmp_path):
     """Test the retrieve endpoint with mocked data."""
 
-    config = {
-        "cat1": [
-            {"name": "repoA", "url": "https://github.com/user/repoA.git"},
-        ],
-    }
-    cfg_file = tmp_path / "repositories.yml"
-    cfg_file.write_text(yaml.safe_dump(config))
+    mock_rag = Mock()
 
-    embeddings_path = tmp_path / "embeddings"
-    embeddings_path.mkdir()
-    raw_path = tmp_path / "raw"
-    raw_path.mkdir()
+    # Mock retrieve method
+    async def mock_retrieve(doc_id, start=None, end=None):
+        return {
+            "doc_id": doc_id,
+            "text": "line 1\nline 2\nline 3\n",
+            "github_url": "https://github.com/user/repoA/blob/master/test.md",
+            "content_sha256": "abcdef123456",
+        }
 
-    with patch("connectors.http_api.app.RAGService") as mock_rag_class:
-        mock_rag = Mock()
-        mock_rag_class.return_value = mock_rag
+    async def mock_retrieve_batch(items):
+        results = []
+        for item in items:
+            result = await mock_retrieve(item["doc_id"], item.get("start"), item.get("end"))
+            results.append(result)
+        return results
 
-        # Mock retrieve method
-        async def mock_retrieve(doc_id, start=None, end=None):
-            return {
-                "doc_id": doc_id,
-                "text": "line 1\nline 2\nline 3\n",
-                "github_url": "https://github.com/user/repoA/blob/master/test.md",
-                "content_sha256": "abcdef123456",
-            }
+    mock_rag.retrieve = mock_retrieve
+    mock_rag.retrieve_batch = mock_retrieve_batch
 
-        async def mock_retrieve_batch(items):
-            results = []
-            for item in items:
-                result = await mock_retrieve(item["doc_id"], item.get("start"), item.get("end"))
-                results.append(result)
-            return results
+    # Mock health method for completeness
+    async def mock_health():
+        return {"status": "ok"}
 
-        mock_rag.retrieve = mock_retrieve
-        mock_rag.retrieve_batch = mock_retrieve_batch
+    mock_rag.health = mock_health
 
-        # Mock health method for completeness
-        async def mock_health():
-            return {"status": "ok"}
+    # Mock the dependency
+    def mock_get_rag_service():
+        return mock_rag
 
-        mock_rag.health = mock_health
+    # Use dependency override
+    app.dependency_overrides[get_rag_service] = mock_get_rag_service
 
-        # Initialize service
-        initialize_rag_service(cfg_file, embeddings_path, raw_path)
-
+    try:
         client = TestClient(app)
         headers = {"Authorization": "Bearer test-token"}
 
@@ -191,12 +191,15 @@ def test_http_retrieve_endpoint(tmp_path):
         assert len(data["passages"]) == 2
         assert data["passages"][0]["doc_id"] == "cat1/repoA/test1.md"
         assert "trace_id" in data
+    finally:
+        # Clean up dependency override
+        app.dependency_overrides.clear()
 
 
 def test_http_error_handling():
     """Test error handling when RAG service raises an exception."""
 
-    with patch("connectors.http_api.app.RAGService") as mock_service_class:
+    with patch("rag_core.service.RAGService") as mock_service_class:
         mock_service = Mock()
 
         # Make health() raise an exception
