@@ -61,4 +61,4 @@ pytest
 
 - Check our [GitHub Issues](https://github.com/AmberLee2427/nancy-brain/issues)
 - Join the discussion in [GitHub Discussions](https://github.com/AmberLee2427/nancy-brain/discussions)
-- See [troubleshooting guide](troubleshooting.md) for common solutions
+- See [troubleshooting guide](development/troubleshooting.md) for common solutions
