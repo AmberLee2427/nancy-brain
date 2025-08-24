@@ -8,6 +8,7 @@ from .cli import cli
 try:
     import sys
     from pathlib import Path
+
     # Add parent directory to path to import rag_core
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from rag_core.service import RAGService

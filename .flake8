@@ -1,0 +1,16 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,E501,W503,F401,E402
+exclude = 
+    .venv,
+    __pycache__,
+    .git,
+    knowledge_base,
+    .pytest_cache
+per-file-ignores =
+    __init__.py:F401,E402
+    */tests/*:F401,F841
+    nancy_brain/cli.py:F401,F841
+    run_mcp_server.py:E402
+    rag_core/types.py:E402
+    scripts/*.py:F401,F841,E402

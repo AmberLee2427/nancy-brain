@@ -13,24 +13,24 @@ from nancy_brain.cli import cli
 def test_cli_help():
     """Test CLI help command."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['--help'])
+    result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert 'Nancy Brain' in result.output
-    assert 'Turn GitHub repos into AI-searchable knowledge bases' in result.output
+    assert "Nancy Brain" in result.output
+    assert "Turn GitHub repos into AI-searchable knowledge bases" in result.output
 
 
 def test_init_command():
     """Test init command creates project structure."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         project_name = "test-project"
         with runner.isolated_filesystem(tmpdir):
-            result = runner.invoke(cli, ['init', project_name])
-            
+            result = runner.invoke(cli, ["init", project_name])
+
             assert result.exit_code == 0
-            assert 'Initialized Nancy Brain project' in result.output
-            
+            assert "Initialized Nancy Brain project" in result.output
+
             # Check that files were created
             project_path = Path(project_name)
             assert project_path.exists()
@@ -41,128 +41,127 @@ def test_init_command():
 def test_add_repo_command():
     """Test add-repo command."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a basic config structure
         config_dir = Path(tmpdir) / "config"
         config_dir.mkdir()
         config_file = config_dir / "repositories.yml"
         config_file.write_text("# Empty config\n")
-        
-        result = runner.invoke(cli, [
-            'add-repo', 
-            'https://github.com/test/repo.git',
-            '--category', 'test_category'
-        ], cwd=tmpdir)
-        
+
+        result = runner.invoke(
+            cli, ["add-repo", "https://github.com/test/repo.git", "--category", "test_category"], cwd=tmpdir
+        )
+
         assert result.exit_code == 0
-        assert 'Added repo to test_category' in result.output
+        assert "Added repo to test_category" in result.output
 
 
 def test_add_repo_command_no_config():
     """Test add-repo command when no config exists."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = runner.invoke(cli, [
-            'add-repo', 
-            'https://github.com/test/repo.git'
-        ], cwd=tmpdir)
-        
+        result = runner.invoke(cli, ["add-repo", "https://github.com/test/repo.git"], cwd=tmpdir)
+
         assert result.exit_code == 0
-        assert 'No config/repositories.yml found' in result.output
+        assert "No config/repositories.yml found" in result.output
 
 
 def test_add_article_command():
     """Test add-article command."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = runner.invoke(cli, [
-            'add-article',
-            'https://arxiv.org/pdf/test.pdf',
-            'test_article',
-            '--category', 'test_papers',
-            '--description', 'A test article'
-        ], cwd=tmpdir)
-        
+        result = runner.invoke(
+            cli,
+            [
+                "add-article",
+                "https://arxiv.org/pdf/test.pdf",
+                "test_article",
+                "--category",
+                "test_papers",
+                "--description",
+                "A test article",
+            ],
+            cwd=tmpdir,
+        )
+
         assert result.exit_code == 0
-        assert 'Added article' in result.output
-        
+        assert "Added article" in result.output
+
         # Check that the config file was created and contains the article
         config_file = Path(tmpdir) / "config" / "articles.yml"
         assert config_file.exists()
-        
+
         with open(config_file) as f:
             config = yaml.safe_load(f)
-        
-        assert 'test_papers' in config
-        assert len(config['test_papers']) == 1
-        assert config['test_papers'][0]['name'] == 'test_article'
-        assert config['test_papers'][0]['url'] == 'https://arxiv.org/pdf/test.pdf'
-        assert config['test_papers'][0]['description'] == 'A test article'
+
+        assert "test_papers" in config
+        assert len(config["test_papers"]) == 1
+        assert config["test_papers"][0]["name"] == "test_article"
+        assert config["test_papers"][0]["url"] == "https://arxiv.org/pdf/test.pdf"
+        assert config["test_papers"][0]["description"] == "A test article"
 
 
 def test_add_article_duplicate():
     """Test add-article command with duplicate name."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create initial article
         config_dir = Path(tmpdir) / "config"
         config_dir.mkdir()
         config_file = config_dir / "articles.yml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 test_papers:
   - name: test_article
     url: https://example.com/existing.pdf
-""")
-        
+"""
+        )
+
         # Try to add duplicate
-        result = runner.invoke(cli, [
-            'add-article',
-            'https://arxiv.org/pdf/test.pdf',
-            'test_article',
-            '--category', 'test_papers'
-        ], cwd=tmpdir)
-        
+        result = runner.invoke(
+            cli,
+            ["add-article", "https://arxiv.org/pdf/test.pdf", "test_article", "--category", "test_papers"],
+            cwd=tmpdir,
+        )
+
         assert result.exit_code == 0
-        assert 'already exists' in result.output
+        assert "already exists" in result.output
 
 
 def test_search_command_no_embeddings():
     """Test search command when no embeddings exist."""
     runner = CliRunner()
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = runner.invoke(cli, [
-            'search', 
-            'test query'
-        ], cwd=tmpdir)
-        
+        result = runner.invoke(cli, ["search", "test query"], cwd=tmpdir)
+
         assert result.exit_code == 1
-        assert 'Search failed' in result.output
+        assert "Search failed" in result.output
 
 
 def test_serve_command_help():
     """Test serve command help."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['serve', '--help'])
+    result = runner.invoke(cli, ["serve", "--help"])
     assert result.exit_code == 0
-    assert 'Start the HTTP API server' in result.output
+    assert "Start the HTTP API server" in result.output
 
 
 def test_ui_command_help():
     """Test ui command help."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['ui', '--help'])
+    result = runner.invoke(cli, ["ui", "--help"])
     assert result.exit_code == 0
-    assert 'Launch the web admin interface' in result.output
+    assert "Launch the web admin interface" in result.output
 
 
 def test_build_command_help():
     """Test build command help."""
     runner = CliRunner()
-    result = runner.invoke(cli, ['build', '--help'])
+    result = runner.invoke(cli, ["build", "--help"])
     assert result.exit_code == 0
-    assert 'Build the knowledge base' in result.output
+    assert "Build the knowledge base" in result.output

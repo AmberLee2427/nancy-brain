@@ -45,6 +45,7 @@ Usage:
 """
 
 import os
+
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -63,15 +64,15 @@ from rag_core.service import RAGService
 
 class NancyMCPServer:
     """Nancy Brain MCP Server implementation."""
-    
+
     def __init__(self):
         self.server = Server("nancy-brain")
         self.rag_service: Optional[RAGService] = None
         self._setup_handlers()
-    
+
     def _setup_handlers(self):
         """Set up MCP server handlers."""
-        
+
         @self.server.list_tools()
         async def handle_list_tools() -> list[types.Tool]:
             """List available tools."""
@@ -82,33 +83,30 @@ class NancyMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query for the knowledge base"
-                            },
+                            "query": {"type": "string", "description": "Search query for the knowledge base"},
                             "limit": {
                                 "type": "integer",
                                 "description": "Maximum number of results to return",
-                                "default": 6
+                                "default": 6,
                             },
                             "toolkit": {
                                 "type": "string",
                                 "description": "Filter by specific toolkit/category",
-                                "enum": ["microlensing_tools", "general_tools"]
+                                "enum": ["microlensing_tools", "general_tools"],
                             },
                             "doctype": {
-                                "type": "string", 
+                                "type": "string",
                                 "description": "Filter by document type",
-                                "enum": ["code", "documentation", "notebook"]
+                                "enum": ["code", "documentation", "notebook"],
                             },
                             "threshold": {
                                 "type": "number",
                                 "description": "Minimum relevance score threshold",
-                                "default": 0.0
-                            }
+                                "default": 0.0,
+                            },
                         },
-                        "required": ["query"]
-                    }
+                        "required": ["query"],
+                    },
                 ),
                 types.Tool(
                     name="retrieve_document_passage",
@@ -118,20 +116,13 @@ class NancyMCPServer:
                         "properties": {
                             "doc_id": {
                                 "type": "string",
-                                "description": "Document ID (e.g., 'microlensing_tools/MulensModel/README.md')"
+                                "description": "Document ID (e.g., 'microlensing_tools/MulensModel/README.md')",
                             },
-                            "start": {
-                                "type": "integer",
-                                "description": "Starting line number (0-based)",
-                                "default": 0
-                            },
-                            "end": {
-                                "type": "integer",
-                                "description": "Ending line number (exclusive)"
-                            }
+                            "start": {"type": "integer", "description": "Starting line number (0-based)", "default": 0},
+                            "end": {"type": "integer", "description": "Ending line number (exclusive)"},
                         },
-                        "required": ["doc_id"]
-                    }
+                        "required": ["doc_id"],
+                    },
                 ),
                 types.Tool(
                     name="retrieve_multiple_passages",
@@ -146,15 +137,15 @@ class NancyMCPServer:
                                     "properties": {
                                         "doc_id": {"type": "string"},
                                         "start": {"type": "integer", "default": 0},
-                                        "end": {"type": "integer"}
+                                        "end": {"type": "integer"},
                                     },
-                                    "required": ["doc_id"]
+                                    "required": ["doc_id"],
                                 },
-                                "description": "List of document passages to retrieve"
+                                "description": "List of document passages to retrieve",
                             }
                         },
-                        "required": ["items"]
-                    }
+                        "required": ["items"],
+                    },
                 ),
                 types.Tool(
                     name="explore_document_tree",
@@ -165,15 +156,11 @@ class NancyMCPServer:
                             "path": {
                                 "type": "string",
                                 "description": "Path prefix to filter results (e.g., 'microlensing_tools/MulensModel')",
-                                "default": ""
+                                "default": "",
                             },
-                            "max_depth": {
-                                "type": "integer",
-                                "description": "Maximum depth to traverse",
-                                "default": 3
-                            }
-                        }
-                    }
+                            "max_depth": {"type": "integer", "description": "Maximum depth to traverse", "default": 3},
+                        },
+                    },
                 ),
                 types.Tool(
                     name="set_retrieval_weights",
@@ -183,36 +170,36 @@ class NancyMCPServer:
                         "properties": {
                             "namespace": {
                                 "type": "string",
-                                "description": "Namespace to set weight for (e.g., 'microlensing_tools')"
+                                "description": "Namespace to set weight for (e.g., 'microlensing_tools')",
                             },
                             "weight": {
                                 "type": "number",
                                 "description": "Weight value (higher = more priority)",
-                                "minimum": 0.0
-                            }
+                                "minimum": 0.0,
+                            },
                         },
-                        "required": ["namespace", "weight"]
-                    }
+                        "required": ["namespace", "weight"],
+                    },
                 ),
                 types.Tool(
                     name="get_system_status",
                     description="Get Nancy Brain system status and health information",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {}
-                    }
-                )
+                    inputSchema={"type": "object", "properties": {}},
+                ),
             ]
-        
+
         @self.server.call_tool()
-        async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+        async def handle_call_tool(
+            name: str, arguments: Dict[str, Any]
+        ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
             """Handle tool calls."""
             if not self.rag_service:
-                return [types.TextContent(
-                    type="text",
-                    text="❌ Nancy Brain service not initialized. Please check server configuration."
-                )]
-            
+                return [
+                    types.TextContent(
+                        type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                    )
+                ]
+
             try:
                 if name == "search_knowledge_base":
                     return await self._handle_search(arguments)
@@ -227,157 +214,140 @@ class NancyMCPServer:
                 elif name == "get_system_status":
                     return await self._handle_status(arguments)
                 else:
-                    return [types.TextContent(
-                        type="text",
-                        text=f"❌ Unknown tool: {name}"
-                    )]
+                    return [types.TextContent(type="text", text=f"❌ Unknown tool: {name}")]
             except Exception as e:
-                return [types.TextContent(
-                    type="text",
-                    text=f"❌ Error executing {name}: {str(e)}"
-                )]
-    
+                return [types.TextContent(type="text", text=f"❌ Error executing {name}: {str(e)}")]
+
     async def _handle_search(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle search_knowledge_base tool."""
         if not self.rag_service:
-            return [types.TextContent(
-                type="text",
-                text="❌ Nancy Brain service not initialized. Please check server configuration."
-            )]
-            
+            return [
+                types.TextContent(
+                    type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                )
+            ]
+
         query = args["query"]
         limit = args.get("limit", 6)
         toolkit = args.get("toolkit")
         doctype = args.get("doctype")
         threshold = args.get("threshold", 0.0)
-        
+
         results = await self.rag_service.search_docs(
-            query=query,
-            limit=limit,
-            toolkit=toolkit,
-            doctype=doctype,
-            threshold=threshold
+            query=query, limit=limit, toolkit=toolkit, doctype=doctype, threshold=threshold
         )
-        
+
         if not results:
-            return [types.TextContent(
-                type="text",
-                text=f"🔍 No results found for query: '{query}'"
-            )]
-        
+            return [types.TextContent(type="text", text=f"🔍 No results found for query: '{query}'")]
+
         # Format results
         response_text = f"🔍 **Search Results for:** '{query}'\n\n"
-        
+
         for i, result in enumerate(results, 1):
-            score = result.get('score', 0.0)
-            doc_id = result.get('id', result.get('doc_id', 'unknown'))
-            text = result.get('text', '')
-            
+            score = result.get("score", 0.0)
+            doc_id = result.get("id", result.get("doc_id", "unknown"))
+            text = result.get("text", "")
+
             response_text += f"**{i}. {doc_id}** (score: {score:.3f})\n"
             response_text += f"```\n{text[:300]}{'...' if len(text) > 300 else ''}\n```\n\n"
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def _handle_retrieve(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle retrieve_document_passage tool."""
         doc_id = args["doc_id"]
         start = args.get("start", 0)
         end = args.get("end")
-        
+
         result = await self.rag_service.retrieve(doc_id, start, end)
-        
+
         if not result:
-            return [types.TextContent(
-                type="text",
-                text=f"❌ Document not found: {doc_id}"
-            )]
-        
-        text = result.get('text', '')
-        github_url = result.get('github_url', '')
-        
+            return [types.TextContent(type="text", text=f"❌ Document not found: {doc_id}")]
+
+        text = result.get("text", "")
+        github_url = result.get("github_url", "")
+
         response_text = f"📄 **Document:** {doc_id}\n"
         if github_url:
             response_text += f"🔗 **GitHub:** {github_url}\n"
         response_text += f"\n```\n{text}\n```"
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def _handle_retrieve_batch(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle retrieve_multiple_passages tool."""
         items = args["items"]
-        
+
         results = await self.rag_service.retrieve_batch(items)
-        
+
         if not results:
-            return [types.TextContent(
-                type="text",
-                text="❌ No documents retrieved"
-            )]
-        
+            return [types.TextContent(type="text", text="❌ No documents retrieved")]
+
         response_text = f"📄 **Retrieved {len(results)} passages:**\n\n"
-        
+
         for i, result in enumerate(results, 1):
-            doc_id = result.get('doc_id', 'unknown')
-            text = result.get('text', '')
-            github_url = result.get('github_url', '')
-            
+            doc_id = result.get("doc_id", "unknown")
+            text = result.get("text", "")
+            github_url = result.get("github_url", "")
+
             response_text += f"**{i}. {doc_id}**\n"
             if github_url:
                 response_text += f"🔗 {github_url}\n"
             response_text += f"```\n{text}\n```\n\n"
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def _handle_tree(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle explore_document_tree tool."""
         path = args.get("path", "")
         max_depth = args.get("max_depth", 3)
-        
+
         tree_data = await self.rag_service.list_tree(path, max_depth)
-        
+
         response_text = f"🌳 **Document Tree"
         if path:
             response_text += f" (path: {path})"
         response_text += ":**\n\n"
-        
+
         def format_tree(items, indent=0):
             formatted = ""
             for item in items[:50]:  # Limit for readability
                 prefix = "  " * indent
                 if isinstance(item, dict):
-                    name = item.get('name', 'unknown')
-                    if item.get('type') == 'file':
+                    name = item.get("name", "unknown")
+                    if item.get("type") == "file":
                         formatted += f"{prefix}📄 {name}\n"
                     else:
                         formatted += f"{prefix}📁 {name}/\n"
-                        if 'children' in item:
-                            formatted += format_tree(item['children'], indent + 1)
+                        if "children" in item:
+                            formatted += format_tree(item["children"], indent + 1)
                 else:
                     formatted += f"{prefix}📄 {item}\n"
             return formatted
-        
+
         response_text += format_tree(tree_data)
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def _handle_set_weights(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle set_retrieval_weights tool."""
         if not self.rag_service:
-            return [types.TextContent(
-                type="text",
-                text="❌ Nancy Brain service not initialized. Please check server configuration."
-            )]
-            
+            return [
+                types.TextContent(
+                    type="text", text="❌ Nancy Brain service not initialized. Please check server configuration."
+                )
+            ]
+
         doc_id = args["doc_id"]
         weight = args["weight"]
         namespace = args.get("namespace", "global")
         ttl_days = args.get("ttl_days")
-        
+
         await self.rag_service.set_weight(doc_id, weight, namespace, ttl_days)
-        
+
         # Show the actual clamped weight
         clamped_weight = max(0.5, min(weight, 2.0))
-        
+
         response_text = f"⚖️ **Weight Updated:**\n"
         response_text += f"Document: `{doc_id}`\n"
         response_text += f"Requested Weight: `{weight}`\n"
@@ -389,36 +359,34 @@ class NancyMCPServer:
         if ttl_days:
             response_text += f"TTL: `{ttl_days}` days\n"
         response_text += "\nThis will adjust the document's ranking in future searches."
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def _handle_status(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle get_system_status tool."""
         health_info = await self.rag_service.health()
         version_info = await self.rag_service.version()
-        
+
         response_text = "🏥 **Nancy Brain System Status**\n\n"
-        
+
         # Health info
-        status = health_info.get('status', 'unknown')
+        status = health_info.get("status", "unknown")
         status_emoji = "✅" if status == "ok" else "❌"
         response_text += f"{status_emoji} **Status:** {status}\n"
-        
+
         # Version info
         if version_info:
             response_text += f"🏷️ **Version:** {version_info.get('index_version', 'unknown')}\n"
             response_text += f"🔨 **Build SHA:** {version_info.get('build_sha', 'unknown')}\n"
             response_text += f"📅 **Built At:** {version_info.get('built_at', 'unknown')}\n"
-        
+
         return [types.TextContent(type="text", text=response_text)]
-    
+
     async def initialize(self, config_path: Path, embeddings_path: Path, weights_path: Optional[Path] = None):
         """Initialize the RAG service."""
         try:
             self.rag_service = RAGService(
-                config_path=config_path,
-                embeddings_path=embeddings_path,
-                weights_path=weights_path
+                config_path=config_path, embeddings_path=embeddings_path, weights_path=weights_path
             )
             print(f"✅ Nancy Brain MCP Server initialized successfully")
             print(f"📂 Config: {config_path}")
@@ -428,7 +396,7 @@ class NancyMCPServer:
         except Exception as e:
             print(f"❌ Failed to initialize Nancy Brain: {e}")
             raise
-    
+
     async def run(self):
         """Run the MCP server."""
         # Using stdio transport (most common for MCP)
@@ -440,10 +408,9 @@ class NancyMCPServer:
                     server_name="nancy-brain",
                     server_version="1.0.0",
                     capabilities=self.server.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={}
-                    )
-                )
+                        notification_options=NotificationOptions(), experimental_capabilities={}
+                    ),
+                ),
             )
 
 
@@ -453,29 +420,29 @@ async def main():
     parser.add_argument("config_path", help="Path to repositories.yml config file")
     parser.add_argument("embeddings_path", help="Path to embeddings directory")
     parser.add_argument("--weights", help="Path to weights.yaml file", default=None)
-    
+
     args = parser.parse_args()
-    
+
     config_path = Path(args.config_path)
     embeddings_path = Path(args.embeddings_path)
     weights_path = Path(args.weights) if args.weights else None
-    
+
     # Validate paths
     if not config_path.exists():
         print(f"❌ Config file not found: {config_path}")
         sys.exit(1)
-    
+
     if not embeddings_path.exists():
         print(f"❌ Embeddings directory not found: {embeddings_path}")
         sys.exit(1)
-    
+
     if weights_path and not weights_path.exists():
         print(f"❌ Weights file not found: {weights_path}")
         sys.exit(1)
-    
+
     # Create and run server
     server = NancyMCPServer()
-    
+
     try:
         await server.initialize(config_path, embeddings_path, weights_path)
         await server.run()

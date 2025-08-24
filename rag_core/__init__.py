@@ -15,9 +15,10 @@ __version__ = "0.1.0"
 # Global instance for the bot to use
 rag_service = None
 
+
 def get_rag_service() -> Optional[RAGService]:
     """Get the global RAG service instance."""
     global rag_service
     if rag_service is None:
         rag_service = RAGService()
-    return rag_service 
+    return rag_service

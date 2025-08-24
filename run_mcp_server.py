@@ -13,6 +13,7 @@ Usage:
 """
 
 import os
+
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -26,13 +27,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 async def main():
     """Launch the Nancy Brain MCP server with default configuration."""
-    
+
     # Default paths (adjust these to match your setup)
     base_path = Path(__file__).parent
     config_path = base_path / "config" / "repositories.yml"
     embeddings_path = base_path / "knowledge_base" / "embeddings"
     weights_path = base_path / "config" / "weights.yaml"
-    
+
     # Check if paths exist
     missing_paths = []
     if not config_path.exists():
@@ -42,7 +43,7 @@ async def main():
     if weights_path and not weights_path.exists():
         # Weights are optional
         weights_path = None
-    
+
     if missing_paths:
         print("❌ Missing required files:")
         for path in missing_paths:
@@ -51,7 +52,7 @@ async def main():
         print("1. Built the knowledge base with embeddings")
         print("2. Created the repositories.yml config file")
         sys.exit(1)
-    
+
     print("🚀 Starting Nancy Brain MCP Server...")
     print(f"📂 Config: {config_path}")
     print(f"🔍 Embeddings: {embeddings_path}")
@@ -66,14 +67,14 @@ async def main():
     print("   • explore_document_tree - Browse the document structure")
     print("   • set_retrieval_weights - Adjust search priorities")
     print("   • get_system_status - Check server health and version")
-    print("\n" + "="*60)
-    
+    print("\n" + "=" * 60)
+
     # Import here to avoid early crashes with txtai/torch
     from connectors.mcp_server.server import NancyMCPServer
-    
+
     # Create and run server
     server = NancyMCPServer()
-    
+
     try:
         await server.initialize(config_path, embeddings_path, weights_path)
         await server.run()

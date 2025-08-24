@@ -6,6 +6,7 @@ Store for document embeddings.
 from pathlib import Path
 from typing import Optional
 
+
 class Store:
     """Store for reading document text by line ranges."""
 
@@ -23,12 +24,11 @@ class Store:
             doc_path = self.base_path / f"{doc_id}.txt"
         if not doc_path.exists():
             raise FileNotFoundError(f"Document not found: {doc_id}")
-        
+
         # Read all lines including newline characters
-        with open(doc_path, 'r') as f:
+        with open(doc_path, "r") as f:
             lines = f.readlines()
         # Default to full range
         s = start if start is not None else 0
         e = end if end is not None else len(lines)
-        return ''.join(lines[s:e])
-    
+        return "".join(lines[s:e])
