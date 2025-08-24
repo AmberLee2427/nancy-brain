@@ -155,6 +155,5 @@ config/model_weights.yaml  # Dynamic learning weights from Nancy's WEIGHT: tool
 # Documentation
 docs/_build/
 site/
-mkdocs.yml
 
 SLACK.md

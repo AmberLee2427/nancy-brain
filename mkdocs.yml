@@ -1,0 +1,92 @@
+site_name: Nancy Brain
+site_description: Turn GitHub repos into AI-searchable knowledge bases
+site_url: https://amberlee2427.github.io/nancy-brain/
+repo_url: https://github.com/AmberLee2427/nancy-brain
+repo_name: AmberLee2427/nancy-brain
+
+docs_dir: docs_site
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - mkdocs_click
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quick-start.md
+    - Configuration: configuration.md
+  - Integrations:
+    - VS Code + MCP: integrations/vscode-mcp.md
+    - Claude Desktop: integrations/claude-desktop.md
+    - HTTP API: integrations/http-api.md
+  - Tutorials:
+    - Research Workflow: tutorials/research-workflow.md
+    - Python API: tutorials/python-api.md
+  - API Reference:
+    - CLI Commands: api/cli.md
+    - Core Services: api/core.md
+    - Web Interface: api/web.md
+  - Development:
+    - Architecture: development/architecture.md
+    - Workflow Automations: development/workflow-automations.md
+    - Documentation Hosting: development/hosting.md
+    - Troubleshooting: development/troubleshooting.md
+  - Reference:
+    - Original MCP Setup: reference/mcp-server-original.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AmberLee2427/nancy-brain
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/nancy-brain/
