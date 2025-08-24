@@ -115,7 +115,14 @@ knowledge_base/
 │       ├── Paczynski_1986.pdf
 │       └── Mao_2012.pdf
 └── embeddings/             # Persistent search index
-    └── index/              # txtai embeddings (used by Nancy)
+    ├── index/              # General embeddings (used by Nancy)
+    │   ├── config.json
+    │   ├── documents
+    │   └── embeddings
+    └── code_index/         # Code-specific embeddings (dual embedding)
+        ├── config.json
+        ├── documents
+        └── embeddings
 ```
 
 ## 🔧 **Advanced Usage**
@@ -187,8 +194,17 @@ python scripts/build_knowledge_base.py --category journal_articles --dirty
 
 The knowledge base scripts feed directly into Nancy's RAG system:
 
-1. **Build Process** → Creates `knowledge_base/embeddings/index/`  
+1. **Build Process** → Creates `knowledge_base/embeddings/index/` and `knowledge_base/embeddings/code_index/`
 2. **Nancy's RAG Service** → Loads embeddings for semantic search
+   ```python
+   # Configure RAG service to use the built embeddings
+   rag = RAGService(
+       config_path=Path('config/repositories.yml'),
+       embeddings_path=Path('knowledge_base/embeddings/index'),  # Point to index subfolder
+       weights_path=Path('config/weights.yaml'),
+       use_dual_embedding=True  # Enables code_index usage
+   )
+   ```
 3. **User Queries** → Search across both code repositories and research papers
 4. **Results** → Nancy can cite specific papers, code files, or notebooks
 

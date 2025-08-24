@@ -17,8 +17,11 @@ Usage:
     python scripts/manage_articles.py rebuild
 """
 
-import argparse
 import os
+# Fix OpenMP issue before importing any ML libraries
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -28,8 +31,14 @@ from typing import List, Dict, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from bot.plugins.rag.rag_service import RAGService
-from txtai.pipeline import Textractor
+from rag_core.service import RAGService
+
+try:
+    from txtai.pipeline import Textractor
+    TXTAI_AVAILABLE = True
+except ImportError:
+    TXTAI_AVAILABLE = False
+    Textractor = None
 
 
 class ArticleManager:

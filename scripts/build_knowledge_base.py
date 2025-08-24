@@ -4,6 +4,9 @@ Orchestrates the full knowledge base build pipeline (cloning, direct txtai index
 """
 
 import os
+# Fix OpenMP issue before importing any ML libraries
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import yaml
 import subprocess
 from pathlib import Path
