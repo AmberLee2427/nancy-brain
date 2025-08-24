@@ -1,0 +1,23 @@
+# Netlify configuration for MkDocs
+[build]
+  command = "pip install -e '.[docs]' && mkdocs build"
+  publish = "site/"
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+
+# Redirect rules for clean URLs
+[[redirects]]
+  from = "/api/*"
+  to = "/api/:splat/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/tutorials/*"
+  to = "/tutorials/:splat/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/integrations/*"
+  to = "/integrations/:splat/index.html"
+  status = 200

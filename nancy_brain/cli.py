@@ -156,6 +156,68 @@ def search(query, limit, embeddings_path, config, weights):
 
 
 @cli.command()
+@click.option("--embeddings-path", default="knowledge_base/embeddings", help="Embeddings path")
+@click.option("--config", default="config/repositories.yml", help="Config path")
+@click.option("--weights", default="config/weights.yaml", help="Weights path")
+@click.option("--prefix", default="", help="Path prefix to filter results")
+@click.option("--max-depth", default=3, help="Maximum depth to traverse")
+@click.option("--max-entries", default=100, help="Maximum number of entries to show")
+def explore(embeddings_path, config, weights, prefix, max_depth, max_entries):
+    """Explore the knowledge base document tree structure."""
+    import asyncio
+
+    async def do_explore():
+        # Convert paths to absolute paths relative to current working directory
+        embeddings_path_abs = Path.cwd() / embeddings_path
+        config_path_abs = Path.cwd() / config
+        weights_path_abs = Path.cwd() / weights
+
+        # Initialize service with proper paths
+        service = RAGService(
+            embeddings_path=embeddings_path_abs,
+            config_path=config_path_abs,
+            weights_path=weights_path_abs,
+        )
+
+        results = await service.list_tree(prefix=prefix, depth=max_depth, max_entries=max_entries)
+
+        if not results:
+            click.echo("No documents found.")
+            return
+
+        click.echo(f"📁 Document tree (prefix: '{prefix}', depth: {max_depth}):")
+        click.echo()
+
+        for entry in results:
+            path = entry.get("path", "unknown")
+            name = path.split("/")[-1] if "/" in path else path
+            entry_type = "📁" if entry.get("type") == "directory" else "📄"
+
+            # Add trailing slash for directories
+            if entry.get("type") == "directory":
+                name += "/"
+
+            # Calculate simple indentation based on path depth
+            depth = path.count("/") if path != "unknown" else 0
+            indent = "  " * depth
+
+            click.echo(f"{indent}{entry_type} {name}")
+
+            # Show document ID for files
+            if entry.get("type") == "file" and "doc_id" in entry:
+                doc_id = entry.get("doc_id")
+                if doc_id != path:  # Only show if different from path
+                    click.echo(f"{indent}   → {doc_id}")
+
+    # Run the async explore
+    try:
+        asyncio.run(do_explore())
+    except Exception as e:
+        click.echo(f"❌ Explore failed: {e}")
+        sys.exit(1)
+
+
+@cli.command()
 @click.option("--port", default=8501, help="Port to run Streamlit on")
 def ui(port):
     """Launch the web admin interface."""

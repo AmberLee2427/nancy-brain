@@ -79,6 +79,11 @@
   - Search result highlighting
 
 ### CLI Enhancements
+- [ ] **Improved CLI error handling**
+  - Better error messages with actionable suggestions
+  - Graceful handling of missing dependencies
+  - Clear validation errors for configuration files
+  - Helpful hints for common user mistakes
 - [ ] **Better CLI experience**
   - Progress bars for build operations
   - Colored output for better readability

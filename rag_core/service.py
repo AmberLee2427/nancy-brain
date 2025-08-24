@@ -277,28 +277,84 @@ class RAGService:
 
     async def list_tree(self, prefix: str = "", depth: int = 2, max_entries: int = 500) -> List[Dict]:
         """List document IDs under a prefix as a tree structure."""
-        doc_ids = self.registry.list_ids(prefix)
+        # Get document IDs from the actual search index, not the registry config
+        if not self.search.general_embeddings:
+            return []
+
+        try:
+            # Get all document IDs from the search index by doing a broad search
+            # txtai doesn't have a direct "list all IDs" method, so we search for common terms
+            all_results = []
+
+            # Try several broad searches to get as many document IDs as possible
+            search_terms = ["the", "and", "a", "import", "def", "class", "README", "docs"]
+            seen_ids = set()
+
+            for term in search_terms:
+                try:
+                    results = self.search.general_embeddings.search(term, limit=2000)
+                    for result in results:
+                        doc_id = result.get("id", "")
+                        if doc_id and doc_id not in seen_ids:
+                            if not prefix or doc_id.startswith(prefix):
+                                all_results.append(doc_id)
+                                seen_ids.add(doc_id)
+                except Exception:
+                    # Skip documents that can't be parsed
+                    continue
+
+                # Stop if we have enough diverse results
+                if len(seen_ids) > 1000:
+                    break
+
+            # Filter by prefix
+            if prefix:
+                doc_ids = [doc_id for doc_id in all_results if doc_id.startswith(prefix)]
+            else:
+                doc_ids = all_results
+
+        except Exception:
+            # Fallback to registry-based approach if search fails
+            doc_ids = self.registry.list_ids(prefix)
 
         # Convert flat list to tree structure
         tree_entries = []
         seen_paths = set()
 
-        for doc_id in doc_ids[:max_entries]:
-            # Split path into parts
+        # First pass: collect ALL paths (not limited by max_entries) to properly detect directories
+        all_paths = set()
+        for doc_id in doc_ids:
             parts = doc_id.split("/")
+            for i in range(1, min(len(parts), depth + 1) + 1):  # Go one level deeper to detect directories
+                path = "/".join(parts[:i])
+                all_paths.add(path)
 
-            # Build tree entries up to specified depth
+        # Second pass: build tree entries (limited by max_entries for display)
+        entries_added = 0
+        for doc_id in doc_ids:
+            if entries_added >= max_entries:
+                break
+
+            parts = doc_id.split("/")
             for i in range(1, min(len(parts), depth) + 1):
                 path = "/".join(parts[:i])
                 if path not in seen_paths:
                     seen_paths.add(path)
+
+                    # Check if this path has any children (making it a directory)
+                    is_directory = any(other_path.startswith(path + "/") for other_path in all_paths)
+
                     tree_entries.append(
                         {
                             "path": path,
-                            "type": "directory" if i < len(parts) else "file",
+                            "type": "directory" if is_directory else "file",
                             "doc_id": doc_id if i == len(parts) else None,
                         }
                     )
+                    entries_added += 1
+
+                    if entries_added >= max_entries:
+                        break
 
         return tree_entries
 
