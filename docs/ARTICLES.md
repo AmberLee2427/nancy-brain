@@ -187,5 +187,5 @@ python scripts/manage_pdf_articles.py --list
 python scripts/manage_articles.py add /path/to/new_paper.pdf
 
 # Troubleshoot any issues
-jupyter notebook knowledge_base_troubleshooting.ipynb
+jupyter notebook docs/knowledge_base_troubleshooting.ipynb
 ```

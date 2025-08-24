@@ -36,13 +36,14 @@ class Search:
         """Load txtai embeddings for general and code indexes."""
         try:
             from txtai.embeddings import Embeddings
-            # Load general embeddings
-            logger.info(f"Loading general embeddings from {self.embeddings_path}")
+            # Load general embeddings (index is in 'index' subdirectory)
+            general_index = self.embeddings_path / "index"
+            logger.info(f"Loading general embeddings from {general_index}")
             self.general_embeddings = Embeddings()
-            self.general_embeddings.load(str(self.embeddings_path))
+            self.general_embeddings.load(str(general_index))
             # Load code embeddings if dual embedding enabled
             if self.use_dual_embedding:
-                code_index = self.embeddings_path.parent / "code_index"
+                code_index = self.embeddings_path / "code_index"
                 if code_index.exists():
                     logger.info(f"Loading code embeddings from {code_index}")
                     self.code_embeddings = Embeddings()
