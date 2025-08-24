@@ -1,0 +1,32 @@
+[run]
+source = .
+omit = 
+    tests/*
+    .pytest_cache/*
+    build/*
+    dist/*
+    *.egg-info/*
+
+[report]
+include = 
+    rag_core/*
+    nancy_brain/*
+    connectors/*
+    scripts/*
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+
+[html]
+directory = htmlcov
+
+[xml]
+output = coverage.xml

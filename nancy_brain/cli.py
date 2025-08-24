@@ -14,8 +14,15 @@ sys.path.insert(0, str(package_root))
 
 from rag_core.service import RAGService
 
+# Get version from package
+try:
+    from nancy_brain import __version__
+except ImportError:
+    __version__ = "unknown"
+
 
 @click.group()
+@click.version_option(version=__version__)
 def cli():
     """Nancy Brain - Turn GitHub repos into AI-searchable knowledge bases."""
     pass

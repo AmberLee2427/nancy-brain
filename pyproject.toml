@@ -1,13 +1,14 @@
 [project]
 name = "nancy-brain"
 version = "0.1.0"
-description = "Nancy Brain - RAG service for microlensing research AI assistant"
+description = "Turn any GitHub repository into a searchable knowledge base for AI agents"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 authors = [
     {name = "Amber Malpas", email = "malpas.1@osu.edu"}
 ]
 license = {text = "MIT"}
+keywords = ["AI", "RAG", "knowledge-base", "search", "embeddings", "research", "github"]
 dependencies = [
     "aiohttp>=3.8.0",
     "slack-sdk>=3.18.0",
@@ -29,17 +30,28 @@ dependencies = [
     "streamlit>=1.28.0"
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Astronomy",
-    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Indexing",
+    "Environment :: Console",
+    "Environment :: Web Environment",
 ]
+
+[project.urls]
+Homepage = "https://github.com/AmberLee2427/nancy-brain"
+Documentation = "https://github.com/AmberLee2427/nancy-brain/blob/main/README.md"
+Repository = "https://github.com/AmberLee2427/nancy-brain"
+Issues = "https://github.com/AmberLee2427/nancy-brain/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -47,9 +59,13 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
+    "coverage>=7.0.0",
     "ipykernel",
     "jupyter",
-    "ipywidgets"
+    "ipywidgets",
+    "build>=0.10.0",
+    "twine>=4.0.0",
+    "bump-my-version>=0.11.0"
 ]
 pdf = [
     "tika>=2.6.0",
@@ -72,3 +88,27 @@ packages = [
 
 [project.scripts]
 nancy-brain = "nancy_brain.cli:cli"
+
+[tool.bumpversion]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "nancy_brain/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'

@@ -493,6 +493,34 @@ flake8 nancy_brain/
 nancy-brain --help
 ```
 
+### Releasing
+Nancy Brain uses automated versioning and PyPI publishing:
+
+```bash
+# Bump patch version (0.1.0 → 0.1.1)
+./release.sh patch
+
+# Bump minor version (0.1.0 → 0.2.0)  
+./release.sh minor
+
+# Bump major version (0.1.0 → 1.0.0)
+./release.sh major
+```
+
+This automatically:
+1. Updates version numbers in `pyproject.toml` and `nancy_brain/__init__.py`
+2. Creates a git commit and tag
+3. Pushes to GitHub, triggering PyPI publication via GitHub Actions
+
+Manual version management:
+```bash
+# See current version and bump options
+bump-my-version show-bump
+
+# Dry run (see what would change)
+bump-my-version bump --dry-run patch
+```
+
 ---
 ## 15. Roadmap (Optional)
 - Persistence layer for runtime weights

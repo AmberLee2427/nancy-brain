@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include nancy_brain *.py
+recursive-include rag_core *.py
+recursive-include connectors *.py
+recursive-include scripts *.py
+recursive-include config *.yml *.yaml
+recursive-exclude tests *
+recursive-exclude .pytest_cache *
+recursive-exclude __pycache__ *
+recursive-exclude *.egg-info *
