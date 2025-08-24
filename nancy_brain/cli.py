@@ -67,23 +67,28 @@ def build(config, articles_config, embeddings_path, force_update):
     """Build the knowledge base from configured repositories."""
     click.echo("🏗️  Building knowledge base...")
 
+    # Convert paths to absolute paths relative to current working directory
+    config_path = Path.cwd() / config
+    embeddings_path = Path.cwd() / embeddings_path
+
     # Build command arguments
     cmd = [
         sys.executable,
         str(package_root / "scripts" / "build_knowledge_base.py"),
         "--config",
-        config,
+        str(config_path),
         "--embeddings-path",
-        embeddings_path,
+        str(embeddings_path),
     ]
     if articles_config:
-        cmd.extend(["--articles-config", articles_config])
+        articles_config_path = Path.cwd() / articles_config
+        cmd.extend(["--articles-config", str(articles_config_path)])
     if force_update:
         cmd.append("--force-update")
 
-    # Run the build script
+    # Run the build script from the package directory
     try:
-        result = subprocess.run(cmd, check=True, cwd=package_root)
+        result = subprocess.run(cmd, check=True)
         click.echo("✅ Knowledge base built successfully!")
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Build failed with exit code {e.returncode}")
@@ -102,7 +107,12 @@ def serve(host, port):
         return
 
     click.echo(f"🚀 Starting Nancy Brain server on {host}:{port}")
-    uvicorn.run("connectors.http_api.app:app", host=host, port=port)
+
+    # Add package root to Python path for imports
+    sys.path.insert(0, str(package_root))
+
+    # Use the app from the package
+    uvicorn.run("connectors.http_api.app:app", host=host, port=port, reload=False)
 
 
 @cli.command()
@@ -116,11 +126,16 @@ def search(query, limit, embeddings_path, config, weights):
     import asyncio
 
     async def do_search():
+        # Convert paths to absolute paths relative to current working directory
+        embeddings_path_abs = Path.cwd() / embeddings_path
+        config_path_abs = Path.cwd() / config
+        weights_path_abs = Path.cwd() / weights
+
         # Initialize service with proper paths
         service = RAGService(
-            embeddings_path=Path(embeddings_path),
-            config_path=Path(config),
-            weights_path=Path(weights),
+            embeddings_path=embeddings_path_abs,
+            config_path=config_path_abs,
+            weights_path=weights_path_abs,
         )
         results = await service.search_docs(query, limit=limit)
 
