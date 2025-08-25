@@ -381,9 +381,11 @@ class RAGService:
 
     async def version(self) -> Dict:
         """Return index and build version info."""
-        # TODO: Read from actual index metadata file
+        from nancy_brain import __version__
+
+        # TODO: Read build_sha and built_at from actual index metadata file
         return {
-            "index_version": "dev-0.1.0",
+            "index_version": __version__,
             "build_sha": "unknown",
             "built_at": "unknown",
         }

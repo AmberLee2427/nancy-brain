@@ -196,3 +196,14 @@
 - [ ] Add code of conduct
 - [ ] Create community discussion forum
 - [ ] Reach out to potential users/contributors
+
+## 🐞 Bug Squashing (User Feedback)
+
+- [ ] **`explore_document_tree` returns only "unknown" entries.**
+    - **Description:** The `explore_document_tree` tool is not working correctly. It should display the file and directory structure of the knowledge base, but instead it only shows "unknown" for all entries. This makes it impossible to browse the knowledge base.
+- [ ] **`retrieve_document_passage` fails to find documents from search results.**
+    - **Description:** The `retrieve_document_passage` tool consistently fails with a "Document not found" error when using a `doc_id` provided by the `search_knowledge_base` tool. This is a critical bug that breaks the core search and retrieval functionality. The `retrieve` function should be able to fetch the document content from the `txtai` index, as the server is not supposed to rely on the `raw` files.
+- [ ] **Search relevance needs improvement.**
+    - **Description:** The `search_knowledge_base` tool returns results with mixed relevance and low scores. While some results are good, others seem unrelated to the query. The search algorithm and/or the underlying embeddings should be investigated to improve the quality of the search results.
+- [ ] **`get_system_status` shows incorrect version information.**
+    - **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. It also doesn't show the build SHA or date. The version information should be populated correctly from the build process to allow for proper version tracking.
