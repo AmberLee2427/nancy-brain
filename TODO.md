@@ -31,11 +31,11 @@
 ## 📚 Documentation & Examples (Post-Release v0.1.x)
 
 ### Read the Docs Setup
-- [ ] **Set up MkDocs Material**
-  - Create `docs/` directory structure
-  - Configure `mkdocs.yml` with material theme
-  - Set up Read the Docs project
-  - Add GitHub Actions for auto-deploy
+- [x] **Set up MkDocs Material**
+  - ✅ Create `docs_site/` directory structure
+  - ✅ Configure `mkdocs.yml` with material theme
+  - ✅ Set up Read the Docs project
+  - ✅ Add GitHub Actions for auto-deploy
 
 ### Integration Examples (with Screenshots Later)
 - [ ] **VS Code + MCP Integration**
@@ -56,10 +56,10 @@
   - Usage examples
 
 ### Tutorial Content
-- [ ] **Researcher Workflow Tutorial**
-  - Academic paper + GitHub repo workflow
-  - PDF article management
-  - Search and retrieval examples
+- [x] **Researcher Workflow Tutorial**
+  - ✅ Academic paper + GitHub repo workflow
+  - ✅ PDF article management
+  - ✅ Search and retrieval examples
 - [ ] **ML Engineer Setup Tutorial**
   - PyTorch/scikit-learn knowledge base
   - Code search and documentation
@@ -92,6 +92,7 @@
 
 ### Advanced Features
 - [ ] **Enhanced Search**
+  - [ ] **Refactor search to use txtai's SQL-like queries**
   - Semantic reranking
   - Search result caching
   - Custom scoring algorithms

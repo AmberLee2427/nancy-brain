@@ -68,6 +68,7 @@ nav:
   - Integrations:
     - VS Code + MCP: integrations/vscode-mcp.md
     - Claude Desktop: integrations/claude-desktop.md
+    - Gemini Code Assist: integrations/gemini-code-assist.md
     - HTTP API: integrations/http-api.md
   - Tutorials:
     - Research Workflow: tutorials/research-workflow.md

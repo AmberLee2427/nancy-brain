@@ -1,5 +1,7 @@
 # Nancy Brain
 
+[Pages](https://amberlee2427.github.io/nancy-brain/) [Read the Docs](https://nancy-brain.readthedocs.io/en/latest/)
+
 **Turn any GitHub repository into a searchable knowledge base for AI agents.**
 
 Load the complete source code, documentation, examples, and notebooks from any package you're working with. Nancy Brain gives AI assistants instant access to:
@@ -543,3 +545,11 @@ Expect JSON with status + trace_id.
 
 ---
 Happy searching.
+
+<br>
+<br>
+<br>
+<br>
+
+<!-- Badges Dashbord to check for issues, PRs, and health of CI tests and docs builds -->
+[![GitHub license](https://img.shields.io/github/license/amberlee2427/nancy-brain)](https://github.com/amberlee2427/nancy-brain/blob/main/LICENSE) [![GitHub issues](https://img.shields.io/github/issues/amberlee2427/nancy-brain)](https://github.com/amberlee2427/nancy-brain/issues) [![GitHub releases](https://img.shields.io/github/releases/amberlee2427/nancy-brain)](https://github.com/amberlee2427/nancy-brain/releases) [![GitHub status](https://github.com/amberlee2427/nancy-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/amberlee2427/nancy-brain/actions/workflows/ci.yml) [![docs status](https://github.com/amberlee2427/nancy-brain/actions/workflows/docs.yml/badge.svg)](https://github.com/amberlee2427/nancy-brain/actions/workflows/docs.yml)
