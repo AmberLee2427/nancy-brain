@@ -1,484 +1,176 @@
 # Research Workflow with Nancy Brain
 
-This tutorial walks through using Nancy Brain for academic research, from initial setup to advanced queries. Perfect for researchers who want to build searchable knowledge bases from scientific repositories and papers.
+Build searchable knowledge bases from scientific repositories, papers, and documentation for academic research.
 
-## Overview
-
-Nancy Brain excels at creating searchable knowledge bases from:
-- **Scientific code repositories** (Python, R, MATLAB, etc.)
-- **Documentation and papers** (Markdown, RST, LaTeX)
-- **Research notebooks** (Jupyter, R Markdown)
-- **PDF articles and preprints** (arXiv, journal papers)
-
-## Quick Start: Microlensing Research Example
-
-Let's build a knowledge base for microlensing research tools and papers.
-
-### 1. Project Setup
+## Quick Setup
 
 ```bash
-# Create new research project
-nancy-brain init microlensing-research
-cd microlensing-research
+# Create research project
+nancy-brain init my-research
+cd my-research
 
-# Verify structure
-ls -la
-# config/repositories.yml - for code repositories
-# knowledge_base/ - will contain embeddings
-```
-
-### 2. Configure Research Repositories
-
-Edit `config/repositories.yml` to include key microlensing tools:
-
-```yaml
-# Microlensing analysis tools
-microlensing_tools:
-  - name: MulensModel
-    url: https://github.com/rpoleski/MulensModel.git
-  - name: pyLIMA
-    url: https://github.com/ebachelet/pyLIMA.git
-  - name: VBMicrolensing
-    url: https://github.com/valboz/VBMicrolensing.git
-  - name: RTModel
-    url: https://github.com/AedenElder/RTModel.git
-
-# Data analysis frameworks
-analysis_tools:
+# Configure repositories in config/repositories.yml
+research_tools:
   - name: astropy
     url: https://github.com/astropy/astropy.git
-  - name: scipy
+  - name: scipy  
     url: https://github.com/scipy/scipy.git
 
-# Simulation tools
-simulation_tools:
-  - name: synthpop
-    url: https://github.com/synthpop-galaxy/synthpop.git
-  - name: PopSyCLE
-    url: https://github.com/jluastro/PopSyCLE.git
-```
+# Add papers in config/articles.yml
+key_papers:
+  - name: "Important Paper 2024"
+    url: "https://arxiv.org/pdf/2401.12345.pdf"
+    description: "Key methodology paper"
 
-### 3. Add Research Papers
-
-Create `config/articles.yml` for important papers:
-
-```yaml
-# Key microlensing papers
-foundational_papers:
-  - name: "Paczynski 1986 - Gravitational Microlensing"
-    url: "https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/ADS_PDF"
-    description: "Original gravitational microlensing paper"
-  
-  - name: "Gould 2000 - Microlensing Survey Strategies"
-    url: "https://arxiv.org/pdf/astro-ph/0001421.pdf"
-    description: "Survey design and optimization strategies"
-
-recent_reviews:
-  - name: "Mao 2012 - Microlensing Review"
-    url: "https://arxiv.org/pdf/1206.2557.pdf"
-    description: "Comprehensive review of microlensing techniques"
-    
-  - name: "Gaudi 2012 - Exoplanet Microlensing"
-    url: "https://arxiv.org/pdf/1002.0332.pdf"
-    description: "Microlensing for exoplanet detection"
-
-# Add your own papers
-my_research:
-  - name: "Your Recent Paper"
-    url: "https://arxiv.org/pdf/2301.12345.pdf"
-    description: "Brief description of your work"
-```
-
-### 4. Build Knowledge Base
-
-```bash
-# Build from repositories (takes 5-15 minutes)
-nancy-brain build
-
-# Add PDF articles
-nancy-brain build --articles-config config/articles.yml
-
-# Check what was indexed
-nancy-brain explore --max-entries 20
-```
-
-### 5. Start Researching
-
-```bash
-# Launch web interface
-nancy-brain ui
-
-# Or search from command line
-nancy-brain search "binary lens modeling"
-nancy-brain search "finite source effects"
-nancy-brain search "galactic bulge survey optimization"
-```
-
-## Research Workflow Patterns
-
-### Literature Review Workflow
-
-**1. Seed with Core Papers**
-```bash
-# Add foundational papers to articles.yml
-nancy-brain add-article https://arxiv.org/pdf/astro-ph/0001421.pdf "Gould Survey Strategy"
-nancy-brain build --articles-config config/articles.yml
-```
-
-**2. Explore Related Topics**
-```bash
-# Search for methodology
-nancy-brain search "microlensing event detection algorithms"
-nancy-brain search "photometric precision requirements"
-nancy-brain search "stellar variability background"
-
-# Browse by category
-nancy-brain explore --prefix "foundational_papers"
-```
-
-**3. Find Implementation Details**
-```bash
-# Search for specific techniques
-nancy-brain search "finite source effects implementation"
-nancy-brain search "binary lens caustic calculation"
-nancy-brain search "limb darkening coefficients"
-```
-
-### Code Discovery Workflow
-
-**1. Find Relevant Functions**
-```bash
-# Search for specific capabilities
-nancy-brain search "photometric error modeling"
-nancy-brain search "event fitting optimization"
-nancy-brain search "parallax calculation"
-```
-
-**2. Explore Implementation**
-```bash
-# Browse specific tools
-nancy-brain explore --prefix "microlensing_tools/MulensModel"
-nancy-brain explore --prefix "microlensing_tools/pyLIMA"
-
-# Search within specific tools
-nancy-brain search "MulensModel Event class"
-nancy-brain search "pyLIMA fitting methods"
-```
-
-**3. Compare Approaches**
-```bash
-# Compare implementations across tools
-nancy-brain search "binary lens solver comparison"
-nancy-brain search "optimization algorithms microlensing"
-nancy-brain search "numerical precision finite source"
-```
-
-### Method Development Workflow
-
-**1. Research Background**
-```bash
-# Understand current state
-nancy-brain search "machine learning microlensing classification"
-nancy-brain search "deep learning stellar variability"
-nancy-brain search "neural networks time series astronomy"
-```
-
-**2. Find Related Implementations**
-```bash
-# Look for similar approaches
-nancy-brain search "CNN light curve analysis"
-nancy-brain search "RNN astronomical time series"
-nancy-brain search "transformer models astronomy"
-```
-
-**3. Identify Gaps and Opportunities**
-```bash
-# Search for limitations
-nancy-brain search "computational bottlenecks microlensing"
-nancy-brain search "systematic uncertainties galactic bulge"
-nancy-brain search "false positive rejection methods"
-```
-
-## Advanced Research Queries
-
-### Cross-Domain Searches
-
-```bash
-# Combine multiple concepts
-nancy-brain search "Bayesian inference gravitational lensing"
-nancy-brain search "MCMC parameter estimation microlensing"
-nancy-brain search "Gaussian processes stellar variability"
-
-# Search for interdisciplinary approaches
-nancy-brain search "computer vision astronomical surveys"
-nancy-brain search "signal processing microlensing detection"
-nancy-brain search "statistical methods rare events"
-```
-
-### Technical Implementation Queries
-
-```bash
-# Performance optimization
-nancy-brain search "GPU acceleration astronomy"
-nancy-brain search "parallel processing large datasets"
-nancy-brain search "memory efficient algorithms"
-
-# Numerical methods
-nancy-brain search "root finding algorithms"
-nancy-brain search "integration methods precision"
-nancy-brain search "numerical stability considerations"
-
-# Data handling
-nancy-brain search "large scale data processing"
-nancy-brain search "time series data structures"
-nancy-brain search "efficient file formats astronomy"
-```
-
-### Validation and Testing
-
-```bash
-# Find testing approaches
-nancy-brain search "unit testing scientific software"
-nancy-brain search "validation synthetic data"
-nancy-brain search "benchmark datasets microlensing"
-
-# Error analysis
-nancy-brain search "uncertainty propagation"
-nancy-brain search "systematic error analysis"
-nancy-brain search "robustness testing"
-```
-
-## Research Documentation Workflow
-
-### 1. Document Methodology Searches
-
-Create a research log with your queries:
-
-```markdown
-# Research Log: Machine Learning for Microlensing
-
-## 2025-08-24: Background Research
-- nancy-brain search "machine learning microlensing"
-  - Found 3 recent papers on CNN approaches
-  - MulensModel has preliminary ML modules
-  
-## 2025-08-24: Implementation Survey  
-- nancy-brain search "CNN time series classification astronomy"
-  - TensorFlow implementations in astropy ecosystem
-  - PyTorch examples in several repositories
-```
-
-### 2. Track Useful Document IDs
-
-```bash
-# Save important document references
-nancy-brain search "tensorflow astronomy" > search-results-ml.txt
-nancy-brain explore --prefix "analysis_tools/astropy" > astropy-structure.txt
-```
-
-### 3. Export Context for Papers
-
-Use Nancy Brain to gather context for your writing:
-
-```bash
-# Get comprehensive background
-nancy-brain search "microlensing survey efficiency" --limit 10
-
-# Find specific implementation details
-nancy-brain search "pyLIMA optimization algorithms" --limit 5
-
-# Gather comparison data
-nancy-brain search "VBMicrolensing vs MulensModel performance"
-```
-
-## Collaboration Workflow
-
-### Sharing Knowledge Bases
-
-**1. Export Configuration**
-```bash
-# Share your repository configuration
-cp config/repositories.yml shared-config.yml
-cp config/articles.yml shared-articles.yml
-
-# Document your setup
-echo "# Research KB Setup" > README.md
-echo "Built: $(date)" >> README.md
-echo "Repositories: $(wc -l < config/repositories.yml) sources" >> README.md
-```
-
-**2. Reproducible Builds**
-```bash
-# Version your knowledge base
-git init
-git add config/
-git commit -m "Initial knowledge base configuration"
-
-# Others can rebuild
-git clone your-repo
+# Build knowledge base
 nancy-brain build
 nancy-brain build --articles-config config/articles.yml
+
+# Start searching
+nancy-brain ui  # Web interface
+nancy-brain search "your research topic"
 ```
 
-### Team Research Queries
+## Core Workflows
 
-**1. Onboarding New Team Members**
+### Literature Review
 ```bash
-# Essential background
-nancy-brain search "microlensing fundamentals"
-nancy-brain search "observational strategies"
-nancy-brain search "data analysis pipeline"
+# Seed with foundational papers
+nancy-brain search "fundamental concepts your-field"
+nancy-brain explore --prefix "key_papers"
 
-# Tool orientation
-nancy-brain explore --prefix "microlensing_tools" --max-depth 2
-nancy-brain search "MulensModel tutorial"
-nancy-brain search "pyLIMA getting started"
+# Find related work  
+nancy-brain search "specific methodology"
+nancy-brain search "recent developments"
 ```
 
-**2. Project Planning**
+### Code Discovery
 ```bash
-# Assess current capabilities
-nancy-brain search "existing implementations survey optimization"
-nancy-brain search "computational requirements large surveys"
+# Find implementations
+nancy-brain search "algorithm implementation"
+nancy-brain explore --prefix "research_tools/astropy"
 
-# Identify knowledge gaps
-nancy-brain search "unsolved problems microlensing"
-nancy-brain search "future survey challenges"
+# Compare approaches
+nancy-brain search "performance comparison methods"
+nancy-brain search "numerical stability"
 ```
 
-## Performance Tips for Large Knowledge Bases
-
-### Efficient Building
-
+### Method Development
 ```bash
-# Build incrementally
-nancy-brain build --config config/core-tools.yml
-nancy-brain build --config config/extended-tools.yml --force-update
+# Research background
+nancy-brain search "machine learning your-domain"
+nancy-brain search "current limitations"
 
-# Separate articles for faster iteration
-nancy-brain build --articles-config config/core-papers.yml
-nancy-brain build --articles-config config/recent-papers.yml
+# Find gaps and opportunities
+nancy-brain search "computational bottlenecks"
+nancy-brain search "unsolved problems"
 ```
 
-### Targeted Searching
+## Advanced Features
 
-```bash
-# Use specific categories
-nancy-brain explore --prefix "simulation_tools"
-nancy-brain explore --prefix "foundational_papers"
-
-# Limit search depth for overview
-nancy-brain explore --max-depth 2 --max-entries 50
-
-# Focus searches with technical terms
-nancy-brain search "algorithm implementation" --limit 3
-```
-
-### Resource Management
-
-```bash
-# Monitor knowledge base size
-du -sh knowledge_base/embeddings/
-
-# Clean up if needed
-rm -rf knowledge_base/embeddings/
-nancy-brain build  # Rebuild fresh
-```
-
-## Integration with Research Tools
-
-### Jupyter Notebooks
+### SQL-Like Queries
+Nancy Brain supports direct database queries through the txtai backend:
 
 ```python
-# Use Nancy Brain from Python
-import subprocess
-import json
+# From scripts or Python integration
+results = embeddings.database.search("SELECT id, text FROM txtai WHERE id LIKE 'papers/%'")
+results = embeddings.database.search("SELECT * FROM txtai WHERE id = 'specific_document_id'")
+```
 
-def search_knowledge_base(query, limit=5):
-    """Search Nancy Brain from Jupyter"""
+### Targeted Searches
+```bash
+# Use prefixes for specific collections
+nancy-brain explore --prefix "simulation_tools"
+nancy-brain explore --prefix "foundational_papers" 
+
+# Limit scope and depth
+nancy-brain explore --max-depth 2 --max-entries 20
+nancy-brain search "specific query" --limit 5
+```
+
+### Cross-Domain Research
+```bash
+# Combine concepts
+nancy-brain search "machine learning astronomical surveys"
+nancy-brain search "Bayesian methods time series"
+nancy-brain search "GPU acceleration scientific computing"
+```
+
+## Integration Examples
+
+### Jupyter Notebooks
+```python
+import subprocess
+
+def search_kb(query, limit=5):
     result = subprocess.run([
         'nancy-brain', 'search', query, '--limit', str(limit)
     ], capture_output=True, text=True)
     return result.stdout
 
-# Example usage
-background = search_knowledge_base("microlensing detection efficiency")
-print(background)
+# Use in research
+background = search_kb("methodology background")
 ```
 
 ### LaTeX Writing
-
 ```bash
-# Generate context for paper sections
-nancy-brain search "microlensing survey design principles" --limit 3 > background.txt
-nancy-brain search "computational performance comparison" --limit 5 > methods.txt
-
-# Find specific citations
-nancy-brain search "Paczynski 1986" 
-nancy-brain search "Gould 2000 survey optimization"
+# Generate context for papers
+nancy-brain search "survey methodology" --limit 3 > background.txt
+nancy-brain search "implementation details" --limit 5 > methods.txt
 ```
 
-### Reference Management
+### Research Documentation
+Create research logs tracking your queries and findings:
 
-```bash
-# Extract paper information
-nancy-brain explore --prefix "foundational_papers"
-nancy-brain explore --prefix "recent_reviews"
-
-# Find methodological papers
-nancy-brain search "statistical methods parameter estimation"
-nancy-brain search "Bayesian analysis astronomical data"
+```markdown
+# Research Log
+## 2025-01-15: Background Survey
+- nancy-brain search "deep learning astronomy" 
+  - Found 3 relevant implementations
+  - TensorFlow examples in astropy ecosystem
 ```
 
-## Troubleshooting Research Workflows
+## Performance & Collaboration
 
-### No Results for Specific Topics
-
+### Efficient Builds
 ```bash
-# Try broader terms first
-nancy-brain search "lensing" instead of "gravitational microlensing parallax"
+# Incremental updates
+nancy-brain build --config config/core-tools.yml
+nancy-brain build --articles-config config/papers.yml
 
-# Check what's actually indexed
-nancy-brain explore --prefix "microlensing_tools" --max-entries 10
-
-# Verify papers were indexed
-nancy-brain explore --prefix "foundational_papers"
+# Monitor size
+du -sh knowledge_base/embeddings/
 ```
 
-### Finding Implementation Details
-
+### Team Sharing
 ```bash
-# Look for specific file types
-nancy-brain search "python class definition"
-nancy-brain search "function documentation"
-nancy-brain search "example usage"
+# Version control configurations
+git add config/
+git commit -m "Research KB configuration"
 
-# Browse code structure
-nancy-brain explore --prefix "microlensing_tools/MulensModel" --max-depth 4
+# Reproducible builds
+git clone shared-config-repo
+nancy-brain build
 ```
 
-### Performance Issues
-
+### Troubleshooting
 ```bash
-# Use more specific queries
-nancy-brain search "finite source FSPL" --limit 3
-# Instead of: nancy-brain search "finite source effects"
+# No results? Try broader terms
+nancy-brain search "general-topic" # before "very-specific-implementation"
 
-# Limit exploration depth
-nancy-brain explore --max-depth 2 --max-entries 20
+# Check what's indexed
+nancy-brain explore --max-entries 10
+
+# Performance issues? Use targeted queries
+nancy-brain search "specific-term" --limit 3
+nancy-brain explore --max-depth 2
 ```
 
 ## Next Steps
 
-1. **Expand Your Knowledge Base**: Add more repositories and papers relevant to your research
-2. **Customize Weights**: Edit `config/weights.yaml` to prioritize certain file types
-3. **Automate Updates**: Set up scripts to regularly rebuild with `--force-update`
-4. **Share with Collaborators**: Version control your configuration files
-5. **Integrate with Tools**: Use the HTTP API or MCP server for deeper integration
+1. **Expand**: Add domain-specific repositories and papers
+2. **Customize**: Edit `config/weights.yaml` for file type priorities  
+3. **Automate**: Script regular updates with `--force-update`
+4. **Integrate**: Use MCP server or HTTP API for deeper tool integration
 
-## Further Reading
-
-- [MCP Server Integration](../integrations/vscode-mcp.md) - Use with VS Code and Claude
-- [HTTP API Reference](../integrations/http-api.md) - Programmatic access
-- [Advanced Configuration](../configuration.md) - Customize weights and settings
-- [Troubleshooting](../development/troubleshooting.md) - Common issues and solutions
+See [MCP Integration](../integrations/vscode-mcp.md), [HTTP API](../integrations/http-api.md), and [Advanced Configuration](../configuration.md) for more details.

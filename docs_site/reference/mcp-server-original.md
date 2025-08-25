@@ -65,15 +65,15 @@ Get Nancy Brain system status and health information.
 
 ### Prerequisites
 
-1. **Python Environment**: Ensure you have the `roman-slack-bot` conda environment set up
+1. **Python Environment**: Ensure you have a conda environment set up with Nancy Brain installed
 2. **Knowledge Base**: Build the knowledge base with embeddings
 3. **Configuration**: Have a `repositories.yml` config file
 
 ### Install MCP Dependencies
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
-conda run -n roman-slack-bot pip install -e .
+cd /path/to/nancy-brain
+conda run -n your-environment pip install -e .
 ```
 
 This will install all dependencies including MCP from the `pyproject.toml` file.
@@ -81,8 +81,8 @@ This will install all dependencies including MCP from the `pyproject.toml` file.
 ### Build Knowledge Base (if not already done)
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
-conda run -n roman-slack-bot python scripts/build_knowledge_base.py
+cd /path/to/nancy-brain
+conda run -n your-environment python scripts/build_knowledge_base.py
 ```
 
 ## Running the Server
@@ -90,15 +90,15 @@ conda run -n roman-slack-bot python scripts/build_knowledge_base.py
 ### Option 1: Using the Launcher Script
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
-conda run -n roman-slack-bot python run_mcp_server.py
+cd /path/to/nancy-brain
+conda run -n your-environment python run_mcp_server.py
 ```
 
 ### Option 2: Direct Command Line
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
-conda run -n roman-slack-bot python -m connectors.mcp_server.server \
+cd /path/to/nancy-brain
+conda run -n your-environment python -m connectors.mcp_server.server \
     config/repositories.yml \
     knowledge_base/embeddings \
     --weights config/weights.yaml
@@ -116,8 +116,8 @@ Add the following to your Claude Desktop MCP configuration file:
     "nancy-brain": {
       "command": "conda",
       "args": [
-        "run", "-n", "roman-slack-bot",
-        "python", "/Users/malpas.1/Code/slack-bot/src/nancy-brain/run_mcp_server.py"
+        "run", "-n", "your-environment",
+        "python", "/path/to/nancy-brain/run_mcp_server.py"
       ]
     }
   }
@@ -128,8 +128,8 @@ Add the following to your Claude Desktop MCP configuration file:
 
 Configure the MCP extension to connect to:
 - **Server Type**: stdio
-- **Command**: `conda run -n roman-slack-bot python run_mcp_server.py`
-- **Working Directory**: `/Users/malpas.1/Code/slack-bot/src/nancy-brain`
+- **Command**: `conda run -n your-environment python run_mcp_server.py`
+- **Working Directory**: `/path/to/nancy-brain`
 
 ## Example Usage
 
@@ -179,8 +179,8 @@ Once connected to an MCP client, you can use natural language to interact with N
 Run the comprehensive test suite:
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
-conda run -n roman-slack-bot python -m pytest tests/test_mcp_server.py -v
+cd /path/to/nancy-brain
+conda run -n your-environment python -m pytest tests/test_mcp_server.py -v
 ```
 
 ## Troubleshooting
