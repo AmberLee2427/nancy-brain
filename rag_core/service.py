@@ -383,11 +383,16 @@ class RAGService:
         """Return index and build version info."""
         from nancy_brain import __version__
 
-        # TODO: Read build_sha and built_at from actual index metadata file
+        try:
+            from nancy_brain._build_info import __build_sha__, __built_at__
+        except ImportError:
+            __build_sha__ = "unknown"
+            __built_at__ = "unknown"
+
         return {
             "index_version": __version__,
-            "build_sha": "unknown",
-            "built_at": "unknown",
+            "build_sha": __build_sha__,
+            "built_at": __built_at__,
         }
 
     async def health(self) -> Dict:

@@ -10,7 +10,7 @@ from .service import RAGService
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.1.0"
+__version__ = "0.1.3"
 
 # Global instance for the bot to use
 rag_service = None

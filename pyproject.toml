@@ -97,6 +97,9 @@ packages = [
 [project.scripts]
 nancy-brain = "nancy_brain.cli:cli"
 
+[tool.hatch.metadata.hooks.custom]
+path = "hatch_hooks.py"
+
 [tool.bumpversion]
 current_version = "0.1.3"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
@@ -118,5 +121,10 @@ replace = 'version = "{new_version}"'
 
 [[tool.bumpversion.files]]
 filename = "nancy_brain/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "rag_core/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'

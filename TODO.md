@@ -42,6 +42,8 @@
   - Step-by-step setup guide
   - Sample workspace configuration
   - Demo with real repository
+- [x] **Gemini Code Assist + VSCode + MCP Integration**
+  - ✅ User test 
 - [ ] **Claude Desktop Integration**
   - Configuration file example
   - Usage demonstration
@@ -205,5 +207,11 @@
     - **Description:** The `retrieve_document_passage` tool consistently fails with a "Document not found" error when using a `doc_id` provided by the `search_knowledge_base` tool. This is a critical bug that breaks the core search and retrieval functionality. The `retrieve` function should be able to fetch the document content from the `txtai` index, as the server is not supposed to rely on the `raw` files.
 - [ ] **Search relevance needs improvement.**
     - **Description:** The `search_knowledge_base` tool returns results with mixed relevance and low scores. While some results are good, others seem unrelated to the query. The search algorithm and/or the underlying embeddings should be investigated to improve the quality of the search results.
-- [ ] **`get_system_status` shows incorrect version information.**
-    - **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. It also doesn't show the build SHA or date. The version information should be populated correctly from the build process to allow for proper version tracking.
+- [x] **`get_system_status` shows incorrect version information.**
+    - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
+- [x] **`get_system_status` shows "unknown" for build info.**
+    - **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.
+- [ ] **`get_system_status` status message is not detailed enough.**
+    - **Description:** The `get_system_status` tool reports a simple "ok" status. It would be more helpful if it provided more details about what checks were performed (e.g., "Registry: loaded, Store: loaded, Search: loaded").
+- [x] **Investigate inconsistent version reporting.**
+    - ✅ **Description:** The user reported seeing `dev-0.1.0` as the version, while the codebase is at `0.1.3`. This could be an environment issue, but it should be investigated to prevent confusion.
