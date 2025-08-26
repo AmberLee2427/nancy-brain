@@ -1,6 +1,6 @@
 # hatch_hooks.py
 import os
-from hatchling.metadata.hook.interface import MetadataHookInterface
+from hatchling.metadata.plugin.interface import MetadataHookInterface
 from pathlib import Path
 
 
