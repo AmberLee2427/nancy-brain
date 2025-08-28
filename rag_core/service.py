@@ -380,19 +380,50 @@ class RAGService:
         logger.info(f"Runtime weight set for {doc_id}: {m}")
 
     async def version(self) -> Dict:
-        """Return index and build version info."""
+        """Return index and build version info, with robust error handling for build info and extra environment details."""
+        import sys
+        import platform
         from nancy_brain import __version__
 
+        __build_sha__ = "unknown"
+        __built_at__ = "unknown"
         try:
-            from nancy_brain._build_info import __build_sha__, __built_at__
-        except ImportError:
-            __build_sha__ = "unknown"
-            __built_at__ = "unknown"
+            from nancy_brain import _build_info
+
+            __build_sha__ = getattr(_build_info, "__build_sha__", "unknown")
+            __built_at__ = getattr(_build_info, "__built_at__", "unknown")
+        except (ImportError, AttributeError, Exception):
+            pass
+
+        # Gather environment info
+        python_version = platform.python_version()
+        implementation = platform.python_implementation()
+        environment = os.environ.get("CONDA_DEFAULT_ENV") or os.environ.get("VIRTUAL_ENV") or "unknown"
+
+        # Try to get key dependency versions
+        def get_version(pkg):
+            try:
+                return __import__(pkg).__version__
+            except Exception:
+                return "unknown"
+
+        dependencies = {
+            "fastapi": get_version("fastapi"),
+            "pydantic": get_version("pydantic"),
+            "txtai": get_version("txtai"),
+            "faiss": get_version("faiss") if get_version("faiss") != "unknown" else get_version("faiss_cpu"),
+            "torch": get_version("torch"),
+            "transformers": get_version("transformers"),
+        }
 
         return {
             "index_version": __version__,
             "build_sha": __build_sha__,
             "built_at": __built_at__,
+            "python_version": python_version,
+            "python_implementation": implementation,
+            "environment": environment,
+            "dependencies": dependencies,
         }
 
     async def health(self) -> Dict:

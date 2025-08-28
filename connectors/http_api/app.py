@@ -69,11 +69,28 @@ class VersionResponse(BaseModel):
     index_version: str
     build_sha: str
     built_at: str
+    python_version: str
+    python_implementation: str
+    environment: str
+    dependencies: Dict[str, str]
     trace_id: str
 
 
 class HealthResponse(BaseModel):
     status: str
+    trace_id: str
+
+
+# System status response model
+class SystemStatusResponse(BaseModel):
+    status: str
+    index_version: str
+    build_sha: str
+    built_at: str
+    python_version: str
+    python_implementation: str
+    environment: str
+    dependencies: Dict[str, str]
     trace_id: str
 
 
@@ -83,6 +100,13 @@ class ErrorResponse(BaseModel):
     trace_id: str
     detail: Optional[str] = None
 
+
+# --- SYSTEM STATUS ENDPOINT ---
+
+
+# --- SYSTEM STATUS ENDPOINT ---
+
+# --- SYSTEM STATUS ENDPOINT ---
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -119,6 +143,38 @@ def verify_auth(token: str = Depends(security)) -> str:
     """Simple bearer token auth - implement proper validation."""
     # TODO: Implement proper token validation
     return token.credentials
+
+
+# --- SYSTEM STATUS ENDPOINT ---
+@app.get("/system_status", response_model=SystemStatusResponse, operation_id="system_status")
+async def system_status(rag: RAGService = Depends(get_rag_service), _token: str = Depends(verify_auth)):
+    """Get full system status including health, version, environment, and dependencies."""
+    trace_id = str(uuid.uuid4())
+    try:
+        health_info = await rag.health()
+        version_info = await rag.version()
+        # Ensure all expected fields are present
+        version_info.setdefault("python_version", "unknown")
+        version_info.setdefault("python_implementation", "unknown")
+        version_info.setdefault("environment", "unknown")
+        version_info.setdefault("dependencies", {})
+        return SystemStatusResponse(
+            status=health_info.get("status", "unknown"),
+            index_version=version_info.get("index_version", "unknown"),
+            build_sha=version_info.get("build_sha", "unknown"),
+            built_at=version_info.get("built_at", "unknown"),
+            python_version=version_info["python_version"],
+            python_implementation=version_info["python_implementation"],
+            environment=version_info["environment"],
+            dependencies=version_info["dependencies"],
+            trace_id=trace_id,
+        )
+    except Exception as e:
+        logger.error(f"System status failed: {e}", extra={"trace_id": trace_id})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"System status failed: {str(e)}",
+        )
 
 
 @app.get("/search", response_model=SearchResponse, operation_id="search_documents")
@@ -241,10 +297,15 @@ async def set_weight(
 
 @app.get("/version", response_model=VersionResponse, operation_id="get_version")
 async def version(rag: RAGService = Depends(get_rag_service), _token: str = Depends(verify_auth)):
-    """Get version information about the knowledge base."""
+    """Get version information about the knowledge base, including environment and dependencies."""
     trace_id = str(uuid.uuid4())
     try:
         version_info = await rag.version()
+        # Ensure all expected fields are present for backward compatibility
+        version_info.setdefault("python_version", "unknown")
+        version_info.setdefault("python_implementation", "unknown")
+        version_info.setdefault("environment", "unknown")
+        version_info.setdefault("dependencies", {})
         return VersionResponse(**version_info, trace_id=trace_id)
     except Exception as e:
         logger.error(f"Version check failed: {e}", extra={"trace_id": trace_id})

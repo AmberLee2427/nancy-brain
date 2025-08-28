@@ -385,21 +385,39 @@ class NancyMCPServer:
 
     async def _handle_status(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle get_system_status tool."""
-        health_info = await self.rag_service.health()
-        version_info = await self.rag_service.version()
+        # Call the new merged system status method for full details
+        if not self.rag_service:
+            return [types.TextContent(type="text", text="❌ Nancy Brain service not initialized.")]
+
+        # Use the merged system status (health + version + env + dependencies)
+        try:
+            # If you have a direct method, use it; otherwise, merge manually
+            status_info = await self.rag_service.system_status() if hasattr(self.rag_service, "system_status") else None
+        except Exception:
+            status_info = None
+        if not status_info:
+            # Fallback: merge health and version manually
+            health_info = await self.rag_service.health()
+            version_info = await self.rag_service.version()
+            status_info = {
+                **version_info,
+                "status": health_info.get("status", "unknown"),
+            }
 
         response_text = "🏥 **Nancy Brain System Status**\n\n"
-
-        # Health info
-        status = health_info.get("status", "unknown")
+        status = status_info.get("status", "unknown")
         status_emoji = "✅" if status == "ok" else "❌"
         response_text += f"{status_emoji} **Status:** {status}\n"
-
-        # Version info
-        if version_info:
-            response_text += f"🏷️ **Version:** {version_info.get('index_version', 'unknown')}\n"
-            response_text += f"🔨 **Build SHA:** {version_info.get('build_sha', 'unknown')}\n"
-            response_text += f"📅 **Built At:** {version_info.get('built_at', 'unknown')}\n"
+        response_text += f"🏷️ **Version:** {status_info.get('index_version', 'unknown')}\n"
+        response_text += f"🔨 **Build SHA:** {status_info.get('build_sha', 'unknown')}\n"
+        response_text += f"📅 **Built At:** {status_info.get('built_at', 'unknown')}\n"
+        response_text += f"🐍 **Python:** {status_info.get('python_version', 'unknown')} ({status_info.get('python_implementation', 'unknown')})\n"
+        response_text += f"🌎 **Environment:** {status_info.get('environment', 'unknown')}\n"
+        dependencies = status_info.get("dependencies", {})
+        if dependencies:
+            response_text += "📦 **Dependencies:**\n"
+            for dep, ver in dependencies.items():
+                response_text += f"  - {dep}: {ver}\n"
 
         return [types.TextContent(type="text", text=response_text)]
 
