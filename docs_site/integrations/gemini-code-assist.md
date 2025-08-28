@@ -4,7 +4,7 @@ Nancy Brain can be used as a local MCP (Model Context Protocol) server with Gemi
 
 ## Prerequisites
 
-Before you begin, ensure you have [installed Nancy Brain](https://github.com/AmberLee2427/nancy-brain/blob/main/INSTALLATION.md) and built your knowledge base.
+Before you begin, ensure you have [installed Nancy Brain](https://amberlee2427.github.io/nancy-brain/installation/) and built your knowledge base.
 
 ## Configuration
 
@@ -19,10 +19,10 @@ To connect Gemini Code Assist to the Nancy Brain MCP server, you need to configu
             "nancy-brain": {
                 "command": "/path/to/your/conda/env/bin/python",
                 "args": [
-                    "/path/to/your/slack-bot/src/nancy-brain/run_mcp_server.py"
+                    "/path/to/your/nancy-brain/run_mcp_server.py"
                 ],
                 "env": {
-                    "PYTHONPATH": "/path/to/your/slack-bot/src/nancy-brain",
+                    "PYTHONPATH": "/path/to/your/nancy-brain",
                     "KMP_DUPLICATE_LIB_OK": "TRUE"
                 }
             }
@@ -30,7 +30,7 @@ To connect Gemini Code Assist to the Nancy Brain MCP server, you need to configu
     }
     ```
 
-    **Important:** Replace `/path/to/your/conda/env/bin/python` with the absolute path to the Python executable in your Conda environment where `nancy-brain` is installed. Also, replace `/path/to/your/slack-bot/` with the absolute path to your `slack-bot` project directory.
+    **Important:** Replace `/path/to/your/conda/env/bin/python` with the absolute path to the Python executable in your Conda environment where `nancy-brain` is installed. Also, replace `/path/to/your/nancy-brain/` with the absolute path to your `nancy-brain` project directory.
 
 3.  Save the `settings.json` file.
 4.  In your IDE, open the command palette and select **Developer: Reload Window** to apply the changes.

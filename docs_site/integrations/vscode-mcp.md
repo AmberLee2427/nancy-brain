@@ -125,6 +125,8 @@ code --install-extension codeium.codeium
 code --install-extension gemini-code-assist.gemini-code-assist
 ```
 
+> For dedicated Gemini Code Assist Instruction see [this page.](https://amberlee2427.github.io/nancy-brain/integrations/gemini-code-assist/)
+
 ## Step 2: Build Your Knowledge Base
 
 If you haven't already, create and build a knowledge base:
