@@ -385,16 +385,15 @@ class NancyMCPServer:
 
     async def _handle_status(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle get_system_status tool."""
-        # Call the new merged system status method for full details
         if not self.rag_service:
             return [types.TextContent(type="text", text="❌ Nancy Brain service not initialized.")]
 
         # Use the merged system status (health + version + env + dependencies)
         try:
-            # If you have a direct method, use it; otherwise, merge manually
             status_info = await self.rag_service.system_status() if hasattr(self.rag_service, "system_status") else None
         except Exception:
             status_info = None
+        health_info = None
         if not status_info:
             # Fallback: merge health and version manually
             health_info = await self.rag_service.health()
@@ -402,13 +401,43 @@ class NancyMCPServer:
             status_info = {
                 **version_info,
                 "status": health_info.get("status", "unknown"),
+                "registry_loaded": health_info.get("registry_loaded"),
+                "store_loaded": health_info.get("store_loaded"),
+                "search_loaded": health_info.get("search_loaded"),
             }
+        else:
+            # If system_status exists, try to get health info for details
+            try:
+                health_info = await self.rag_service.health()
+            except Exception:
+                health_info = None
 
         response_text = "🏥 **Nancy Brain System Status**\n\n"
         status = status_info.get("status", "unknown")
         status_emoji = "✅" if status == "ok" else "❌"
         response_text += f"{status_emoji} **Status:** {status}\n"
-        response_text += f"🏷️ **Version:** {status_info.get('index_version', 'unknown')}\n"
+
+        # Add subsystem details
+        registry_loaded = status_info.get("registry_loaded")
+        store_loaded = status_info.get("store_loaded")
+        search_loaded = status_info.get("search_loaded")
+        # If not present, try to get from health_info
+        if registry_loaded is None and health_info:
+            registry_loaded = health_info.get("registry_loaded")
+        if store_loaded is None and health_info:
+            store_loaded = health_info.get("store_loaded")
+        if search_loaded is None and health_info:
+            search_loaded = health_info.get("search_loaded")
+
+        def checkmark(val):
+            return "✅" if val else "❌"
+
+        response_text += "\n**Subsystems:**\n"
+        response_text += f"- Registry: {checkmark(registry_loaded)}\n"
+        response_text += f"- Store: {checkmark(store_loaded)}\n"
+        response_text += f"- Search: {checkmark(search_loaded)}\n"
+
+        response_text += f"\n🏷️ **Version:** {status_info.get('index_version', 'unknown')}\n"
         response_text += f"🔨 **Build SHA:** {status_info.get('build_sha', 'unknown')}\n"
         response_text += f"📅 **Built At:** {status_info.get('built_at', 'unknown')}\n"
         response_text += f"🐍 **Python:** {status_info.get('python_version', 'unknown')} ({status_info.get('python_implementation', 'unknown')})\n"

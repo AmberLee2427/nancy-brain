@@ -38,12 +38,14 @@
   - ✅ Add GitHub Actions for auto-deploy
 
 ### Integration Examples (with Screenshots Later)
-- [ ] **VS Code + MCP Integration**
-  - Step-by-step setup guide
-  - Sample workspace configuration
+- [-] **VS Code + MCP Integration**
+  - ✅ Step-by-step setup guide
+  - ✅ Sample workspace configuration
   - Demo with real repository
-- [x] **Gemini Code Assist + VSCode + MCP Integration**
-  - ✅ User test 
+  - [x] **Gemini Code Assist + VSCode + MCP Integration**
+    - ✅ User test 
+  - [ ] **Update for native Chat integreation**
+- [ ] **Cursor + MCP Integration**
 - [ ] **Claude Desktop Integration**
   - Configuration file example
   - Usage demonstration
@@ -126,7 +128,7 @@
 
 ### Infrastructure
 - [ ] **Monitoring & Observability**
-  - Health check endpoints
+  - ✅ Health check endpoints
   - Metrics collection
   - Error tracking
 - [ ] **Security**
@@ -145,15 +147,6 @@
   - VS Code with MCP tools active
   - Claude Desktop with nancy-brain
   - Slack bot conversations
-- [ ] **Demo Videos**
-  - Quick start tutorial (2-3 minutes)
-  - Advanced usage examples
-  - Integration setup walkthroughs
-
-### Blog Content
-- [ ] **Launch announcement**
-- [ ] **Technical deep-dive posts**
-- [ ] **Use case spotlights**
 
 ## 🚀 Release Milestones
 
@@ -166,7 +159,7 @@
 - [x] Package validation and testing
 
 ### v0.2.x (Documentation Release)
-- [ ] Complete Read the Docs setup
+- [x] Complete Read the Docs setup
 - [ ] All integration examples
 - [ ] Improved test coverage
 - [ ] Better error handling
@@ -211,7 +204,7 @@
     - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
 - [x] **`get_system_status` shows "unknown" for build info.**
     - **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.
-- [ ] **`get_system_status` status message is not detailed enough.**
+- [x] **`get_system_status` status message is not detailed enough.**
     - **Description:** The `get_system_status` tool reports a simple "ok" status. It would be more helpful if it provided more details about what checks were performed (e.g., "Registry: loaded, Store: loaded, Search: loaded").
 - [x] **Investigate inconsistent version reporting.**
     - ✅ **Description:** The user reported seeing `dev-0.1.0` as the version, while the codebase is at `0.1.3`. This could be an environment issue, but it should be investigated to prevent confusion.

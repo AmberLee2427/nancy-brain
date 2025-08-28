@@ -15,6 +15,95 @@ Transform VS Code into an AI-powered development environment with access to your
 - **Nancy Brain** installed and knowledge base built
 - **MCP-compatible extension** (instructions below)
 
+
+## VSCode Native Integraion with `Chat` (VSCode version>=1.103.0)
+
+### `Ctrl/Cmd + Shift + P` → "MCP: Add Server..."
+
+#### Option A: Local Command
+
+- Command: /path/to/env/bin/python -m path/to/run_mcp_server.py
+
+- Name: nancy-brain
+
+- Where: Global/Workspace
+
+#### Option B: Pip
+
+- Package name: nancy-brain
+
+- Allow
+
+- Project: path/to/your/project
+
+- env: /path/to/nancy-brain
+
+- KMP_DUPLICATE_LIB_OK
+
+- Name: nancy-brain
+
+- Where: Global/Workspace
+
+#### Option C: Remote HTTP Server
+
+??
+
+`Ctrl/Cmd + Shift + P` → "MCP: Open User Confoguration"
+
+#### Global Settings
+A local command example;
+
+```mcp.json
+{
+  "servers": {
+		"nancy-brain": {
+			"type": "stdio",
+			"command": "/path/to/env/bin/python",
+			"args": [
+        "-m",
+				"/path/to/nancy-brain/run_mcp_server.py"
+			],
+			"env": {
+				"PYTHONPATH": "/path/to/project",
+				"KMP_DUPLICATE_LIB_OK": "TRUE"
+			}
+	  }
+	}
+}
+```
+
+#### Workspace:
+A pip example:
+
+```<ws dir>/<ws name>.code-workspace
+{
+	"folders": [
+		{
+			"path": "/path/to/project"
+		}
+	],
+	"settings": {
+		"mcp.servers": {
+			"type": "stdio",
+			"command": "uvx",
+			"cwd": "${input:cwd}",
+			"args": [
+				"nancy_brain==0.1.3",
+				"/path/to/run_mcp_server.py"
+			],
+			"env": {
+				"KMP_DUPLICATE_LIB_OK": "TRUE"
+			}
+		}
+	}
+}
+```
+^ this doesn't actually work with those settings
+
+---
+
+# For Older Versions of VSCode
+
 ## Step 1: Install MCP Extension
 
 Install an MCP-compatible VS Code extension. Popular options:
@@ -29,6 +118,11 @@ code --install-extension continue.continue
 ```bash
 # Install Codeium extension  
 code --install-extension codeium.codeium
+```
+
+### Option C: Gemini Code Assist
+```bash
+code --install-extension gemini-code-assist.gemini-code-assist
 ```
 
 ## Step 2: Build Your Knowledge Base
@@ -80,6 +174,28 @@ nancy-brain build
       }
     }
   ]
+}
+```
+
+or, for gemini-code-assist
+
+```~/.gemini/settings.json
+{
+  "mcpServers": {
+    "nancy-brain": {
+      "command": "/path/to/env/bin/python",
+      "args": [
+        "/path/to/nancy-brain/run_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/project",
+        "KMP_DUPLICATE_LIB_OK": "TRUE"
+      }
+    }
+  },
+  "ideMode": true,
+  "hasSeenIdeIntegrationNudge": true,
+  "selectedAuthType": "oauth-personal"
 }
 ```
 
