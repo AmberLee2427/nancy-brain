@@ -16,6 +16,33 @@ pip install --upgrade pip
 pip install -v nancy-brain
 ```
 
+### ERROR: Could not install packages due to an OSError: [Errno 28] No space left on device
+
+You may get this error when installing nancy-brain, despite have plenty of storage space on your machine.
+This can be an issues caused by yoou `/tmp/` or `~/.cache/` directories become full before the package finishes installing dependencies.
+
+**Solution:** You can temporarily resize your `/tmp/` directory using:
+
+```bash
+sudo mount -o remount,size=8G /tmp
+```
+
+This change will last until you reboot. For a permanent change, you would need to edit your `/etc/fstab` file.
+
+**Solution:** Work arounds, not requiring `su` permissions, are to install using:
+
+```bash
+pip install --no-cache-dir nancy-brain
+```
+
+or pre-installing larger dependencies:
+
+```bash
+pip install torch>=1.12.1
+pip install faiss-cpu>=1.7.1.post2
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cusparse-cu12 nvidia-cusparselt-cu12
+```
+
 ### Missing Dependencies
 
 If you get import errors:
