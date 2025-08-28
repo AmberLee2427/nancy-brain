@@ -4,9 +4,7 @@ version = "0.1.4"
 description = "Turn any GitHub repository into a searchable knowledge base for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [
-    {name = "Amber Malpas", email = "malpas.1@osu.edu"}
-]
+dynamic = ["authors"]   # <-- this makes Hatch load your metadata hook
 license = {text = "MIT"}
 keywords = ["AI", "RAG", "knowledge-base", "search", "embeddings", "research", "github"]
 dependencies = [
@@ -67,7 +65,8 @@ dev = [
     "ipywidgets",
     "build>=0.10.0",
     "twine>=4.0.0",
-    "bump-my-version>=0.11.0"
+    "bump-my-version>=0.11.0",
+    "hatch"
 ]
 pdf = [
     "tika>=2.6.0",
@@ -83,7 +82,7 @@ docs = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
@@ -92,6 +91,15 @@ packages = [
     "rag_core",
     "connectors",
     "scripts"
+]
+
+[tool.hatch.build]
+include = [
+  "hatch_hooks.py",
+  "nancy_brain/**",
+  "rag_core/**",
+  "connectors/**",
+  "scripts/**",
 ]
 
 [project.scripts]
