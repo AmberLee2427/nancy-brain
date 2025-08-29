@@ -139,6 +139,7 @@
   - Input validation
   - Rate limiting
   - Authentication improvements
+  - Roles / permissions (low priority) — consider simple role column in `users` table for future RBAC
 
 ## 📸 Content Creation (When Ready)
 

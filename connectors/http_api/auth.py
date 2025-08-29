@@ -1,18 +1,36 @@
 import sqlite3
+import os
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 
-# --- Config ---
-SECRET_KEY = "nancy-brain-dev-key"  # Change in production
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-DB_PATH = "users.db"
+# --- Config (from environment) ---
+SECRET_KEY = os.environ.get("NB_SECRET_KEY", "nancy-brain-dev-key")
+ALGORITHM = os.environ.get("NB_JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("NB_ACCESS_EXPIRE_MINUTES", "60"))
+REFRESH_TOKEN_EXPIRE_MINUTES = int(os.environ.get("NB_REFRESH_EXPIRE_MINUTES", str(60 * 24 * 7)))
+DB_PATH = os.environ.get("NB_USERS_DB", "users.db")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+
+def create_refresh_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        return username
+    except JWTError:
+        return None
 
 
 def get_db():
@@ -58,7 +76,7 @@ def authenticate_user(username: str, password: str):
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -69,12 +87,8 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
+    username = verify_token(token)
+    if not username:
         raise credentials_exception
     user = get_user(username)
     if user is None:
@@ -90,3 +104,23 @@ def add_user(username: str, password: str):
         conn.commit()
     finally:
         conn.close()
+
+
+def require_auth(current_user=Depends(get_current_user)):
+    """Reusable dependency for endpoints that require a valid authenticated user.
+
+    Use in routes as: current_user = Depends(auth.require_auth)
+    Returns the user row (sqlite3.Row) on success, raises 401 on failure.
+
+    Example:
+
+    from fastapi import APIRouter, Depends
+    from connectors.http_api import auth
+
+    router = APIRouter()
+
+    @router.get("/my-protected")
+    def my_protected_route(current_user = Depends(auth.require_auth)):
+        return {"user": current_user["username"]}
+    """
+    return current_user

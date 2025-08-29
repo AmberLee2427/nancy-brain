@@ -188,12 +188,23 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token = auth.create_access_token(data={"sub": user["username"]})
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = auth.create_refresh_token(data={"sub": user["username"]})
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+
+@app.post("/refresh")
+def refresh_token_endpoint(payload: dict):
+    token = payload.get("refresh_token")
+    username = auth.verify_token(token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    new_access = auth.create_access_token(data={"sub": username})
+    return {"access_token": new_access, "token_type": "bearer"}
 
 
 # Example protected endpoint
 @app.get("/protected")
-def protected_route(current_user=Depends(auth.get_current_user)):
+def protected_route(current_user=Depends(auth.require_auth)):
     return {"message": f"Hello, {current_user['username']}!"}
 
 
