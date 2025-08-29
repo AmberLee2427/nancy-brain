@@ -93,6 +93,10 @@
   - Colored output for better readability
   - Interactive configuration wizard
   - Auto-completion support
+- [ ] **More options**
+  - `--dry-run` 
+  - `--category` 
+  - `--dirty`
 
 ### Advanced Features
 - [ ] **Enhanced Search**
