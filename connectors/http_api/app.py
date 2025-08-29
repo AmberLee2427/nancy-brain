@@ -4,12 +4,15 @@ Provides REST endpoints for search, retrieve, tree, weight, version, and health 
 """
 
 import os
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from connectors.http_api import auth
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import status
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -115,6 +118,7 @@ app = FastAPI(
     version="2.0.0",
     openapi_version="3.0.3",
 )
+auth.create_user_table()  # Ensure user table exists at startup
 
 # Middleware
 # app.add_middleware(GzipMiddleware, minimum_size=1000)  # Commented out for now
@@ -175,6 +179,22 @@ async def system_status(rag: RAGService = Depends(get_rag_service), _token: str 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"System status failed: {str(e)}",
         )
+
+
+# --- Auth endpoints ---
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = auth.authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    access_token = auth.create_access_token(data={"sub": user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# Example protected endpoint
+@app.get("/protected")
+def protected_route(current_user=Depends(auth.get_current_user)):
+    return {"message": f"Hello, {current_user['username']}!"}
 
 
 @app.get("/search", response_model=SearchResponse, operation_id="search_documents")
