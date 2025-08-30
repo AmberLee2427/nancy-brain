@@ -4,12 +4,26 @@ Provides REST endpoints for search, retrieve, tree, weight, version, and health 
 """
 
 import os
+from pathlib import Path
+import logging
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from connectors.http_api import auth
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Load .env file if present (dev convenience)
+try:
+    from dotenv import load_dotenv
+
+    env_path = Path(__file__).parents[2] / "config" / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        logger = logging.getLogger(__name__)
+        logger.info(f"Loaded environment overrides from {env_path}")
+except Exception:
+    pass
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import status
@@ -119,6 +133,14 @@ app = FastAPI(
     openapi_version="3.0.3",
 )
 auth.create_user_table()  # Ensure user table exists at startup
+auth.create_refresh_table()  # Ensure refresh token table exists
+
+# Enforce secret key in non-dev mode
+if (
+    os.environ.get("NB_SECRET_KEY") in (None, "", "nancy-brain-dev-key")
+    and os.environ.get("NB_ALLOW_INSECURE", "false").lower() != "true"
+):
+    raise RuntimeError("NB_SECRET_KEY not set. Set NB_SECRET_KEY or export NB_ALLOW_INSECURE=true for dev.")
 
 # Middleware
 # app.add_middleware(GzipMiddleware, minimum_size=1000)  # Commented out for now
@@ -189,6 +211,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token = auth.create_access_token(data={"sub": user["username"]})
     refresh_token = auth.create_refresh_token(data={"sub": user["username"]})
+    # store refresh token for revocation support
+    try:
+        auth.store_refresh_token(user["username"], refresh_token)
+    except Exception:
+        logger.warning("Failed to store refresh token in DB")
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
@@ -198,8 +225,25 @@ def refresh_token_endpoint(payload: dict):
     username = auth.verify_token(token)
     if not username:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+    # check DB for revocation
+    if not auth.is_refresh_valid(token):
+        raise HTTPException(status_code=401, detail="Refresh token revoked or unknown")
     new_access = auth.create_access_token(data={"sub": username})
     return {"access_token": new_access, "token_type": "bearer"}
+
+
+@app.post("/revoke")
+def revoke_token(payload: dict, current_user=Depends(auth.require_auth)):
+    token = payload.get("refresh_token")
+    if not token:
+        raise HTTPException(status_code=400, detail="refresh_token required")
+    owner = auth.get_refresh_owner(token)
+    if owner is None:
+        raise HTTPException(status_code=404, detail="token not found")
+    if owner != current_user["username"]:
+        raise HTTPException(status_code=403, detail="not allowed to revoke this token")
+    auth.revoke_refresh_token(token)
+    return {"revoked": True}
 
 
 # Example protected endpoint

@@ -26,3 +26,10 @@ Streamlit dev UI (example):
 ```bash
 streamlit run connectors/http_api/streamlit_auth.py
 ```
+
+Revoke a refresh token (requires authentication):
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+	-d '{"refresh_token":"'$REFRESH'"}' http://127.0.0.1:8001/revoke
+```

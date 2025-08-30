@@ -54,6 +54,64 @@ def create_user_table():
     conn.close()
 
 
+def create_refresh_table():
+    conn = get_db()
+    conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        token TEXT NOT NULL,
+        revoked INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """
+    )
+    conn.commit()
+    conn.close()
+
+
+def store_refresh_token(username: str, token: str):
+    conn = get_db()
+    try:
+        conn.execute("INSERT INTO refresh_tokens (username, token) VALUES (?, ?)", (username, token))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def revoke_refresh_token(token: str):
+    conn = get_db()
+    try:
+        conn.execute("UPDATE refresh_tokens SET revoked = 1 WHERE token = ?", (token,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def is_refresh_valid(token: str) -> bool:
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT revoked FROM refresh_tokens WHERE token = ?", (token,)).fetchone()
+        if not row:
+            return False
+        return row["revoked"] == 0
+    finally:
+        conn.close()
+
+
+def get_refresh_owner(token: str):
+    """Return the username owning a refresh token, or None if not found."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT username FROM refresh_tokens WHERE token = ?", (token,)).fetchone()
+        if not row:
+            return None
+        return row["username"]
+    finally:
+        conn.close()
+
+
 def get_user(username: str):
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
