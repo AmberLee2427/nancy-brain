@@ -442,7 +442,9 @@ def run_ui():
                 key="export_index_weights",
             )
         with col_imp:
-            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
+            upload_weights = st.file_uploader(
+                "⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_index_weights_top"
+            )
             if upload_weights is not None:
                 try:
                     raw = upload_weights.read()
@@ -560,9 +562,12 @@ def run_ui():
                 data=export_weights_yaml,
                 file_name="index_weights_export.yml",
                 mime="text/yaml",
+                key="export_index_weights_bottom",
             )
         with col_imp:
-            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
+            upload_weights = st.file_uploader(
+                "⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_index_weights_bottom"
+            )
             if upload_weights is not None:
                 try:
                     raw = upload_weights.read()

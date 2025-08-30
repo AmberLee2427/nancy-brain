@@ -108,6 +108,15 @@ pytest -q
 nancy-brain --help
 ```
 
+Note for developers: The build pipeline now requires `docutils` and `pylatexenc` to reliably convert
+reStructuredText (`.rst`) and LaTeX (`.tex`) files to plain text. These are included in the project's
+dependencies (`pyproject.toml`) so `pip install -e ."[dev]"` will install them automatically. If you
+prefer to install them manually in your environment, run:
+
+```bash
+pip install docutils pylatexenc
+```
+
 ---
 ## 2. Project Layout (Core Parts)
 ```

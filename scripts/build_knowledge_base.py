@@ -405,13 +405,68 @@ def build_txtai_index(
             logger.info("✅ Tika VM initialized for PDF processing")
         except Exception as e:
             logger.warning(f"Failed to initialize Tika VM: {e}. Will use fallback methods if available.")
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Failed to read repository config: {config_path} ({e})")
+        return {
+            "failed_text_files": [],
+            "failed_pdf_files": [],
+            "failed_notebook_conversions": [],
+            "successful_text_files": 0,
+            "successful_pdf_files": 0,
+            "successful_notebook_conversions": 0,
+            "skipped_repositories": [],
+            "skipped_articles": [],
+            "validation_errors": [f"Failed to read config: {config_path}: {e}"],
+        }
+
+    # Validate repository config early to give clear feedback
+    try:
+        from nancy_brain.config_validation import validate_repositories_config, validate_articles_config
+
+        ok, errors = validate_repositories_config(config or {})
+        if not ok:
+            logger.error("repositories.yml validation failed")
+            return {
+                "failed_text_files": [],
+                "failed_pdf_files": [],
+                "failed_notebook_conversions": [],
+                "successful_text_files": 0,
+                "successful_pdf_files": 0,
+                "successful_notebook_conversions": 0,
+                "skipped_repositories": [],
+                "skipped_articles": [],
+                "validation_errors": errors,
+            }
+    except Exception:
+        # If validation helpers are unavailable for any reason, continue without failing
+        pass
+
     articles_config = {}
     if articles_config_path and os.path.exists(articles_config_path):
         with open(articles_config_path, "r") as f:
             articles_config = yaml.safe_load(f)
         logger.info(f"Loaded articles configuration from {articles_config_path}")
+        # Validate articles config if validator available
+        try:
+            ok2, errors2 = validate_articles_config(articles_config or {})
+            if not ok2:
+                logger.error("articles.yml validation failed")
+                return {
+                    "failed_text_files": [],
+                    "failed_pdf_files": [],
+                    "failed_notebook_conversions": [],
+                    "successful_text_files": 0,
+                    "successful_pdf_files": 0,
+                    "successful_notebook_conversions": 0,
+                    "skipped_repositories": [],
+                    "skipped_articles": [],
+                    "validation_errors": errors2,
+                }
+        except Exception:
+            pass
     embeddings_dir = Path(embeddings_path)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
     general_embeddings = Embeddings(
@@ -463,7 +518,7 @@ def build_txtai_index(
                         except Exception as e:
                             failures["failed_notebook_conversions"].append(f"{ipynb_file}: {str(e)}")
             text_files = []
-            for ext in [".py", ".md", ".txt", ".rst", ".yaml", ".yml", ".json"]:
+            for ext in [".py", ".md", ".txt", ".rst", ".tex", ".yaml", ".yml", ".json"]:
                 text_files.extend(repo_dir.rglob(f"*{ext}"))
             text_files.extend(repo_dir.rglob("*.nb.txt"))
             pdf_files = []
@@ -503,11 +558,31 @@ def build_txtai_index(
             text_files = [f for f in text_files if not any(skip in f.parts for skip in skip_dirs)]
             pdf_files = [f for f in pdf_files if not any(skip in f.parts for skip in skip_dirs)]
             text_files = [f for f in text_files if "docs/build" not in str(f) and not str(f).endswith(".rst.txt")]
+            # Use text extraction helpers for .rst and .tex files when available
+            try:
+                from scripts.text_extract import extract_text_from_rst, extract_text_from_tex
+            except Exception:
+                extract_text_from_rst = None
+                extract_text_from_tex = None
+
             for file_path in text_files:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
                     if not content.strip():
+                        continue
+                    suffix = file_path.suffix.lower()
+                    if suffix == ".rst" and extract_text_from_rst:
+                        try:
+                            content = extract_text_from_rst(content)
+                        except Exception:
+                            pass
+                    if suffix == ".tex" and extract_text_from_tex:
+                        try:
+                            content = extract_text_from_tex(content)
+                        except Exception:
+                            pass
+                    if not content or not content.strip():
                         continue
                     doc_id = f"{cat}/{repo_name}/{file_path.relative_to(repo_dir)}"
                     documents.append((doc_id, content))

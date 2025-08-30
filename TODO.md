@@ -191,9 +191,9 @@
 ---
 
 ## ⚡ Quick Wins (Can Do Anytime)
-- [ ] Add more file type support (.txt, .rst, .tex)
+- [x] Add more file type support (.txt, .rst, .tex)
 - [ ] Improve CLI help text and examples
-- [ ] Add configuration file validation
+- [x] Add configuration file validation
 - [ ] Create sample configuration templates
 - [ ] Add health check for dependencies
 
