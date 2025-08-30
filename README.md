@@ -307,6 +307,27 @@ Example:
 curl -H "Authorization: Bearer TEST" 'http://localhost:8000/search?query=light%20curve&limit=5'
 ```
 
+## Admin UI Authentication
+
+The Streamlit admin UI supports HTTP API authentication (recommended) and a
+convenience insecure bypass for local development.
+
+- To use the HTTP API for auth, ensure your API is running and set `NB_API_URL` if not using the default:
+
+```bash
+export NB_API_URL="http://localhost:8000"
+streamlit run nancy_brain/admin_ui.py
+```
+
+- For local development without an API, enable an insecure bypass (only use locally):
+
+```bash
+export NB_ALLOW_INSECURE=true
+streamlit run nancy_brain/admin_ui.py
+```
+
+The admin UI stores the access token and refresh token in `st.session_state` for the current Streamlit session.
+
 Set a document weight (boost factor 0.5–2.0 typical):
 ```bash
 curl -X POST -H 'Authorization: Bearer TEST' \
