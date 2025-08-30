@@ -6,6 +6,8 @@ Search for relevant documents using embeddings.
 import logging
 from pathlib import Path
 from typing import List, Dict
+import re
+import difflib
 from .types import get_file_type_category
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,29 @@ class Search:
     def _single_embedding_search(self, query: str, limit: int) -> List[Dict[str, str]]:
         """Perform search with single embedding model (backward compatibility)."""
         results = self.general_embeddings.search(query, limit * 50)
+        # Attach highlights computed from query
+        for r in results:
+            r.setdefault("highlights", [])
+            # compute highlights here by reusing helper from _process_and_rank_results scope
+            # simple approach: compute inline lightweight highlights
+            try:
+                tokens = [t for t in re.split(r"\s+", query.strip()) if len(t) > 0]
+            except Exception:
+                tokens = []
+            r["highlights"] = []
+            if tokens:
+                lower_text = r.get("text", "").lower()
+                for tok in tokens:
+                    if not tok:
+                        continue
+                    start = 0
+                    lower_tok = tok.lower()
+                    while True:
+                        idx = lower_text.find(lower_tok, start)
+                        if idx == -1:
+                            break
+                        r["highlights"].append({"start": idx, "end": idx + len(tok), "type": "stem"})
+                        start = idx + len(tok)
         return self._process_and_rank_results(results, limit, dual_scores=None)
 
     def _dual_embedding_search(self, query: str, limit: int) -> List[Dict[str, str]]:
@@ -151,8 +176,28 @@ class Search:
             }
             merged_results.append(merged_result)
 
-        # Sort by dual score and process with existing reweighting
+        # Sort by dual score and attach simple highlights from query
         merged_results.sort(key=lambda r: r["score"], reverse=True)
+        for r in merged_results:
+            r.setdefault("highlights", [])
+            try:
+                tokens = [t for t in re.split(r"\s+", query.strip()) if len(t) > 0]
+            except Exception:
+                tokens = []
+            if tokens:
+                lower_text = r.get("text", "").lower()
+                for tok in tokens:
+                    if not tok:
+                        continue
+                    start = 0
+                    lower_tok = tok.lower()
+                    while True:
+                        idx = lower_text.find(lower_tok, start)
+                        if idx == -1:
+                            break
+                        r["highlights"].append({"start": idx, "end": idx + len(tok), "type": "stem"})
+                        start = idx + len(tok)
+
         # Send all merged results - let _process_and_rank_results do the reweighting and limiting
         return self._process_and_rank_results(merged_results, limit, dual_scores=True)
 
@@ -218,5 +263,85 @@ class Search:
         # Log search results
         dual_info = " (dual embedding)" if dual_scores else ""
         logger.info(f"Found {len(formatted_results)} results{dual_info} (sorted by adjusted_score)")
+
+        # Compute lightweight highlights (offsets) for each result based on the query
+        def compute_highlights(text: str, query: str) -> List[Dict]:
+            highlights = []
+            if not query or not text:
+                return highlights
+
+            tokens = [t for t in re.split(r"\s+", query.strip()) if len(t) > 0]
+            if not tokens:
+                return highlights
+
+            lower_text = text.lower()
+
+            # Exact (word-boundary) matches
+            for tok in tokens:
+                try:
+                    pattern = r"\b" + re.escape(tok) + r"\b"
+                    for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+                        highlights.append({"start": m.start(), "end": m.end(), "type": "exact"})
+                except re.error:
+                    continue
+
+            # Stem-like matches: token as substring (not already covered)
+            for tok in tokens:
+                lower_tok = tok.lower()
+                start = 0
+                while True:
+                    idx = lower_text.find(lower_tok, start)
+                    if idx == -1:
+                        break
+                    end = idx + len(lower_tok)
+                    # skip if overlapping an exact
+                    if not any(
+                        h["start"] <= idx < h["end"] or h["start"] < end <= h["end"]
+                        for h in highlights
+                        if h["type"] == "exact"
+                    ):
+                        highlights.append({"start": idx, "end": end, "type": "stem"})
+                    start = end
+
+            # Fuzzy matches: compare token to words in text using difflib
+            words = list(re.finditer(r"\w+", text))
+            for tok in tokens:
+                for w in words:
+                    word_text = w.group(0)
+                    # skip if already covered
+                    if any(h["start"] <= w.start() < h["end"] or h["start"] < w.end() <= h["end"] for h in highlights):
+                        continue
+                    try:
+                        ratio = difflib.SequenceMatcher(None, tok.lower(), word_text.lower()).ratio()
+                    except Exception:
+                        ratio = 0.0
+                    if ratio >= 0.7:
+                        highlights.append({"start": w.start(), "end": w.end(), "type": "fuzzy"})
+
+            # Merge and sort non-overlapping, preferring exact > stem > fuzzy
+            type_priority = {"exact": 3, "stem": 2, "fuzzy": 1}
+            # Sort by start, then by -priority
+            highlights.sort(key=lambda h: (h["start"], -type_priority.get(h["type"], 0)))
+
+            # Remove overlaps by keeping higher priority spans
+            merged = []
+            for h in highlights:
+                if not merged:
+                    merged.append(h)
+                else:
+                    last = merged[-1]
+                    if h["start"] < last["end"]:
+                        # overlap, keep the one with higher priority
+                        if type_priority.get(h["type"], 0) > type_priority.get(last["type"], 0):
+                            merged[-1] = h
+                    else:
+                        merged.append(h)
+
+            return merged
+
+        # If query not available in this scope, we can't compute highlights; skip.
+        # The UI will prefer highlights if provided by the service layer. We add empty highlights here.
+        for r in formatted_results:
+            r.setdefault("highlights", [])
 
         return formatted_results[:limit]

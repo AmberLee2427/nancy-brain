@@ -13,6 +13,7 @@ from pathlib import Path
 import logging
 import argparse
 import requests
+import json
 
 # Optional imports
 try:
@@ -57,6 +58,19 @@ EXCLUDE_PDF_SUBSTRINGS = DEFAULT_EXCLUDE_PDF_SUBSTRINGS + ENV_EXCLUDES
 def is_excluded_pdf(path: str) -> bool:
     p = str(path)
     return any(token in p for token in EXCLUDE_PDF_SUBSTRINGS)
+
+
+def emit_progress(percent: int, stage: str = "", detail: str = ""):
+    """Emit a JSON progress marker line to stdout for UIs to parse.
+
+    Lines are prefixed with PROGRESS_JSON: to make them easy to detect in logs.
+    """
+    try:
+        payload = {"percent": int(percent), "stage": stage, "detail": detail}
+        print("PROGRESS_JSON: " + json.dumps(payload), flush=True)
+    except Exception:
+        # Never fail the build due to progress emission
+        pass
 
 
 # PDF download headers
@@ -783,11 +797,16 @@ if __name__ == "__main__":
             logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
             logger = logging.getLogger(__name__)
             all_failures = {"repos": {}, "articles": {}, "indexing": {}}
+            emit_progress(5, stage="start", detail="Cloning repositories")
             all_failures["repos"] = clone_repositories(config_path, base_path, dry_run, category, force_update)
+
+            emit_progress(25, stage="repos_done", detail="Repositories cloned/updated")
             if articles_config_path and os.path.exists(articles_config_path):
+                emit_progress(30, stage="articles", detail="Downloading PDF articles")
                 all_failures["articles"] = download_pdf_articles(
                     articles_config_path, base_path, dry_run, category, force_update
                 )
+                emit_progress(50, stage="articles_done", detail="PDF articles downloaded")
             all_failures["indexing"] = build_txtai_index(
                 config_path,
                 articles_config_path,
@@ -796,11 +815,14 @@ if __name__ == "__main__":
                 dry_run,
                 category,
             )
+            emit_progress(85, stage="indexing_done", detail="Indexing completed")
             if not dirty and not dry_run:
                 cleanup_raw_repositories(config_path, base_path, category)
                 if articles_config_path and os.path.exists(articles_config_path):
                     cleanup_pdf_articles(articles_config_path, base_path, category)
+            emit_progress(95, stage="cleanup", detail="Cleaning up raw files")
             print_pipeline_summary(all_failures, dry_run)
+            emit_progress(100, stage="done", detail="Pipeline finished")
 
     build_pipeline(
         config_path=args.config,

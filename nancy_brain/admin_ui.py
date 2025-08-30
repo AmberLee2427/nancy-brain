@@ -9,6 +9,8 @@ import yaml
 import subprocess
 import sys
 import os
+import logging
+import traceback
 
 # Add package root to path
 package_root = Path(__file__).parent.parent
@@ -17,6 +19,15 @@ sys.path.insert(0, str(package_root))
 from rag_core.service import RAGService
 
 from connectors.http_api import streamlit_auth
+import re
+import html
+
+try:
+    # Prefer relative import when running as a package
+    from .utils_weights import validate_weights_config
+except Exception:
+    # Fallback to absolute import when running the module as a script
+    from nancy_brain.utils_weights import validate_weights_config
 
 
 def _init_session_state_safe():
@@ -35,6 +46,31 @@ def _init_session_state_safe():
     except Exception:
         # Not running inside Streamlit; ignore
         pass
+
+
+def safe_rerun():
+    """Try to call Streamlit's experimental rerun; fallback to an instruction message if unavailable."""
+    try:
+        # Some Streamlit versions provide experimental_rerun, others may not
+        getattr(st, "experimental_rerun")()
+    except Exception:
+        try:
+            # Newer API may expose experimental functions under runtime; try best-effort
+            st.info("Please refresh the page to apply changes.")
+        except Exception:
+            # Silently ignore when not running in Streamlit
+            pass
+
+
+def show_error(message: str, exc: Exception = None, hint: str = None):
+    """Display a user-friendly error with optional exception details and a hint."""
+    logging.exception(message)
+    st.error(message)
+    if hint:
+        st.info(f"Hint: {hint}")
+    if exc is not None:
+        with st.expander("Error details"):
+            st.text(traceback.format_exc())
 
 
 def load_config(config_path: str = "config/repositories.yml"):
@@ -57,16 +93,22 @@ def load_articles_config(config_path: str = "config/articles.yml"):
 
 def save_config(config: dict, config_path: str = "config/repositories.yml"):
     """Save repository configuration."""
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    with open(config_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
+    try:
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False)
+    except Exception as e:
+        raise RuntimeError(f"Failed to save repositories config to {config_path}: {e}") from e
 
 
 def save_articles_config(config: dict, config_path: str = "config/articles.yml"):
     """Save articles configuration."""
-    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-    with open(config_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    try:
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    except Exception as e:
+        raise RuntimeError(f"Failed to save articles config to {config_path}: {e}") from e
 
 
 def run_build_command(force_update: bool = False, articles: bool = False):
@@ -113,7 +155,7 @@ def run_ui():
             if st.button("Logout"):
                 st.session_state.nb_token = None
                 st.session_state.nb_refresh = None
-                st.experimental_rerun()
+                safe_rerun()
         else:
             st.write("Login to access admin features")
             with st.form("sidebar_login"):
@@ -125,7 +167,7 @@ def run_ui():
                         st.session_state.nb_token = data.get("access_token")
                         st.session_state.nb_refresh = data.get("refresh_token")
                         st.success("Logged in")
-                        st.experimental_rerun()
+                        safe_rerun()
                     except Exception as e:
                         st.error(f"Login failed: {e}")
 
@@ -153,6 +195,93 @@ def run_ui():
         with col2:
             limit = st.number_input("Results:", min_value=1, max_value=20, value=5)
 
+        # Reweighting configuration editor (visible immediately on the Search page)
+        st.markdown("---")
+        st.markdown("#### Reweighting Configuration (index_weights.yaml)")
+        weights_path = Path("config/index_weights.yaml")
+        fallback_weights = Path("config/weights.yaml")
+        try:
+            if weights_path.exists():
+                with open(weights_path, "r") as wf:
+                    weights_cfg = yaml.safe_load(wf) or {}
+            elif fallback_weights.exists():
+                with open(fallback_weights, "r") as wf:
+                    weights_cfg = yaml.safe_load(wf) or {}
+            else:
+                weights_cfg = {}
+        except Exception as e:
+            weights_cfg = {}
+            show_error(
+                "Failed to load index_weights.yaml or fallback weights.yaml",
+                e,
+                hint="Check config directory and YAML syntax",
+            )
+
+        ext_weights = weights_cfg.get("extensions", {})
+        path_includes = weights_cfg.get("path_includes", {})
+
+        # Pre-populate textareas with the current config (if any)
+        with st.form("weights_form"):
+            st.markdown("**Extension weights (file extension -> multiplier)**")
+            ext_text = st.text_area(
+                "Extensions YAML (e.g. .py: 1.0)",
+                value=yaml.dump(ext_weights) if ext_weights is not None else "",
+                height=120,
+            )
+            st.markdown("**Path includes (keyword -> multiplier)**")
+            path_text = st.text_area(
+                "Path includes YAML (e.g. tests: 1.1)",
+                value=yaml.dump(path_includes) if path_includes is not None else "",
+                height=120,
+            )
+            if st.form_submit_button("Save weights"):
+                try:
+                    new_ext = yaml.safe_load(ext_text) or {}
+                    new_path = yaml.safe_load(path_text) or {}
+                    new_cfg = {"extensions": new_ext, "path_includes": new_path}
+                    os.makedirs(weights_path.parent, exist_ok=True)
+                    with open(weights_path, "w") as wf:
+                        yaml.dump(new_cfg, wf, default_flow_style=False, sort_keys=False)
+                    st.success("Saved index_weights.yaml")
+                    safe_rerun()
+                except Exception as e:
+                    show_error("Failed to save index_weights.yaml", e, hint="Ensure YAML is valid and file is writable")
+
+        # Export / Import reweighting configuration
+        try:
+            export_weights_yaml = yaml.dump(
+                weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
+            )
+        except Exception:
+            export_weights_yaml = ""
+
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            st.download_button(
+                "⬇️ Export Reweighting Config",
+                data=export_weights_yaml,
+                file_name="index_weights_export.yml",
+                mime="text/yaml",
+            )
+        with col_imp:
+            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
+            if upload_weights is not None:
+                try:
+                    raw = upload_weights.read()
+                    txt = raw.decode("utf-8")
+                    parsed = yaml.safe_load(txt)
+                    if not isinstance(parsed, dict):
+                        st.error("Imported weights must be a YAML mapping")
+                    else:
+                        if st.button("Import and overwrite weights"):
+                            os.makedirs(weights_path.parent, exist_ok=True)
+                            with open(weights_path, "w") as wf:
+                                yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
+                            st.success("Imported index_weights.yaml")
+                            safe_rerun()
+                except Exception as e:
+                    show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
+
         if st.button("🔍 Search") and query:
             with st.spinner("Searching..."):
                 try:
@@ -169,9 +298,194 @@ def run_ui():
         # Display results
         if st.session_state.search_results:
             st.subheader("Search Results")
+
+            def _highlight_snippet(text: str, query: str, snippet_len: int = 400, highlights: list = None) -> str:
+                """Return an HTML highlighted snippet for the query tokens.
+
+                Uses <mark> tags around matches and returns an HTML string (escaped).
+                """
+                if not text:
+                    return ""
+
+                escaped = html.escape(text)
+
+                # If highlights provided by the service, use their offsets (preferred)
+                if highlights:
+                    # Build HTML by slicing original escaped text using offsets
+                    parts = []
+                    last = 0
+                    for h in highlights:
+                        s = max(0, h.get("start", 0))
+                        e = min(len(text), h.get("end", s))
+                        # Escape bounds in case
+                        parts.append(html.escape(text[last:s]))
+                        span = html.escape(text[s:e])
+                        typ = h.get("type", "fuzzy")
+                        color = "#ffd54f" if typ == "exact" else ("#90caf9" if typ == "stem" else "#e1bee7")
+                        parts.append(f"<mark style='background:{color}; padding:0;'>{span}</mark>")
+                        last = e
+                    parts.append(html.escape(text[last:]))
+                    composed = "".join(parts)
+
+                    # Focus snippet around first highlight
+                    m = re.search(r"<mark", composed)
+                    if m:
+                        idx = max(0, m.start() - snippet_len // 2)
+                        snippet = composed[idx : idx + snippet_len]
+                        if idx > 0:
+                            snippet = "..." + snippet
+                        if idx + snippet_len < len(composed):
+                            snippet = snippet + "..."
+                        return snippet
+                    else:
+                        return composed[:snippet_len] + ("..." if len(composed) > snippet_len else "")
+
+                # Tokenize query into words, ignore very short tokens
+                tokens = [t for t in re.split(r"\s+", query.strip()) if len(t) > 0]
+                if not tokens:
+                    return html.escape(text[:snippet_len]) + ("..." if len(text) > snippet_len else "")
+
+                # Escape text for HTML then perform case-insensitive replacement
+                escaped = html.escape(text)
+
+                # Build a regex that matches any token (word-boundary aware)
+                pattern = r"(" + r"|".join(re.escape(t) for t in tokens) + r")"
+
+                def _repl(m):
+                    return f"<mark>{m.group(0)}</mark>"
+
+                try:
+                    highlighted = re.sub(pattern, _repl, escaped, flags=re.IGNORECASE)
+                except re.error:
+                    # Fallback if regex fails
+                    highlighted = escaped
+
+                # Find first highlighted occurrence to build a focused snippet
+                first_match = re.search(r"<mark>", highlighted)
+                if first_match:
+                    idx = first_match.start()
+                    # Map back to original escaped text positions roughly
+                    start = max(0, idx - snippet_len // 2)
+                    end = start + snippet_len
+                    snippet = highlighted[start:end]
+                    if start > 0:
+                        snippet = "..." + snippet
+                    if end < len(highlighted):
+                        snippet = snippet + "..."
+                    return snippet
+                else:
+                    # No match highlighted (rare), return escaped leading chunk
+                    return escaped[:snippet_len] + ("..." if len(escaped) > snippet_len else "")
+
             for i, result in enumerate(st.session_state.search_results, 1):
-                with st.expander(f"{i}. {result['id']} (score: {result['score']:.3f})"):
-                    st.code(result["text"][:500] + "..." if len(result["text"]) > 500 else result["text"])
+                title = f"{i}. {result.get('id', 'unknown')} (score: {result.get('score', 0):.3f})"
+                with st.expander(title):
+                    snippet_html = _highlight_snippet(
+                        result.get("text", ""), query or "", highlights=result.get("highlights", [])
+                    )
+                    # Show snippet as HTML
+                    st.markdown(snippet_html, unsafe_allow_html=True)
+                    # Full highlighted content in an expander
+                    with st.expander("Show full result"):
+                        full_html = _highlight_snippet(
+                            result.get("text", ""),
+                            query or "",
+                            snippet_len=len(result.get("text", "")),
+                            highlights=result.get("highlights", []),
+                        )
+                        st.markdown(full_html, unsafe_allow_html=True)
+
+            # --- Reweighting configuration editor (moved here from Repositories tab)
+            st.markdown("---")
+            st.markdown("#### Reweighting Configuration (index_weights.yaml)")
+            weights_path = Path("config/index_weights.yaml")
+            try:
+                if weights_path.exists():
+                    with open(weights_path, "r") as wf:
+                        weights_cfg = yaml.safe_load(wf) or {}
+                else:
+                    weights_cfg = {}
+            except Exception as e:
+                weights_cfg = {}
+                show_error("Failed to load index_weights.yaml", e, hint="Check config directory and YAML syntax")
+
+            ext_weights = weights_cfg.get("extensions", {})
+            path_includes = weights_cfg.get("path_includes", {})
+
+            with st.form("weights_form"):
+                st.markdown("**Extension weights (file extension -> multiplier)**")
+                ext_text = st.text_area(
+                    "Extensions YAML (e.g. .py: 1.0)", value=yaml.dump(ext_weights) if ext_weights else "", height=120
+                )
+                st.markdown("**Path includes (keyword -> multiplier)**")
+                path_text = st.text_area(
+                    "Path includes YAML (e.g. tests: 1.1)",
+                    value=yaml.dump(path_includes) if path_includes else "",
+                    height=120,
+                )
+                if st.form_submit_button("Save weights"):
+                    try:
+                        new_ext = yaml.safe_load(ext_text) or {}
+                        new_path = yaml.safe_load(path_text) or {}
+                        new_cfg = {"extensions": new_ext, "path_includes": new_path}
+                        os.makedirs(weights_path.parent, exist_ok=True)
+                        # Validate before saving
+                        ok, errs = validate_weights_config(new_cfg)
+                        if not ok:
+                            for e in errs:
+                                st.error(e)
+                        else:
+                            with open(weights_path, "w") as wf:
+                                yaml.dump(new_cfg, wf, default_flow_style=False, sort_keys=False)
+                            st.success("Saved index_weights.yaml")
+                            safe_rerun()
+                    except Exception as e:
+                        show_error(
+                            "Failed to save index_weights.yaml", e, hint="Ensure YAML is valid and file is writable"
+                        )
+
+            # Export / Import reweighting configuration
+            try:
+                export_weights_yaml = yaml.dump(
+                    weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
+                )
+            except Exception:
+                export_weights_yaml = ""
+
+            col_exp, col_imp = st.columns(2)
+            with col_exp:
+                st.download_button(
+                    "⬇️ Export Reweighting Config",
+                    data=export_weights_yaml,
+                    file_name="index_weights_export.yml",
+                    mime="text/yaml",
+                )
+            with col_imp:
+                upload_weights = st.file_uploader(
+                    "⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights"
+                )
+                if upload_weights is not None:
+                    try:
+                        raw = upload_weights.read()
+                        txt = raw.decode("utf-8")
+                        parsed = yaml.safe_load(txt)
+                        if not isinstance(parsed, dict):
+                            st.error("Imported weights must be a YAML mapping")
+                        else:
+                            if st.button("Import and overwrite weights"):
+                                # Validate parsed config
+                                ok, errs = validate_weights_config(parsed)
+                                if not ok:
+                                    for e in errs:
+                                        st.error(e)
+                                else:
+                                    os.makedirs(weights_path.parent, exist_ok=True)
+                                    with open(weights_path, "w") as wf:
+                                        yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
+                                    st.success("Imported index_weights.yaml")
+                                    safe_rerun()
+                    except Exception as e:
+                        show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
 
     elif page == "📚 Repository Management":
         st.header("📚 Repository Management")
@@ -181,6 +495,8 @@ def run_ui():
 
         with tab1:
             st.subheader("GitHub Repositories")
+
+            # (Reweighting configuration moved to the Search page)
 
             # Load current config
             config = load_config()
@@ -198,19 +514,63 @@ def run_ui():
 
                 if st.form_submit_button("➕ Add Repository"):
                     if category and repo_name and repo_url:
-                        if category not in config:
-                            config[category] = []
+                        try:
+                            if category not in config:
+                                config[category] = []
 
-                        new_repo = {"name": repo_name, "url": repo_url}
-                        if description:
-                            new_repo["description"] = description
+                            new_repo = {"name": repo_name, "url": repo_url}
+                            if description:
+                                new_repo["description"] = description
 
-                        config[category].append(new_repo)
-                        save_config(config)
-                        st.success(f"Added {repo_name} to {category}")
-                        st.experimental_rerun()
+                            config[category].append(new_repo)
+                            save_config(config)
+                            st.success(f"Added {repo_name} to {category}")
+                            safe_rerun()
+                        except Exception as e:
+                            show_error(
+                                "Failed to add repository.",
+                                e,
+                                hint="Check file permissions and YAML validity for config/repositories.yml",
+                            )
                     else:
                         st.error("Please fill in category, name, and URL")
+
+            # Export / Import configuration
+            st.markdown("#### Export / Import Configuration")
+            try:
+                export_yaml = yaml.dump(config if config else {}, default_flow_style=False, sort_keys=False)
+            except Exception:
+                export_yaml = ""
+
+            st.download_button(
+                label="⬇️ Export Repositories Config",
+                data=export_yaml,
+                file_name="repositories_export.yml",
+                mime="text/yaml",
+            )
+
+            uploaded = st.file_uploader("⬆️ Import Repositories Config (YAML)", type=["yml", "yaml"], key="upload_repos")
+            if uploaded is not None:
+                try:
+                    raw = uploaded.read()
+                    text = raw.decode("utf-8")
+                    parsed = yaml.safe_load(text)
+
+                    if not isinstance(parsed, dict):
+                        st.error("Imported file is not a valid repositories mapping (expected YAML mapping).")
+                    else:
+                        st.info("Preview of imported config (first 1000 chars):")
+                        st.code(text[:1000])
+                        if st.button("Import and overwrite repositories config"):
+                            save_config(parsed)
+                            st.success("Repositories configuration imported successfully.")
+                            safe_rerun()
+                except Exception as e:
+                    show_error(
+                        "Failed to parse uploaded repositories YAML.",
+                        e,
+                        hint="Ensure the file is valid YAML and not too large",
+                    )
 
             # Display current repositories
             st.markdown("#### Current Repositories")
@@ -225,11 +585,18 @@ def run_ui():
                             st.write(repo.get("description", ""))
                         with col3:
                             if st.button("🗑️", key=f"delete_repo_{category}_{repo['name']}"):
-                                config[category] = [r for r in config[category] if r["name"] != repo["name"]]
-                                if not config[category]:
-                                    del config[category]
-                                save_config(config)
-                                st.experimental_rerun()
+                                try:
+                                    config[category] = [r for r in config[category] if r["name"] != repo["name"]]
+                                    if not config[category]:
+                                        del config[category]
+                                    save_config(config)
+                                    safe_rerun()
+                                except Exception as e:
+                                    show_error(
+                                        "Failed to delete repository.",
+                                        e,
+                                        hint="Ensure the config file is writable and valid YAML",
+                                    )
             else:
                 st.info("No repositories configured yet.")
 
@@ -268,22 +635,29 @@ def run_ui():
 
                 if st.form_submit_button("➕ Add Article"):
                     if article_category and article_name and article_url:
-                        if article_category not in articles_config:
-                            articles_config[article_category] = []
+                        try:
+                            if article_category not in articles_config:
+                                articles_config[article_category] = []
 
-                        # Check if article already exists
-                        existing = [a for a in articles_config[article_category] if a.get("name") == article_name]
-                        if existing:
-                            st.error(f"Article '{article_name}' already exists in category '{article_category}'")
-                        else:
-                            new_article = {"name": article_name, "url": article_url}
-                            if article_description:
-                                new_article["description"] = article_description
+                            # Check if article already exists
+                            existing = [a for a in articles_config[article_category] if a.get("name") == article_name]
+                            if existing:
+                                st.error(f"Article '{article_name}' already exists in category '{article_category}'")
+                            else:
+                                new_article = {"name": article_name, "url": article_url}
+                                if article_description:
+                                    new_article["description"] = article_description
 
-                            articles_config[article_category].append(new_article)
-                            save_articles_config(articles_config)
-                            st.success(f"Added article '{article_name}' to category '{article_category}'")
-                            st.experimental_rerun()
+                                articles_config[article_category].append(new_article)
+                                save_articles_config(articles_config)
+                                st.success(f"Added article '{article_name}' to category '{article_category}'")
+                                safe_rerun()
+                        except Exception as e:
+                            show_error(
+                                "Failed to add article.",
+                                e,
+                                hint="Check file permissions and YAML validity for config/articles.yml",
+                            )
                     else:
                         st.error("Please fill in category, name, and URL")
 
@@ -302,15 +676,63 @@ def run_ui():
                             st.write(article.get("description", ""))
                         with col3:
                             if st.button("🗑️", key=f"delete_article_{category}_{article['name']}"):
-                                articles_config[category] = [
-                                    a for a in articles_config[category] if a["name"] != article["name"]
-                                ]
-                                if not articles_config[category]:
-                                    del articles_config[category]
-                                save_articles_config(articles_config)
-                                st.experimental_rerun()
+                                try:
+                                    articles_config[category] = [
+                                        a for a in articles_config[category] if a["name"] != article["name"]
+                                    ]
+                                    if not articles_config[category]:
+                                        del articles_config[category]
+                                    save_articles_config(articles_config)
+                                    safe_rerun()
+                                except Exception as e:
+                                    show_error(
+                                        "Failed to delete article.",
+                                        e,
+                                        hint="Ensure config/articles.yml is writable and valid YAML",
+                                    )
             else:
                 st.info("No articles configured yet.")
+
+            # Export / Import articles configuration
+            st.markdown("#### Export / Import Articles Configuration")
+            try:
+                export_articles_yaml = yaml.dump(
+                    articles_config if articles_config else {}, default_flow_style=False, sort_keys=False
+                )
+            except Exception:
+                export_articles_yaml = ""
+
+            st.download_button(
+                label="⬇️ Export Articles Config",
+                data=export_articles_yaml,
+                file_name="articles_export.yml",
+                mime="text/yaml",
+            )
+
+            uploaded_articles = st.file_uploader(
+                "⬆️ Import Articles Config (YAML)", type=["yml", "yaml"], key="upload_articles"
+            )
+            if uploaded_articles is not None:
+                try:
+                    raw = uploaded_articles.read()
+                    text = raw.decode("utf-8")
+                    parsed = yaml.safe_load(text)
+
+                    if not isinstance(parsed, dict):
+                        st.error("Imported file is not a valid articles mapping (expected YAML mapping).")
+                    else:
+                        st.info("Preview of imported articles config (first 1000 chars):")
+                        st.code(text[:1000])
+                        if st.button("Import and overwrite articles config"):
+                            save_articles_config(parsed)
+                            st.success("Articles configuration imported successfully.")
+                            safe_rerun()
+                except Exception as e:
+                    show_error(
+                        "Failed to parse uploaded articles YAML.",
+                        e,
+                        hint="Ensure the file is valid YAML and not too large",
+                    )
 
     elif page == "🏗️ Build Knowledge Base":
         st.header("🏗️ Build Knowledge Base")
@@ -326,19 +748,88 @@ def run_ui():
             )
 
         if st.button("🚀 Start Build"):
-            with st.spinner("Building knowledge base... This may take several minutes."):
-                result = run_build_command(force_update=force_update, articles=include_articles)
+            st.info("Starting build — streaming output below. This may take several minutes.")
 
-                if result.returncode == 0:
-                    st.success("✅ Knowledge base built successfully!")
-                    if result.stdout:
-                        with st.expander("Build Output"):
-                            st.text(result.stdout)
-                else:
-                    st.error("❌ Build failed!")
-                    if result.stderr:
-                        with st.expander("Error Details"):
-                            st.text(result.stderr)
+            # Build command (same as run_build_command)
+            cmd = [
+                sys.executable,
+                str(package_root / "scripts" / "build_knowledge_base.py"),
+                "--config",
+                "config/repositories.yml",
+                "--embeddings-path",
+                "knowledge_base/embeddings",
+            ]
+            if include_articles and Path("config/articles.yml").exists():
+                cmd.extend(["--articles-config", "config/articles.yml"])
+            if force_update:
+                cmd.append("--force-update")
+
+            # Run subprocess and stream stdout to the UI with a progress bar
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=package_root,
+            )
+
+            log_box = st.empty()
+            progress = st.progress(0)
+
+            lines = []
+            progress_val = 0
+
+            # Read lines as they become available and update UI
+            try:
+                while True:
+                    line = process.stdout.readline()
+                    if line == "" and process.poll() is not None:
+                        break
+                    if line:
+                        # Append and keep recent output trimmed
+                        lines.append(line)
+                        if len(lines) > 500:
+                            lines = lines[-500:]
+
+                        # Detect structured progress markers emitted by the build script
+                        stripped = line.strip()
+                        if stripped.startswith("PROGRESS_JSON:"):
+                            try:
+                                payload = stripped.split("PROGRESS_JSON:", 1)[1].strip()
+                                obj = __import__("json").loads(payload)
+                                pct = int(obj.get("percent", 0))
+                                progress.progress(max(progress_val, min(100, pct)))
+                                progress_val = max(progress_val, min(100, pct))
+                                # Optionally include stage detail in log
+                                lines.append(f"[progress] {obj.get('stage', '')}: {obj.get('detail', '')}\n")
+                            except Exception:
+                                pass
+                        else:
+                            # Heuristic fallback increment if no structured progress seen
+                            progress_val = min(100, progress_val + 1)
+                            progress.progress(progress_val)
+
+                        # Update log area
+                        log_box.text("".join(lines[-200:]))
+
+                returncode = process.poll()
+            except Exception as e:
+                process.kill()
+                st.error(f"Build process failed: {e}")
+                return
+
+            # Finalize progress and show results
+            progress.progress(100)
+            if returncode == 0:
+                st.success("✅ Knowledge base built successfully!")
+                if lines:
+                    with st.expander("Build Output"):
+                        st.text("".join(lines))
+            else:
+                st.error(f"❌ Build failed (exit code {returncode})")
+                if lines:
+                    with st.expander("Build Output"):
+                        st.text("".join(lines))
 
     elif page == "📊 Status":
         st.header("📊 System Status")
