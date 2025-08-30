@@ -204,8 +204,25 @@ class RAGService:
     ) -> List[Dict]:
         """Search for documents with optional filtering."""
         # Before searching, push runtime weights into search.model_weights (backwards compatibility)
+        # Reload file-based weights so each search uses the latest on-disk configuration
+        try:
+            self.weights.reload()
+        except Exception:
+            # If reload fails, proceed with previously loaded values
+            logger.debug("Failed to reload weights from disk; using cached values")
+
+        # Inject file-based weights and any runtime overrides into the Search instance
+        try:
+            self.search.extension_weights = self.weights.extension_weights or {}
+            # Start from the file-based model weights, then apply runtime overrides
+            self.search.model_weights = dict(self.weights.model_weights or {})
+        except Exception:
+            # Defensive fallbacks
+            self.search.extension_weights = {}
+            self.search.model_weights = {}
+
         if self._weights:
-            # Merge without losing existing file-based model weights
+            # Merge runtime weights, overriding file-based values
             self.search.model_weights.update(self._weights)
 
         # Get initial search results

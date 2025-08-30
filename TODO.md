@@ -80,7 +80,10 @@
   - ✅ Better error handling and feedback
   - ✅ Progress bars for long operations
   - ✅ Export/import configurations
-  - Search result highlighting
+  - ✅ Search result highlighting
+  - ✅ Use reweighting processes in UI search so we can test out config options
+  - ✅ Add thumbs up thumbs down button and link it to the `model_weights.yml` to boost/suppress good/bad results
+  - ✅ Mock testing
 
 ### CLI Enhancements
 - [ ] **Improved CLI error handling**
@@ -98,6 +101,11 @@
   - `--category` 
   - `--dirty`
 
+### Auth
+- [ ] create an admin login account
+- [ ] create test keys and add as env variable and github secrets (for CI)
+- [ ] add a "keys" page to the admin interface
+
 ### Advanced Features
 - [ ] **Enhanced Search**
   - [ ] **Refactor search to use txtai's SQL-like queries**
@@ -106,9 +114,9 @@
   - Custom scoring algorithms
   - Search history and favorites
 - [ ] **Multi-model Support**
-  - Support for different embedding models
+  - ✅ Support for different embedding models
   - Model comparison and benchmarking
-  - Automatic model selection
+  - ✅ Automatic model selection
 - [ ] **Advanced PDF Processing**
   - Better table extraction
   - Image and figure processing
@@ -137,9 +145,8 @@
   - Error tracking
 - [ ] **Security**
   - Input validation
-  - Rate limiting
-  - Authentication improvements
-  - Roles / permissions (low priority) — consider simple role column in `users` table for future RBAC
+  - ✅ Rate limiting
+  - ✅ Authentication improvements
 
 ## 📸 Content Creation (When Ready)
 

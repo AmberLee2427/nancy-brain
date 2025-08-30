@@ -29,6 +29,8 @@ except Exception:
     # Fallback to absolute import when running the module as a script
     from nancy_brain.utils_weights import validate_weights_config
 
+from nancy_brain.weights_persistence import load_model_weights, save_model_weights, set_model_weight
+
 
 def _init_session_state_safe():
     """Initialize Streamlit session state keys when running under Streamlit.
@@ -43,6 +45,9 @@ def _init_session_state_safe():
             st.session_state.nb_token = None
         if "nb_refresh" not in st.session_state:
             st.session_state.nb_refresh = None
+        if "weights_undo_stack" not in st.session_state:
+            # each entry: (doc_id, previous_value) where previous_value may be None
+            st.session_state.weights_undo_stack = []
     except Exception:
         # Not running inside Streamlit; ignore
         pass
@@ -176,7 +181,7 @@ def run_ui():
 
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["🔍 Search", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"],
+        ["🔍 Search", "⚖️ Weights", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"],
     )
 
     is_authenticated = bool(st.session_state.nb_token) or allow_insecure
@@ -195,103 +200,31 @@ def run_ui():
         with col2:
             limit = st.number_input("Results:", min_value=1, max_value=20, value=5)
 
-        # Reweighting configuration editor (visible immediately on the Search page)
-        st.markdown("---")
-        st.markdown("#### Reweighting Configuration (index_weights.yaml)")
-        weights_path = Path("config/index_weights.yaml")
-        fallback_weights = Path("config/weights.yaml")
-        try:
-            if weights_path.exists():
-                with open(weights_path, "r") as wf:
-                    weights_cfg = yaml.safe_load(wf) or {}
-            elif fallback_weights.exists():
-                with open(fallback_weights, "r") as wf:
-                    weights_cfg = yaml.safe_load(wf) or {}
-            else:
-                weights_cfg = {}
-        except Exception as e:
-            weights_cfg = {}
-            show_error(
-                "Failed to load index_weights.yaml or fallback weights.yaml",
-                e,
-                hint="Check config directory and YAML syntax",
-            )
+        # (Reweighting configuration moved below search results)
 
-        ext_weights = weights_cfg.get("extensions", {})
-        path_includes = weights_cfg.get("path_includes", {})
-
-        # Pre-populate textareas with the current config (if any)
-        with st.form("weights_form"):
-            st.markdown("**Extension weights (file extension -> multiplier)**")
-            ext_text = st.text_area(
-                "Extensions YAML (e.g. .py: 1.0)",
-                value=yaml.dump(ext_weights) if ext_weights is not None else "",
-                height=120,
-            )
-            st.markdown("**Path includes (keyword -> multiplier)**")
-            path_text = st.text_area(
-                "Path includes YAML (e.g. tests: 1.1)",
-                value=yaml.dump(path_includes) if path_includes is not None else "",
-                height=120,
-            )
-            if st.form_submit_button("Save weights"):
-                try:
-                    new_ext = yaml.safe_load(ext_text) or {}
-                    new_path = yaml.safe_load(path_text) or {}
-                    new_cfg = {"extensions": new_ext, "path_includes": new_path}
-                    os.makedirs(weights_path.parent, exist_ok=True)
-                    with open(weights_path, "w") as wf:
-                        yaml.dump(new_cfg, wf, default_flow_style=False, sort_keys=False)
-                    st.success("Saved index_weights.yaml")
-                    safe_rerun()
-                except Exception as e:
-                    show_error("Failed to save index_weights.yaml", e, hint="Ensure YAML is valid and file is writable")
-
-        # Export / Import reweighting configuration
-        try:
-            export_weights_yaml = yaml.dump(
-                weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
-            )
-        except Exception:
-            export_weights_yaml = ""
-
-        col_exp, col_imp = st.columns(2)
-        with col_exp:
-            st.download_button(
-                "⬇️ Export Reweighting Config",
-                data=export_weights_yaml,
-                file_name="index_weights_export.yml",
-                mime="text/yaml",
-            )
-        with col_imp:
-            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
-            if upload_weights is not None:
-                try:
-                    raw = upload_weights.read()
-                    txt = raw.decode("utf-8")
-                    parsed = yaml.safe_load(txt)
-                    if not isinstance(parsed, dict):
-                        st.error("Imported weights must be a YAML mapping")
-                    else:
-                        if st.button("Import and overwrite weights"):
-                            os.makedirs(weights_path.parent, exist_ok=True)
-                            with open(weights_path, "w") as wf:
-                                yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
-                            st.success("Imported index_weights.yaml")
-                            safe_rerun()
-                except Exception as e:
-                    show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
+        # Ensure a single RAGService is created and reused (embeddings are heavy to load)
+        if "rag_service" not in st.session_state or st.session_state.rag_service is None:
+            try:
+                # Use a dedicated model_weights file for thumbs persistence
+                st.session_state.rag_service = RAGService(
+                    embeddings_path=Path("knowledge_base/embeddings"),
+                    config_path=Path("config/repositories.yml"),
+                    weights_path=Path("config/model_weights.yaml"),
+                )
+            except Exception as e:
+                # Don't crash the UI; show an error and leave rag_service as None
+                st.session_state.rag_service = None
+                show_error("Failed to initialize RAGService", e)
 
         if st.button("🔍 Search") and query:
             with st.spinner("Searching..."):
                 try:
-                    service = RAGService(
-                        embeddings_path=Path("knowledge_base/embeddings"),
-                        config_path=Path("config/repositories.yml"),
-                        weights_path=Path("config/weights.yaml"),
-                    )
-                    results = asyncio.run(service.search_docs(query, limit=limit))
-                    st.session_state.search_results = results
+                    service = st.session_state.rag_service
+                    if service is None:
+                        st.error("Search service is not available")
+                    else:
+                        results = asyncio.run(service.search_docs(query, limit=limit))
+                        st.session_state.search_results = results
                 except Exception as e:
                     st.error(f"Search failed: {e}")
 
@@ -395,97 +328,263 @@ def run_ui():
                         )
                         st.markdown(full_html, unsafe_allow_html=True)
 
-            # --- Reweighting configuration editor (moved here from Repositories tab)
-            st.markdown("---")
-            st.markdown("#### Reweighting Configuration (index_weights.yaml)")
-            weights_path = Path("config/index_weights.yaml")
-            try:
-                if weights_path.exists():
-                    with open(weights_path, "r") as wf:
-                        weights_cfg = yaml.safe_load(wf) or {}
-                else:
-                    weights_cfg = {}
-            except Exception as e:
+                    # Thumbs up / Thumbs down controls to persist model_weights (left aligned)
+                    col_left, col_right, _ = st.columns([0.12, 0.12, 1])
+                    model_weights_path = Path("config/model_weights.yaml")
+                    service = st.session_state.get("rag_service")
+
+                    def _persist_model_weight(doc_id: str, new_value: float):
+                        try:
+                            # Load previous value and persist using helper
+                            prev = set_model_weight(model_weights_path, doc_id, float(new_value))
+                            # record undo
+                            try:
+                                st.session_state.weights_undo_stack.append((doc_id, prev))
+                            except Exception:
+                                pass
+                            # Update in-memory search weights as well
+                            if service is not None and hasattr(service, "search"):
+                                try:
+                                    service.search.model_weights[doc_id] = float(new_value)
+                                except Exception:
+                                    pass
+                            st.success(f"Updated weight for {doc_id} -> {new_value}")
+                        except Exception as e:
+                            show_error("Failed to persist model weight", e)
+
+                    # Upvote (increase multiplier by 20%, cap at 2.0)
+                    with col_left:
+                        if st.button("👍", key=f"thumbs_up_{i}"):
+                            doc_id = result.get("id")
+                            # Determine current value from service or disk
+                            cur = 1.0
+                            if service and hasattr(service, "search"):
+                                cur = float(service.search.model_weights.get(doc_id, cur))
+                            # Compute new value
+                            new = min(2.0, cur * 1.2)
+                            _persist_model_weight(doc_id, new)
+                    # Downvote (decrease multiplier by 20%, floor at 0.5)
+                    with col_right:
+                        if st.button("👎", key=f"thumbs_down_{i}"):
+                            doc_id = result.get("id")
+                            cur = 1.0
+                            if service and hasattr(service, "search"):
+                                cur = float(service.search.model_weights.get(doc_id, cur))
+                            new = max(0.5, cur * 0.8)
+                            _persist_model_weight(doc_id, new)
+
+    # New dedicated Weights page: always-visible editors for index_weights and model_weights
+    elif page == "⚖️ Weights":
+        st.header("⚖️ Reweighting / Model Weights")
+
+        # --- Reweighting configuration editor
+        st.markdown("---")
+        st.markdown("#### Reweighting Configuration (index_weights.yaml)")
+        weights_path = Path("config/index_weights.yaml")
+        try:
+            if weights_path.exists():
+                with open(weights_path, "r") as wf:
+                    weights_cfg = yaml.safe_load(wf) or {}
+            else:
                 weights_cfg = {}
-                show_error("Failed to load index_weights.yaml", e, hint="Check config directory and YAML syntax")
+        except Exception as e:
+            weights_cfg = {}
+            show_error("Failed to load index_weights.yaml", e, hint="Check config directory and YAML syntax")
 
-            ext_weights = weights_cfg.get("extensions", {})
-            path_includes = weights_cfg.get("path_includes", {})
+        ext_weights = weights_cfg.get("extensions", {})
+        path_includes = weights_cfg.get("path_includes", {})
 
-            with st.form("weights_form"):
-                st.markdown("**Extension weights (file extension -> multiplier)**")
-                ext_text = st.text_area(
-                    "Extensions YAML (e.g. .py: 1.0)", value=yaml.dump(ext_weights) if ext_weights else "", height=120
-                )
-                st.markdown("**Path includes (keyword -> multiplier)**")
-                path_text = st.text_area(
-                    "Path includes YAML (e.g. tests: 1.1)",
-                    value=yaml.dump(path_includes) if path_includes else "",
-                    height=120,
-                )
-                if st.form_submit_button("Save weights"):
+        with st.form("weights_form"):
+            st.markdown("**Extension weights (file extension -> multiplier)**")
+            ext_text = st.text_area(
+                "Extensions YAML (e.g. .py: 1.0)", value=yaml.dump(ext_weights) if ext_weights else "", height=120
+            )
+            st.markdown("**Path includes (keyword -> multiplier)**")
+            path_text = st.text_area(
+                "Path includes YAML (e.g. tests: 1.1)",
+                value=yaml.dump(path_includes) if path_includes else "",
+                height=120,
+            )
+            if st.form_submit_button("Save weights"):
+                try:
+                    new_ext = yaml.safe_load(ext_text) or {}
+                    new_path = yaml.safe_load(path_text) or {}
+                    new_cfg = {"extensions": new_ext, "path_includes": new_path}
+                    os.makedirs(weights_path.parent, exist_ok=True)
+                    # Validate before saving
+                    ok, errs = validate_weights_config(new_cfg)
+                    if not ok:
+                        for e in errs:
+                            st.error(e)
+                    else:
+                        with open(weights_path, "w") as wf:
+                            yaml.dump(new_cfg, wf, default_flow_style=False, sort_keys=False)
+                        st.success("Saved index_weights.yaml")
+                        safe_rerun()
+                except Exception as e:
+                    show_error("Failed to save index_weights.yaml", e, hint="Ensure YAML is valid and file is writable")
+
+        # Export / Import reweighting configuration (outside the form)
+        try:
+            export_weights_yaml = yaml.dump(
+                weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
+            )
+        except Exception:
+            export_weights_yaml = ""
+
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            st.download_button(
+                "⬇️ Export Reweighting Config",
+                data=export_weights_yaml,
+                file_name="index_weights_export.yml",
+                mime="text/yaml",
+                key="export_index_weights",
+            )
+        with col_imp:
+            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
+            if upload_weights is not None:
+                try:
+                    raw = upload_weights.read()
+                    txt = raw.decode("utf-8")
+                    parsed = yaml.safe_load(txt)
+                    if not isinstance(parsed, dict):
+                        st.error("Imported weights must be a YAML mapping")
+                    else:
+                        if st.button("Import and overwrite weights"):
+                            # Validate parsed config
+                            ok, errs = validate_weights_config(parsed)
+                            if not ok:
+                                for e in errs:
+                                    st.error(e)
+                            else:
+                                os.makedirs(weights_path.parent, exist_ok=True)
+                                with open(weights_path, "w") as wf:
+                                    yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
+                                st.success("Imported index_weights.yaml")
+                                safe_rerun()
+                except Exception as e:
+                    show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
+
+        # --- Model weights editor (per-document multipliers)
+        st.markdown("---")
+        st.markdown("#### Model Weights (per-document) - config/model_weights.yaml")
+        model_weights_path = Path("config/model_weights.yaml")
+        try:
+            if model_weights_path.exists():
+                with open(model_weights_path, "r") as mf:
+                    model_weights_cfg = yaml.safe_load(mf) or {}
+            else:
+                model_weights_cfg = {}
+        except Exception as e:
+            model_weights_cfg = {}
+            show_error("Failed to load model_weights.yaml", e, hint="Check YAML syntax")
+
+        # Show editable mapping
+        model_text = yaml.dump(model_weights_cfg) if isinstance(model_weights_cfg, dict) else "{}"
+        with st.form("model_weights_form"):
+            st.markdown("**Per-document model weights (doc_id -> multiplier)**")
+            model_text_area = st.text_area(
+                "Model weights YAML (e.g. cat1/repo/path: 1.2)", value=model_text, height=200
+            )
+            col_save = st.columns([1])[0]
+            with col_save:
+                if st.form_submit_button("Save model weights"):
                     try:
-                        new_ext = yaml.safe_load(ext_text) or {}
-                        new_path = yaml.safe_load(path_text) or {}
-                        new_cfg = {"extensions": new_ext, "path_includes": new_path}
-                        os.makedirs(weights_path.parent, exist_ok=True)
-                        # Validate before saving
-                        ok, errs = validate_weights_config(new_cfg)
-                        if not ok:
-                            for e in errs:
-                                st.error(e)
+                        parsed = yaml.safe_load(model_text_area) or {}
+                        if not isinstance(parsed, dict):
+                            st.error("Model weights must be a YAML mapping of doc_id -> numeric multiplier")
                         else:
-                            with open(weights_path, "w") as wf:
-                                yaml.dump(new_cfg, wf, default_flow_style=False, sort_keys=False)
-                            st.success("Saved index_weights.yaml")
-                            safe_rerun()
+                            # Coerce values to floats and clamp to safe range
+                            fixed = {}
+                            for k, v in parsed.items():
+                                try:
+                                    f = float(v)
+                                except Exception:
+                                    st.error(f"Invalid numeric value for {k}: {v}")
+                                    raise
+                                # Clamp to reasonable bounds [0.5, 2.0]
+                                f = max(0.5, min(2.0, f))
+                                fixed[k] = f
+                            # Save using helper
+                            save_model_weights(fixed, model_weights_path)
+                            # Update in-memory service if available
+                            svc = st.session_state.get("rag_service")
+                            if svc is not None and hasattr(svc, "search"):
+                                try:
+                                    svc.search.model_weights = dict(fixed)
+                                except Exception:
+                                    pass
+                            st.success("Saved model_weights.yaml")
                     except Exception as e:
                         show_error(
-                            "Failed to save index_weights.yaml", e, hint="Ensure YAML is valid and file is writable"
+                            "Failed to save model_weights.yaml", e, hint="Ensure YAML is valid and values are numeric"
                         )
 
-            # Export / Import reweighting configuration
-            try:
-                export_weights_yaml = yaml.dump(
-                    weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
-                )
-            except Exception:
-                export_weights_yaml = ""
+        # Undo / Export / Import actions (must be outside the form)
+        if st.button("Undo last weight change"):
+            stack = st.session_state.get("weights_undo_stack", [])
+            if not stack:
+                st.info("Nothing to undo")
+            else:
+                doc_id, prev = stack.pop()
+                # prev may be None (meaning the doc_id didn't exist before)
+                try:
+                    set_model_weight(model_weights_path, doc_id, prev)
+                    # update in-memory service
+                    svc = st.session_state.get("rag_service")
+                    if svc is not None and hasattr(svc, "search"):
+                        try:
+                            if prev is None:
+                                svc.search.model_weights.pop(doc_id, None)
+                            else:
+                                svc.search.model_weights[doc_id] = float(prev)
+                        except Exception:
+                            pass
+                    st.success(f"Reverted {doc_id} to {prev}")
+                except Exception as e:
+                    show_error("Failed to undo model weight change", e)
 
-            col_exp, col_imp = st.columns(2)
-            with col_exp:
-                st.download_button(
-                    "⬇️ Export Reweighting Config",
-                    data=export_weights_yaml,
-                    file_name="index_weights_export.yml",
-                    mime="text/yaml",
-                )
-            with col_imp:
-                upload_weights = st.file_uploader(
-                    "⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights"
-                )
-                if upload_weights is not None:
-                    try:
-                        raw = upload_weights.read()
-                        txt = raw.decode("utf-8")
-                        parsed = yaml.safe_load(txt)
-                        if not isinstance(parsed, dict):
-                            st.error("Imported weights must be a YAML mapping")
-                        else:
-                            if st.button("Import and overwrite weights"):
-                                # Validate parsed config
-                                ok, errs = validate_weights_config(parsed)
-                                if not ok:
-                                    for e in errs:
-                                        st.error(e)
-                                else:
-                                    os.makedirs(weights_path.parent, exist_ok=True)
-                                    with open(weights_path, "w") as wf:
-                                        yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
-                                    st.success("Imported index_weights.yaml")
-                                    safe_rerun()
-                    except Exception as e:
-                        show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
+        # Export / Import reweighting configuration (index_weights export only)
+        try:
+            export_weights_yaml = yaml.dump(
+                weights_cfg if weights_cfg else {}, default_flow_style=False, sort_keys=False
+            )
+        except Exception:
+            export_weights_yaml = ""
+
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            st.download_button(
+                "⬇️ Export Reweighting Config",
+                data=export_weights_yaml,
+                file_name="index_weights_export.yml",
+                mime="text/yaml",
+            )
+        with col_imp:
+            upload_weights = st.file_uploader("⬆️ Import Reweighting Config", type=["yml", "yaml"], key="upload_weights")
+            if upload_weights is not None:
+                try:
+                    raw = upload_weights.read()
+                    txt = raw.decode("utf-8")
+                    parsed = yaml.safe_load(txt)
+                    if not isinstance(parsed, dict):
+                        st.error("Imported weights must be a YAML mapping")
+                    else:
+                        if st.button("Import and overwrite weights"):
+                            # Validate parsed config
+                            ok, errs = validate_weights_config(parsed)
+                            if not ok:
+                                for e in errs:
+                                    st.error(e)
+                            else:
+                                os.makedirs(weights_path.parent, exist_ok=True)
+                                with open(weights_path, "w") as wf:
+                                    yaml.dump(parsed, wf, default_flow_style=False, sort_keys=False)
+                                st.success("Imported index_weights.yaml")
+                                safe_rerun()
+                except Exception as e:
+                    show_error("Failed to parse uploaded weights YAML.", e, hint="Ensure file is valid YAML")
 
     elif page == "📚 Repository Management":
         st.header("📚 Repository Management")
@@ -547,6 +646,7 @@ def run_ui():
                 data=export_yaml,
                 file_name="repositories_export.yml",
                 mime="text/yaml",
+                key="export_repositories",
             )
 
             uploaded = st.file_uploader("⬆️ Import Repositories Config (YAML)", type=["yml", "yaml"], key="upload_repos")
@@ -707,6 +807,7 @@ def run_ui():
                 data=export_articles_yaml,
                 file_name="articles_export.yml",
                 mime="text/yaml",
+                key="export_articles",
             )
 
             uploaded_articles = st.file_uploader(

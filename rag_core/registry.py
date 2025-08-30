@@ -24,20 +24,42 @@ class ModelWeights:
         if self.model_weights_path.exists():
             try:
                 with open(self.model_weights_path, "r") as f:
-                    return yaml.safe_load(f) or {}
+                    data = yaml.safe_load(f) or {}
+                    # If the file looks like an extension-weight file (contains extensions/path_includes),
+                    # treat it as not providing per-doc model weights.
+                    if isinstance(data, dict) and ("extensions" in data or "path_includes" in data):
+                        return {}
+                    return data
             except Exception as e:
                 logger.warning(f"Failed to load model weights: {e}")
         return {}
 
     def _load_extension_weights(self):
-        weights_path = Path(__file__).parent.parent / "config/weights.yaml"
-        if weights_path.exists():
+        # Prefer an index-specific weights file if present in the same directory as the
+        # provided model_weights_path. Fall back to package-level config/weights.yaml.
+        if hasattr(self, "model_weights_path") and self.model_weights_path:
+            base = self.model_weights_path.parent
+        else:
+            base = Path(__file__).parent.parent
+
+        index_weights = base / "index_weights.yaml"
+        weights_path = base / "weights.yaml"
+        target = index_weights if index_weights.exists() else weights_path
+        if target.exists():
             try:
-                with open(weights_path, "r") as f:
+                with open(target, "r") as f:
                     return yaml.safe_load(f) or {}
             except Exception as e:
-                logger.warning(f"Failed to load weights: {e}")
+                logger.warning(f"Failed to load extension weights from {target}: {e}")
         return {}
+
+    def reload(self):
+        """Reload model weights and extension weights from disk.
+
+        Call this before searches to ensure the latest file-based weights are used.
+        """
+        self.model_weights = self._load_model_weights()
+        self.extension_weights = self._load_extension_weights()
 
 
 class Registry:

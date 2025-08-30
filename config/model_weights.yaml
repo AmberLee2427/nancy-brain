@@ -9,3 +9,5 @@ microlensing_tools/eesunhong/docs/source/user_guides/useful_links_for_microlensi
 microlensing_tools/pyLIMA/pyLIMA/pyLIMASS/__init__.py,: 0.7
 microlensing_tools/synthpop/synthpop/modules/initial_mass_function/__init__.py,: 0.7
 microlensing_tools/synthpop/synthpop/modules/metallicity/__init__.py,: 0.7
+microlensing_tools/eesunhong/docs/source/developer_guides/index.md: 0.8
+microlensing_tools/eesunhong/third_party/roots-fortran/README.md: 0.8
