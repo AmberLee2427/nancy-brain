@@ -229,11 +229,11 @@ dependencies:
       - pydeck==0.9.1
       - pyerfa==2.0.1.5
       - pyflakes==3.4.0
+      - pylatexenc==2.10
       - pymdown-extensions==10.16.1
       - pymupdf==1.26.4
       - pyparsing==3.2.3
       - pypdf2==3.0.1
-  - pylatexenc==2.10
       - pypdfium2==4.30.0
       - pyproject-hooks==1.2.0
       - pytest==8.4.1

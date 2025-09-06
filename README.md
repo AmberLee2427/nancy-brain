@@ -117,6 +117,13 @@ prefer to install them manually in your environment, run:
 pip install docutils pylatexenc
 ```
 
+Developer note (CLI & tests):
+The CLI commands and `RAGService` avoid importing heavy ML libraries (such as `txtai` and `torch`) at
+module import time. The service defers initializing the embedding `Search` until an embeddings index is
+present or a command explicitly needs it. This makes running CLI help and most unit tests fast and safe
+in minimal environments. If a test needs a functioning `Search`, mock `rag_core.search` (insert a
+dummy module into `sys.modules['rag_core.search']`) before instantiating `RAGService`.
+
 ---
 ## 2. Project Layout (Core Parts)
 ```

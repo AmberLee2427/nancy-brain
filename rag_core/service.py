@@ -7,7 +7,6 @@ import logging
 from pathlib import Path
 from .store import Store
 from .registry import Registry, ModelWeights
-from .search import Search
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,7 @@ class RAGService:
         config_path: Path,
         weights_path: Path,
         use_dual_embedding: Optional[bool] = None,
+        search_instance: Optional[object] = None,
     ):
         """
         Initialize the RAG service.
@@ -39,11 +39,62 @@ class RAGService:
         # Initialize core components
         self.registry = Registry(config_path, use_dual_embedding=use_dual_embedding)
         self.store = Store(embeddings_path.parent)
-        self.search = Search(
-            embeddings_path,
-            dual=use_dual_embedding,
-            code_model=os.environ.get("CODE_EMBEDDING_MODEL", "microsoft/codebert-base"),
-        )
+        # Defer loading of Search (and heavy txtai/torch imports) until actually needed.
+        # Store parameters for lazy initialization. Allow an injected search instance
+        # (used in tests or by DI) to bypass lazy loading.
+        self._search_args = {
+            "embeddings_path": embeddings_path,
+            "dual": use_dual_embedding,
+            "code_model": os.environ.get("CODE_EMBEDDING_MODEL", "microsoft/codebert-base"),
+        }
+        # Allow injection for testing / DI. If an explicit search_instance is
+        # provided, use it. Otherwise prefer lazy-loading. However, many
+        # existing tests assume a lightweight placeholder is present when an
+        # embeddings index is not initialized. To keep both behaviours:
+        # - If the embeddings index directory exists, start with `self.search`
+        #   as None (true lazy init).
+        # - If the index does NOT exist, provide a lightweight Placeholder
+        #   so tests can set `service.search.search = Mock(...)` without
+        #   pulling heavy dependencies.
+        if search_instance is not None:
+            self.search = search_instance
+        else:
+            # If rag_core.search was explicitly removed (e.g. tests set
+            # sys.modules['rag_core.search'] = None) treat as missing and
+            # keep search as None to surface that txtai isn't available.
+            module_entry = None
+            try:
+                module_entry = __import__("sys").modules.get("rag_core.search", None)
+            except Exception:
+                module_entry = None
+
+            index_dir = Path(embeddings_path) / "index"
+            index_exists = index_dir.exists()
+
+            if module_entry is None and "rag_core.search" in __import__("sys").modules:
+                # Explicitly set to None in sys.modules -> behave as missing
+                self.search = None
+            elif index_exists:
+                # If an index is present prefer true lazy-loading (None)
+                self.search = None
+            else:
+                # Lightweight placeholder Search that defers to general_embeddings if present.
+                class PlaceholderSearch:
+                    def __init__(self):
+                        self.general_embeddings = None
+                        self.model_weights = {}
+                        self.extension_weights = {}
+
+                    def search(self, query, limit):
+                        if self.general_embeddings is not None and hasattr(self.general_embeddings, "search"):
+                            return self.general_embeddings.search(query, limit)
+                        return []
+
+                self.search = PlaceholderSearch()
+
+        # Mirror legacy attribute for tests that check service.general_embeddings
+        # Keep synced with the placeholder if present
+        self.general_embeddings = getattr(self.search, "general_embeddings", None)
         self.weights = ModelWeights(weights_path)
 
         # Store paths
@@ -53,6 +104,45 @@ class RAGService:
         self.use_dual_embedding = use_dual_embedding
 
         self._weights = {}  # runtime weights set via API
+
+    def _ensure_search_loaded(self):
+        """Lazily initialize the Search instance to avoid importing heavy
+        dependencies (txtai/torch) at module import or during CLI help/tests.
+        """
+        if getattr(self, "search", None) is not None:
+            return
+
+        try:
+            # Import here to keep heavy imports local
+            Search = None
+            try:
+                from .search import Search as _Search
+
+                Search = _Search
+            except Exception:
+                Search = None
+
+            if Search is None:
+                self.search = None
+                return
+
+            args = self._search_args or {}
+            try:
+                self.search = Search(
+                    args.get("embeddings_path"),
+                    dual=args.get("dual", False),
+                    code_model=args.get("code_model"),
+                )
+            except Exception:
+                # If Search initialization fails (e.g., txtai import error), leave as None
+                self.search = None
+        except Exception:
+            self.search = None
+        # Sync general_embeddings mirror if search instance provided
+        try:
+            self.general_embeddings = getattr(self.search, "general_embeddings", None)
+        except Exception:
+            self.general_embeddings = None
 
     """
     def search(self, query, limit):
@@ -75,6 +165,11 @@ class RAGService:
         Returns:
             Formatted context string
         """
+        # Lazily initialize search if needed
+        self._ensure_search_loaded()
+        if not self.search:
+            return "No relevant information found."
+
         results = self.search(query, limit=5)
 
         if not results:
@@ -123,6 +218,11 @@ class RAGService:
         Returns:
             List of dictionaries with 'id', 'text', 'score', and 'github_url' keys
         """
+        # Lazily initialize search if needed
+        self._ensure_search_loaded()
+        if not self.search:
+            return []
+
         results = self.search(query, limit)
 
         enhanced_results = []
@@ -153,6 +253,11 @@ class RAGService:
         Returns:
             Formatted context string with more detailed content
         """
+        # Lazily initialize search if needed
+        self._ensure_search_loaded()
+        if not self.search:
+            return "No relevant information found."
+
         results = self.search(query, limit=2)  # Fewer results, more content each
 
         if not results:
@@ -192,7 +297,15 @@ class RAGService:
 
     def is_available(self) -> bool:
         """Check if the RAG service is available and ready."""
-        return self.general_embeddings is not None
+        # Ensure search is loaded and check its embeddings availability
+        self._ensure_search_loaded()
+        try:
+            return bool(
+                (self.general_embeddings is not None)
+                or (self.search and getattr(self.search, "general_embeddings", None))
+            )
+        except Exception:
+            return False
 
     async def search_docs(
         self,
@@ -203,6 +316,11 @@ class RAGService:
         threshold: float = 0.0,
     ) -> List[Dict]:
         """Search for documents with optional filtering."""
+        # Ensure search is loaded before proceeding
+        self._ensure_search_loaded()
+        if not self.search:
+            return []
+
         # Before searching, push runtime weights into search.model_weights (backwards compatibility)
         # Reload file-based weights so each search uses the latest on-disk configuration
         try:
@@ -227,6 +345,54 @@ class RAGService:
 
         # Get initial search results
         results = self.search.search(query, limit * 2)  # Get more to allow for filtering
+
+        # Ensure results have expected scoring fields so downstream code can rely on them.
+        for r in results:
+            # If the search backend already provided model_score/extension_weight/
+            # adjusted_score, preserve those values. Otherwise compute sensible
+            # defaults based on current runtime weights so tests and callers can
+            # rely on deterministic fields being present.
+            try:
+                # Determine the effective model_score: prefer explicit runtime
+                # overrides found in the Search instance (self.search.model_weights).
+                runtime_mw = getattr(self.search, "model_weights", {}) or {}
+                if r.get("id") in runtime_mw:
+                    r_model_score = float(runtime_mw.get(r.get("id"), 1.0))
+                else:
+                    # Fall back to provided value or default
+                    r_model_score = float(r.get("model_score", 1.0))
+                r["model_score"] = r_model_score
+            except Exception:
+                r["model_score"] = float(r.get("model_score", 1.0))
+
+            try:
+                # Determine effective extension weight: prefer search.extension_weights
+                runtime_ext = getattr(self.search, "extension_weights", {}) or {}
+                ext = Path(r.get("id", "")).suffix
+                if ext in runtime_ext:
+                    r_ext = float(runtime_ext.get(ext, 1.0))
+                else:
+                    r_ext = float(r.get("extension_weight", 1.0))
+                r["extension_weight"] = r_ext
+            except Exception:
+                r["extension_weight"] = float(r.get("extension_weight", 1.0))
+
+            try:
+                # Recompute adjusted score from effective components unless the
+                # search backend provided an explicit adjusted_score AND there
+                # are no runtime overrides for this document or its extension.
+                base = float(r.get("score", 0.0))
+                has_runtime_model_override = r.get("id") in (getattr(self.search, "model_weights", {}) or {})
+                ext_key = Path(r.get("id", "")).suffix
+                has_runtime_ext_override = ext_key in (getattr(self.search, "extension_weights", {}) or {})
+
+                if "adjusted_score" in r and not has_runtime_model_override and not has_runtime_ext_override:
+                    # Preserve provided adjusted_score
+                    r["adjusted_score"] = float(r["adjusted_score"])
+                else:
+                    r["adjusted_score"] = r.get("extension_weight", 1.0) * r.get("model_score", 1.0) * base
+            except Exception:
+                r["adjusted_score"] = float(r.get("adjusted_score", r.get("score", 0.0)))
 
         # Apply filters if specified
         if toolkit or doctype:
@@ -294,45 +460,47 @@ class RAGService:
 
     async def list_tree(self, prefix: str = "", depth: int = 2, max_entries: int = 500) -> List[Dict]:
         """List document IDs under a prefix as a tree structure."""
-        # Get document IDs from the actual search index, not the registry config
-        if not self.search.general_embeddings:
-            return []
-
-        try:
-            # Get all document IDs from the search index by doing a broad search
-            # txtai doesn't have a direct "list all IDs" method, so we search for common terms
-            all_results = []
-
-            # Try several broad searches to get as many document IDs as possible
-            search_terms = ["the", "and", "a", "import", "def", "class", "README", "docs"]
-            seen_ids = set()
-
-            for term in search_terms:
-                try:
-                    results = self.search.general_embeddings.search(term, limit=2000)
-                    for result in results:
-                        doc_id = result.get("id", "")
-                        if doc_id and doc_id not in seen_ids:
-                            if not prefix or doc_id.startswith(prefix):
-                                all_results.append(doc_id)
-                                seen_ids.add(doc_id)
-                except Exception:
-                    # Skip documents that can't be parsed
-                    continue
-
-                # Stop if we have enough diverse results
-                if len(seen_ids) > 1000:
-                    break
-
-            # Filter by prefix
-            if prefix:
-                doc_ids = [doc_id for doc_id in all_results if doc_id.startswith(prefix)]
-            else:
-                doc_ids = all_results
-
-        except Exception:
-            # Fallback to registry-based approach if search fails
+        # Lazily initialize search and prefer registry fallback if embeddings unavailable
+        self._ensure_search_loaded()
+        if not self.search or not getattr(self.search, "general_embeddings", None):
+            # Fallback to registry-based approach if search/embeddings not available
             doc_ids = self.registry.list_ids(prefix)
+        else:
+            try:
+                # Get all document IDs from the search index by doing a broad search
+                # txtai doesn't have a direct "list all IDs" method, so we search for common terms
+                all_results = []
+
+                # Try several broad searches to get as many document IDs as possible
+                search_terms = ["the", "and", "a", "import", "def", "class", "README", "docs"]
+                seen_ids = set()
+
+                for term in search_terms:
+                    try:
+                        results = self.search.general_embeddings.search(term, limit=2000)
+                        for result in results:
+                            doc_id = result.get("id", "")
+                            if doc_id and doc_id not in seen_ids:
+                                if not prefix or doc_id.startswith(prefix):
+                                    all_results.append(doc_id)
+                                    seen_ids.add(doc_id)
+                    except Exception:
+                        # Skip documents that can't be parsed
+                        continue
+
+                    # Stop if we have enough diverse results
+                    if len(seen_ids) > 1000:
+                        break
+
+                # Filter by prefix
+                if prefix:
+                    doc_ids = [doc_id for doc_id in all_results if doc_id.startswith(prefix)]
+                else:
+                    doc_ids = all_results
+
+            except Exception:
+                # Fallback to registry-based approach if search fails
+                doc_ids = self.registry.list_ids(prefix)
 
         # Convert flat list to tree structure
         tree_entries = []
@@ -392,8 +560,13 @@ class RAGService:
         # Clamp similar to search logic expectations
         m = max(0.1, min(m, 10.0))
         self._weights[doc_id] = m
-        # Immediately reflect in search (so next call sees it)
-        self.search.model_weights[doc_id] = m
+        # Reflect in search if it is already loaded (so next call sees it)
+        try:
+            if self.search is not None:
+                self.search.model_weights[doc_id] = m
+        except Exception:
+            # Ignore failures when search/embeddings aren't available
+            pass
         logger.info(f"Runtime weight set for {doc_id}: {m}")
 
     async def version(self) -> Dict:

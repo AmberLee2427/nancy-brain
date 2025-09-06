@@ -8,6 +8,25 @@ import subprocess
 import yaml
 from pathlib import Path
 
+# Avoid OpenMP duplicate runtime crashes by allowing duplicate lib loading when not set externally.
+# Respect an existing environment setting (e.g., in a .env) but default to TRUE for CLI runs.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
+# Optional rich integration for colored output and spinners
+try:
+    from rich.console import Console
+    from rich.spinner import Spinner
+    from rich.tree import Tree
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    RICH_AVAILABLE = True
+    _console = Console()
+except Exception:
+    RICH_AVAILABLE = False
+    _console = None
+
 # Add the package root to sys.path to handle relative imports
 package_root = Path(__file__).parent.parent
 sys.path.insert(0, str(package_root))
@@ -70,7 +89,9 @@ def init(project_name):
     help="Embeddings output path",
 )
 @click.option("--force-update", is_flag=True, help="Force update all repositories")
-def build(config, articles_config, embeddings_path, force_update):
+@click.option("--dry-run", is_flag=True, help="Show what would be done without executing the build")
+@click.option("--dirty", is_flag=True, help="Leave raw repos and PDFs in place after build (don't cleanup)")
+def build(config, articles_config, embeddings_path, force_update, dry_run, dirty):
     """Build the knowledge base from configured repositories.
 
     The build command validates `config/repositories.yml` (and `config/articles.yml`
@@ -130,13 +151,41 @@ def build(config, articles_config, embeddings_path, force_update):
         cmd.extend(["--articles-config", str(articles_config_path)])
     if force_update:
         cmd.append("--force-update")
+    if dirty:
+        cmd.append("--dirty")
+
+    # If dry-run requested, show planned actions and exit without running
+    if dry_run:
+        msg = "🔎 Dry run: the following command would be executed:"
+        if RICH_AVAILABLE:
+            _console.print(f"[yellow]{msg}[/yellow]")
+            _console.print(f"[cyan]{' '.join(cmd)}[/cyan]")
+            _console.print("[yellow](no changes were made)[/yellow]")
+        else:
+            click.echo(click.style(msg, fg="yellow"))
+            click.echo(click.style(" ".join(cmd), fg="cyan"))
+            click.echo(click.style("(no changes were made)", fg="yellow"))
+        return
 
     # Run the build script from the package directory
     try:
-        result = subprocess.run(cmd, check=True)
-        click.echo("✅ Knowledge base built successfully!")
+        if RICH_AVAILABLE:
+            with _console.status("Building knowledge base...", spinner="dots"):
+                result = subprocess.run(cmd, check=True)
+        else:
+            result = subprocess.run(cmd, check=True)
+
+        success_msg = "✅ Knowledge base built successfully!"
+        if RICH_AVAILABLE:
+            _console.print(f"[green]{success_msg}[/green]")
+        else:
+            click.echo(click.style(success_msg, fg="green"))
     except subprocess.CalledProcessError as e:
-        click.echo(f"❌ Build failed with exit code {e.returncode}")
+        err_msg = f"❌ Build failed with exit code {e.returncode}"
+        if RICH_AVAILABLE:
+            _console.print(f"[red]{err_msg}[/red]")
+        else:
+            click.echo(click.style(err_msg, fg="red"))
         sys.exit(e.returncode)
 
 
@@ -177,6 +226,21 @@ def search(query, limit, embeddings_path, config, weights):
         weights_path_abs = Path.cwd() / weights
 
         # Lazy import to avoid heavy imports during help tests
+        # If embeddings index doesn't exist, short-circuit without importing heavy deps
+        try:
+            if not (embeddings_path_abs.exists() and (embeddings_path_abs / "index").exists()):
+                click.echo("No results found. Embeddings index missing.")
+                click.echo(
+                    "Tip: run 'nancy-brain build' to create the index, or use --embeddings-path to point to an existing one."
+                )
+                return
+        except Exception:
+            click.echo("No results found. Embeddings index missing or unreadable.")
+            click.echo(
+                "Tip: run 'nancy-brain build' to create the index, or use --embeddings-path to point to an existing one."
+            )
+            return
+
         try:
             from rag_core.service import RAGService
         except Exception:
@@ -192,7 +256,11 @@ def search(query, limit, embeddings_path, config, weights):
                 config_path=config_path_abs,
                 weights_path=weights_path_abs,
             )
-            results = await service.search_docs(query, limit=limit)
+            if RICH_AVAILABLE:
+                with _console.status("Searching...", spinner="dots"):
+                    results = await service.search_docs(query, limit=limit)
+            else:
+                results = await service.search_docs(query, limit=limit)
         except Exception:
             click.echo("No results found.")
             return
@@ -201,9 +269,32 @@ def search(query, limit, embeddings_path, config, weights):
             click.echo("No results found.")
             return
 
-        for i, result in enumerate(results, 1):
-            click.echo(f"\n{i}. {result['id']} (score: {result['score']:.3f})")
-            click.echo(f"   {result['text'][:200]}...")
+        # Present results using rich when available
+        if RICH_AVAILABLE:
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("#", width=4)
+            table.add_column("Document", overflow="fold")
+            table.add_column("Score", width=8, justify="right")
+            table.add_column("Snippet", overflow="fold")
+            for i, result in enumerate(results, 1):
+                doc_id = result.get("id", "<unknown>")
+                score = result.get("score", 0.0)
+                snippet = (result.get("text", "") or "").strip().replace("\n", " ")[:300]
+                github_url = result.get("github_url") or None
+                try:
+                    if github_url:
+                        # Show the GitHub blob URL as a clickable link
+                        doc_text = Text.assemble((doc_id, "link:" + github_url))
+                    else:
+                        doc_text = Text(doc_id)
+                except Exception:
+                    doc_text = Text(doc_id)
+                table.add_row(str(i), doc_text, f"{score:.3f}", snippet + ("..." if len(snippet) == 300 else ""))
+            _console.print(table)
+        else:
+            for i, result in enumerate(results, 1):
+                click.echo(f"\n{i}. {result['id']} (score: {result['score']:.3f})")
+                click.echo(f"   {result['text'][:200]}...")
 
     # Run the async search
     try:
@@ -231,6 +322,21 @@ def explore(embeddings_path, config, weights, prefix, max_depth, max_entries):
         weights_path_abs = Path.cwd() / weights
 
         # Lazy import RAGService to avoid heavy imports during help/tests
+        # If embeddings index doesn't exist, short-circuit without importing heavy deps
+        try:
+            if not (embeddings_path_abs.exists() and (embeddings_path_abs / "index").exists()):
+                click.echo("No documents found. Embeddings index missing.")
+                click.echo(
+                    "Tip: run 'nancy-brain build' to create the index, or use --embeddings-path to point to an existing one."
+                )
+                return
+        except Exception:
+            click.echo("No documents found. Embeddings index missing or unreadable.")
+            click.echo(
+                "Tip: run 'nancy-brain build' to create the index, or use --embeddings-path to point to an existing one."
+            )
+            return
+
         try:
             from rag_core.service import RAGService
         except Exception:
@@ -243,7 +349,11 @@ def explore(embeddings_path, config, weights, prefix, max_depth, max_entries):
                 config_path=config_path_abs,
                 weights_path=weights_path_abs,
             )
-            results = await service.list_tree(prefix=prefix, depth=max_depth, max_entries=max_entries)
+            if RICH_AVAILABLE:
+                with _console.status("Loading document tree...", spinner="dots"):
+                    results = await service.list_tree(prefix=prefix, depth=max_depth, max_entries=max_entries)
+            else:
+                results = await service.list_tree(prefix=prefix, depth=max_depth, max_entries=max_entries)
         except Exception:
             click.echo("No documents found.")
             return
@@ -252,29 +362,52 @@ def explore(embeddings_path, config, weights, prefix, max_depth, max_entries):
             click.echo("No documents found.")
             return
 
-        click.echo(f"📁 Document tree (prefix: '{prefix}', depth: {max_depth}):")
-        click.echo()
+        if RICH_AVAILABLE:
+            _console.print(f"[bold]📁 Document tree (prefix: '{prefix}', depth: {max_depth}):[/bold]")
+            _console.print()
+            for entry in results:
+                path = entry.get("path", "unknown")
+                name = path.split("/")[-1] if "/" in path else path
+                entry_type = "📁" if entry.get("type") == "directory" else "📄"
 
-        for entry in results:
-            path = entry.get("path", "unknown")
-            name = path.split("/")[-1] if "/" in path else path
-            entry_type = "📁" if entry.get("type") == "directory" else "📄"
+                # Add trailing slash for directories
+                if entry.get("type") == "directory":
+                    name += "/"
 
-            # Add trailing slash for directories
-            if entry.get("type") == "directory":
-                name += "/"
+                # Calculate simple indentation based on path depth
+                depth = path.count("/") if path != "unknown" else 0
+                indent = "  " * depth
 
-            # Calculate simple indentation based on path depth
-            depth = path.count("/") if path != "unknown" else 0
-            indent = "  " * depth
+                _console.print(f"{indent}{entry_type} [bold]{name}[/bold]")
 
-            click.echo(f"{indent}{entry_type} {name}")
+                # Show document ID for files
+                if entry.get("type") == "file" and "doc_id" in entry:
+                    doc_id = entry.get("doc_id")
+                    if doc_id != path:  # Only show if different from path
+                        _console.print(f"{indent}   → [cyan]{doc_id}[/cyan]")
+        else:
+            click.echo(f"📁 Document tree (prefix: '{prefix}', depth: {max_depth}):")
+            click.echo()
+            for entry in results:
+                path = entry.get("path", "unknown")
+                name = path.split("/")[-1] if "/" in path else path
+                entry_type = "📁" if entry.get("type") == "directory" else "📄"
 
-            # Show document ID for files
-            if entry.get("type") == "file" and "doc_id" in entry:
-                doc_id = entry.get("doc_id")
-                if doc_id != path:  # Only show if different from path
-                    click.echo(f"{indent}   → {doc_id}")
+                # Add trailing slash for directories
+                if entry.get("type") == "directory":
+                    name += "/"
+
+                # Calculate simple indentation based on path depth
+                depth = path.count("/") if path != "unknown" else 0
+                indent = "  " * depth
+
+                click.echo(f"{indent}{entry_type} {name}")
+
+                # Show document ID for files
+                if entry.get("type") == "file" and "doc_id" in entry:
+                    doc_id = entry.get("doc_id")
+                    if doc_id != path:  # Only show if different from path
+                        click.echo(f"{indent}   → {doc_id}")
 
     # Run the async explore
     try:

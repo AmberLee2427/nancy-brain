@@ -5,6 +5,10 @@ Orchestrates the full knowledge base build pipeline (cloning, direct txtai index
 
 import os
 
+import warnings
+
+# Allow duplicate OpenMP runtime loading when not explicitly configured. This mirrors
+# the CLI behavior so builds don't abort due to multiple libomp copies.
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import yaml
@@ -25,12 +29,22 @@ except ImportError:
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # Add import for direct Tika PDF processing
+# Suppress a noisy deprecation warning coming from tika's use of pkg_resources
 try:
-    import tika
-    from tika import parser as tika_parser
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=UserWarning,
+            message=r"pkg_resources is deprecated as an API.*",
+        )
+        import tika
+        from tika import parser as tika_parser
 
     TIKA_AVAILABLE = True
 except ImportError:
+    TIKA_AVAILABLE = False
+except Exception:
+    # If any other import-time error occurs, disable Tika but continue with fallback methods.
     TIKA_AVAILABLE = False
 
 # Global flag (fix for previous scoping issue)

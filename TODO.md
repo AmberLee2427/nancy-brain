@@ -93,13 +93,13 @@
   - Helpful hints for common user mistakes
 - [ ] **Better CLI experience**
   - Progress bars for build operations
-  - Colored output for better readability
+  - ✅ Colored output for better readability
   - Interactive configuration wizard
   - Auto-completion support
-- [ ] **More options**
-  - `--dry-run` 
-  - `--category` 
-  - `--dirty`
+- [ ] **More build options**
+  - ✅ `--dry-run` 
+  - ✅ `--category` 
+  - ✅ `--dirty`
 
 ### Auth
 - [ ] create an admin login account
@@ -173,8 +173,8 @@
 ### v0.2.x (Documentation Release)
 - [x] Complete Read the Docs setup
 - [ ] All integration examples
-- [ ] Improved test coverage
-- [ ] Better error handling
+- [x] Improved test coverage
+- [x] Better error handling
 
 ### v0.3.x (Polish Release)
 - [ ] Enhanced UI/UX
@@ -192,7 +192,7 @@
 
 ## ⚡ Quick Wins (Can Do Anytime)
 - [x] Add more file type support (.txt, .rst, .tex)
-- [ ] Improve CLI help text and examples
+- [x] Improve CLI help text and examples
 - [x] Add configuration file validation
 - [ ] Create sample configuration templates
 - [ ] Add health check for dependencies
@@ -215,8 +215,8 @@
 - [x] **`get_system_status` shows incorrect version information.**
     - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
 - [x] **`get_system_status` shows "unknown" for build info.**
-    - **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.
+    - ✅ **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.
 - [x] **`get_system_status` status message is not detailed enough.**
-    - **Description:** The `get_system_status` tool reports a simple "ok" status. It would be more helpful if it provided more details about what checks were performed (e.g., "Registry: loaded, Store: loaded, Search: loaded").
+    - ✅ **Description:** The `get_system_status` tool reports a simple "ok" status. It would be more helpful if it provided more details about what checks were performed (e.g., "Registry: loaded, Store: loaded, Search: loaded").
 - [x] **Investigate inconsistent version reporting.**
     - ✅ **Description:** The user reported seeing `dev-0.1.0` as the version, while the codebase is at `0.1.3`. This could be an environment issue, but it should be investigated to prevent confusion.

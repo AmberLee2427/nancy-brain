@@ -15,7 +15,15 @@ logger = logging.getLogger(__name__)
 def initialize_tika():
     """Initialize Tika VM properly for PDF processing"""
     try:
-        import tika
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=r"pkg_resources is deprecated as an API.*",
+            )
+            import tika
 
         tika.initVM()
         logger.info("✅ Tika VM initialized successfully")
@@ -36,7 +44,15 @@ def extract_pdf_text(pdf_path: str) -> Optional[str]:
         Extracted text content or None if extraction failed
     """
     try:
-        from tika import parser
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message=r"pkg_resources is deprecated as an API.*",
+            )
+            from tika import parser
 
         logger.info(f"Extracting text from {pdf_path}...")
         parsed = parser.from_file(pdf_path)
