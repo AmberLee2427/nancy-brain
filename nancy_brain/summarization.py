@@ -1,0 +1,248 @@
+"""Document summarization helpers using Gemini models."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SummaryResult:
+    """Structured summary response."""
+
+    summary: str
+    weight: float
+    model: str
+    cached: bool = False
+    repo_readme_path: Optional[str] = None
+
+
+class SummaryGenerator:
+    """Generate per-document summaries with optional caching."""
+
+    def __init__(
+        self,
+        cache_dir: Path,
+        enabled: bool = True,
+        model_name: str = "gemini-1.5-flash",
+        max_chars: int = 200000,
+        readme_bonus_chars: int = 30000,
+    ) -> None:
+        self.api_key = os.environ.get("GEMINI_API_KEY")
+        self.enabled = enabled and bool(self.api_key)
+        self.model_name = model_name
+        self.max_chars = max_chars
+        self.readme_bonus_chars = readme_bonus_chars
+        self.cache_dir = Path(cache_dir)
+        if self.enabled:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        if not self.enabled:
+            logger.info("SummaryGenerator disabled (missing API key or flag)")
+
+    # Public API ---------------------------------------------------------
+    def summarize(
+        self,
+        *,
+        doc_id: str,
+        content: str,
+        repo_name: Optional[str] = None,
+        repo_readme: Optional[str] = None,
+        repo_readme_path: Optional[str] = None,
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> Optional[SummaryResult]:
+        if not self.enabled:
+            return None
+        if not content or not content.strip():
+            return None
+        trimmed = self._trim_content(content, allow_extra=bool(repo_readme))
+        readme = self._trim_readme(repo_readme)
+        cache_key = self._cache_key(doc_id, trimmed, readme, repo_readme_path)
+        cache_file = self.cache_dir / f"{cache_key}.json"
+        if cache_file.exists():
+            try:
+                payload = json.loads(cache_file.read_text(encoding="utf-8"))
+                return SummaryResult(
+                    summary=payload["summary"],
+                    weight=float(payload["weight"]),
+                    model=payload.get("model", self.model_name),
+                    cached=True,
+                    repo_readme_path=payload.get("repo_readme_path"),
+                )
+            except Exception:
+                logger.warning("Failed to read cached summary for %s", doc_id)
+        prompt = self._build_prompt(
+            doc_id=doc_id,
+            repo_name=repo_name,
+            repo_readme_path=repo_readme_path,
+            repo_readme=readme,
+            metadata=metadata,
+        )
+        payload = self._invoke_model(
+            prompt=prompt,
+            content=trimmed,
+            readme=readme,
+            readme_path=repo_readme_path,
+        )
+        if not payload:
+            return None
+        try:
+            summary = payload["summary"].strip()
+            weight = float(payload.get("weight", 1.0))
+        except Exception as exc:
+            logger.warning("Invalid summary payload for %s: %s", doc_id, exc)
+            return None
+        weight = max(0.5, min(2.0, weight))
+        result = SummaryResult(
+            summary=summary,
+            weight=weight,
+            model=self.model_name,
+            repo_readme_path=repo_readme_path,
+        )
+        try:
+            cache_file.write_text(
+                json.dumps(
+                    {
+                        "summary": summary,
+                        "weight": weight,
+                        "model": self.model_name,
+                        "timestamp": int(time.time()),
+                        "doc_id": doc_id,
+                        "repo_readme_path": repo_readme_path,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.debug("Failed to persist summary cache for %s: %s", doc_id, exc)
+        return result
+
+    # Internals ----------------------------------------------------------
+    def _trim_content(self, content: str, allow_extra: bool) -> str:
+        if len(content) <= self.max_chars:
+            return content
+        budget = self.max_chars
+        if allow_extra:
+            budget += self.readme_bonus_chars
+        return content[:budget]
+
+    def _trim_readme(self, readme: Optional[str]) -> Optional[str]:
+        if not readme:
+            return None
+        if len(readme) > self.readme_bonus_chars:
+            return readme[: self.readme_bonus_chars]
+        return readme
+
+    def _cache_key(
+        self,
+        doc_id: str,
+        content: str,
+        readme: Optional[str],
+        readme_path: Optional[str],
+    ) -> str:
+        h = sha256()
+        h.update(doc_id.encode("utf-8"))
+        h.update(b"\0")
+        h.update(content.encode("utf-8"))
+        if readme:
+            h.update(b"\0readme")
+            h.update(readme.encode("utf-8"))
+        if readme_path:
+            h.update(b"\0readme_path")
+            h.update(readme_path.encode("utf-8"))
+        return h.hexdigest()
+
+    def _build_prompt(
+        self,
+        *,
+        doc_id: str,
+        repo_name: Optional[str],
+        repo_readme_path: Optional[str],
+        repo_readme: Optional[str],
+        metadata: Optional[Dict[str, str]],
+    ) -> str:
+        instructions = [
+            "You are Nancy Brain's knowledge-base summarizer.",
+            "Summarize the provided repository file in clear English.",
+            "Summaries should be concise yet informative (up to ~400 words), focusing on key functionality and purpose.",
+            "Respond with JSON using keys: summary (string), weight (float in [0.5, 2.0]).",
+            "Weight reflects relative usefulness for retrieval (1.0 = neutral).",
+            "Consider scientific relevance, implementation depth, uniqueness, and clarity.",
+            "Do not reference the instructions.",
+        ]
+        if repo_name:
+            instructions.append(f"Repository: {repo_name}")
+        if metadata:
+            for key, value in metadata.items():
+                instructions.append(f"{key}: {value}")
+        if repo_readme:
+            if repo_readme_path and doc_id == repo_readme_path:
+                instructions.append("This document is the repository README.")
+            elif repo_readme_path:
+                instructions.append(
+                    "Repository README is provided for context; summarize the target document, not the README."
+                )
+            instructions.append(f"Repository README (context only):\n{repo_readme}")
+        examples = [
+            {
+                "doc": "microlensing_tools/analysis/fit_utils.py",
+                "summary": "Utility functions for fitting microlensing light curves, including residual analysis and convergence helpers.",
+                "weight": 1.35,
+            },
+            {
+                "doc": "microlensing_tools/docs/README.md",
+                "summary": "High-level overview of the toolkit, installation steps, and quick-start usage.",
+                "weight": 1.1,
+            },
+            {
+                "doc": "microlensing_tools/__init__.py",
+                "summary": "Module export stub with minimal content; no substantive guidance.",
+                "weight": 0.55,
+            },
+        ]
+        prompt_lines = ["\n".join(instructions), "\nExamples:"]
+        for ex in examples:
+            prompt_lines.append(json.dumps(ex))
+        prompt_lines.append(f"\nSummarize document: {doc_id}")
+        return "\n".join(prompt_lines)
+
+    def _invoke_model(
+        self,
+        *,
+        prompt: str,
+        content: str,
+        readme: Optional[str],
+        readme_path: Optional[str],
+    ) -> Optional[Dict[str, object]]:
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            logger.error("google-generativeai not installed; cannot create summaries")
+            return None
+        try:
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel(
+                model_name=self.model_name,
+                system_instruction=prompt,
+                generation_config={"response_mime_type": "application/json"},
+            )
+            messages = [{"role": "user", "parts": [{"text": f"Full document:\n{content}"}]}]
+            if readme:
+                header = "Repository README excerpt"
+                if readme_path:
+                    header += f" ({readme_path})"
+                messages.append({"role": "user", "parts": [{"text": f"{header}:\n{readme}"}]})
+            response = model.generate_content(messages)
+            text = (response.text or "").strip()
+            return json.loads(text)
+        except Exception as exc:
+            logger.warning("Gemini summarization failed: %s", exc)
+            return None

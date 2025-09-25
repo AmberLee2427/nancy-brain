@@ -18,6 +18,15 @@ import logging
 import argparse
 import requests
 import json
+from typing import Optional, Set, Dict
+
+try:
+    from dotenv import load_dotenv
+except Exception:
+    load_dotenv = None
+
+from nancy_brain.chunking import SmartChunker, strip_chunk_suffix
+from nancy_brain.summarization import SummaryGenerator
 
 # Optional imports
 try:
@@ -25,8 +34,15 @@ try:
 except ImportError:
     convert_ipynb_to_txt = None
 
-# Fix OpenMP issue before importing any ML libraries
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# Load .env overrides early so subsequent imports see them
+if load_dotenv is not None:
+    try:
+        script_root = Path(__file__).resolve().parent.parent
+        env_path = script_root / "config" / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
+    except Exception:
+        pass
 
 # Add import for direct Tika PDF processing
 # Suppress a noisy deprecation warning coming from tika's use of pkg_resources
@@ -67,11 +83,31 @@ DEFAULT_EXCLUDE_PDF_SUBSTRINGS = [
 ]
 ENV_EXCLUDES = [e.strip() for e in os.environ.get("PDF_EXCLUDE_SUBSTRINGS", "").split(",") if e.strip()]
 EXCLUDE_PDF_SUBSTRINGS = DEFAULT_EXCLUDE_PDF_SUBSTRINGS + ENV_EXCLUDES
+README_CANDIDATES = ["README.md", "README.rst", "README.txt"]
+DEFAULT_SUMMARIES_ENABLED = os.environ.get("ENABLE_DOC_SUMMARIES", "false").lower() == "true"
 
 
 def is_excluded_pdf(path: str) -> bool:
     p = str(path)
     return any(token in p for token in EXCLUDE_PDF_SUBSTRINGS)
+
+
+def load_repo_readme(repo_dir: Path) -> Optional[dict]:
+    for candidate in README_CANDIDATES:
+        readme_path = repo_dir / candidate
+        if not readme_path.exists():
+            continue
+        try:
+            text = readme_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if text.strip():
+            try:
+                relative = str(readme_path.relative_to(repo_dir))
+            except Exception:
+                relative = str(readme_path.name)
+            return {"content": text, "path": relative}
+    return None
 
 
 def emit_progress(percent: int, stage: str = "", detail: str = ""):
@@ -183,7 +219,8 @@ def process_pdf_with_fallback(pdf_path, repo_info=None, article_info=None):
 
 
 def get_file_type_category(doc_id: str) -> str:
-    path = Path(doc_id)
+    base_id = strip_chunk_suffix(doc_id)
+    path = Path(base_id)
     code_extensions = {
         ".py",
         ".js",
@@ -372,6 +409,7 @@ def build_txtai_index(
     embeddings_path: str = "knowledge_base/embeddings",
     dry_run: bool = False,
     category: str = None,
+    summary_generator: Optional[SummaryGenerator] = None,
 ) -> dict:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
@@ -501,6 +539,7 @@ def build_txtai_index(
         ext_weights = {}
     categories = [category] if category else list(config.keys())
     documents = []
+    chunker = SmartChunker()
     pdf_status = {}  # doc_id -> {status, size, chars, method}
     failures = {
         "failed_text_files": [],
@@ -511,7 +550,12 @@ def build_txtai_index(
         "successful_notebook_conversions": 0,
         "skipped_repositories": [],
         "skipped_articles": [],
+        "skipped_low_value": [],
     }
+    summary_documents = []
+    auto_model_weights: Dict[str, float] = {}
+    summarized_docs: Set[str] = set()
+    repo_readme_cache: Dict[Path, Optional[dict]] = {}
     for cat in categories:
         repos = config.get(cat)
         if not isinstance(repos, list):
@@ -522,6 +566,14 @@ def build_txtai_index(
             if not repo_dir.exists():
                 failures["skipped_repositories"].append(f"{cat}/{repo_name}")
                 continue
+            repo_readme_content = None
+            repo_readme_path = None
+            if summary_generator is not None:
+                if repo_dir not in repo_readme_cache:
+                    repo_readme_cache[repo_dir] = load_repo_readme(repo_dir)
+                repo_readme_info = repo_readme_cache.get(repo_dir) or {}
+                repo_readme_content = repo_readme_info.get("content")
+                repo_readme_path = repo_readme_info.get("path")
             if convert_ipynb_to_txt is not None:
                 for ipynb_file in repo_dir.rglob("*.ipynb"):
                     nb_txt_file = ipynb_file.with_suffix(".nb.txt")
@@ -598,8 +650,50 @@ def build_txtai_index(
                             pass
                     if not content or not content.strip():
                         continue
-                    doc_id = f"{cat}/{repo_name}/{file_path.relative_to(repo_dir)}"
-                    documents.append((doc_id, content))
+                    relative_path = file_path.relative_to(repo_dir)
+                    doc_id = f"{cat}/{repo_name}/{relative_path}"
+                    if summary_generator is not None and doc_id not in summarized_docs:
+                        summary_payload = summary_generator.summarize(
+                            doc_id=doc_id,
+                            content=content,
+                            repo_name=repo_name,
+                            repo_readme=repo_readme_content,
+                            repo_readme_path=repo_readme_path,
+                            metadata={"category": cat, "source": "repository_file"},
+                        )
+                        if summary_payload is not None:
+                            summary_documents.append(
+                                (
+                                    f"summaries/{doc_id}",
+                                    summary_payload.summary,
+                                    {
+                                        "source_document": doc_id,
+                                        "category": cat,
+                                        "repository": repo_name,
+                                        "doc_type": "summary",
+                                        "model": summary_payload.model,
+                                        "cached": summary_payload.cached,
+                                        **(
+                                            {"repo_readme_path": summary_payload.repo_readme_path}
+                                            if summary_payload.repo_readme_path
+                                            else {}
+                                        ),
+                                    },
+                                )
+                            )
+                            auto_model_weights[doc_id] = summary_payload.weight
+                            summarized_docs.add(doc_id)
+                    chunks = chunker.chunk(doc_id, content, source_kind="repository_file")
+                    if not chunks:
+                        logger.debug(f"Skipping low-value document: {doc_id}")
+                        failures["skipped_low_value"].append(doc_id)
+                        continue
+                    for chunk in chunks:
+                        meta = dict(chunk.metadata)
+                        meta.setdefault("extension", suffix)
+                        meta.setdefault("relative_path", str(relative_path))
+                        meta.setdefault("repository", repo_name)
+                        documents.append((chunk.chunk_id, chunk.text, meta))
                     failures["successful_text_files"] += 1
                 except Exception as e:
                     failures["failed_text_files"].append(f"{file_path}: {str(e)}")
@@ -608,15 +702,62 @@ def build_txtai_index(
                     content, success = process_pdf_with_fallback(pdf_path, repo_info=repo)
                     size = pdf_path.stat().st_size if pdf_path.exists() else 0
                     if success and content:
-                        doc_id = f"{cat}/{repo_name}/{pdf_path.relative_to(repo_dir)}"
-                        metadata = f"Source: Repository PDF from {repo['url']}\nPath: {pdf_path.relative_to(repo_dir)}\nType: Repository Document\n\n"
+                        relative_path = pdf_path.relative_to(repo_dir)
+                        doc_id = f"{cat}/{repo_name}/{relative_path}"
+                        metadata = (
+                            f"Source: Repository PDF from {repo['url']}\n"
+                            f"Path: {relative_path}\nType: Repository Document\n\n"
+                        )
                         full_content = metadata + content
-                        documents.append((doc_id, full_content))
+                        if summary_generator is not None and doc_id not in summarized_docs:
+                            summary_payload = summary_generator.summarize(
+                                doc_id=doc_id,
+                                content=full_content,
+                                repo_name=repo_name,
+                                repo_readme=repo_readme_content,
+                                repo_readme_path=repo_readme_path,
+                                metadata={"category": cat, "source": "repository_pdf"},
+                            )
+                            if summary_payload is not None:
+                                summary_documents.append(
+                                    (
+                                        f"summaries/{doc_id}",
+                                        summary_payload.summary,
+                                        {
+                                            "source_document": doc_id,
+                                            "category": cat,
+                                            "repository": repo_name,
+                                            "doc_type": "summary",
+                                            "model": summary_payload.model,
+                                            "cached": summary_payload.cached,
+                                            **(
+                                                {"repo_readme_path": summary_payload.repo_readme_path}
+                                                if summary_payload.repo_readme_path
+                                                else {}
+                                            ),
+                                        },
+                                    )
+                                )
+                                auto_model_weights[doc_id] = summary_payload.weight
+                                summarized_docs.add(doc_id)
+                        chunks = chunker.chunk(doc_id, full_content, source_kind="repository_pdf")
+                        if not chunks:
+                            logger.debug(f"Skipping low-value PDF: {doc_id}")
+                            failures["skipped_low_value"].append(doc_id)
+                            continue
+                        for chunk in chunks:
+                            meta = dict(chunk.metadata)
+                            meta.setdefault("relative_path", str(relative_path))
+                            meta.setdefault("repository", repo_name)
+                            meta.setdefault("pdf_size_bytes", size)
+                            meta.setdefault("source_url", repo.get("url"))
+                            documents.append((chunk.chunk_id, chunk.text, meta))
                         failures["successful_pdf_files"] += 1
                         pdf_status[doc_id] = {
                             "status": "indexed",
                             "size": size,
                             "chars": len(content),
+                            "chunk_count": len(chunks),
                         }
                     else:
                         failures["failed_pdf_files"].append(f"{pdf_path}: No meaningful text extracted")
@@ -646,14 +787,60 @@ def build_txtai_index(
                     content, success = process_pdf_with_fallback(pdf_file, article_info=article)
                     if success and content:
                         doc_id = f"journal_articles/{cat}/{article_name}"
-                        metadata = f"Title: {article['description']}\nSource: {article.get('url', 'Unknown')}\nType: Journal Article\n\n"
+                        metadata = (
+                            f"Title: {article['description']}\n"
+                            f"Source: {article.get('url', 'Unknown')}\nType: Journal Article\n\n"
+                        )
                         full_content = metadata + content
-                        documents.append((doc_id, full_content))
+                        if summary_generator is not None and doc_id not in summarized_docs:
+                            summary_payload = summary_generator.summarize(
+                                doc_id=doc_id,
+                                content=full_content,
+                                repo_name=cat,
+                                repo_readme=None,
+                                repo_readme_path=None,
+                                metadata={"category": cat, "source": "journal_pdf", "article": article_name},
+                            )
+                            if summary_payload is not None:
+                                summary_documents.append(
+                                    (
+                                        f"summaries/{doc_id}",
+                                        summary_payload.summary,
+                                        {
+                                            "source_document": doc_id,
+                                            "category": cat,
+                                            "doc_type": "summary",
+                                            "model": summary_payload.model,
+                                            "cached": summary_payload.cached,
+                                            **(
+                                                {"repo_readme_path": summary_payload.repo_readme_path}
+                                                if summary_payload.repo_readme_path
+                                                else {}
+                                            ),
+                                        },
+                                    )
+                                )
+                                auto_model_weights[doc_id] = summary_payload.weight
+                                summarized_docs.add(doc_id)
+                        chunks = chunker.chunk(doc_id, full_content, source_kind="journal_pdf")
+                        if not chunks:
+                            logger.debug(f"Skipping low-value journal PDF: {doc_id}")
+                            failures["skipped_low_value"].append(doc_id)
+                            continue
+                        size_bytes = pdf_file.stat().st_size if pdf_file.exists() else 0
+                        for chunk in chunks:
+                            meta = dict(chunk.metadata)
+                            meta.setdefault("article_name", article_name)
+                            meta.setdefault("category", meta.get("category", "docs"))
+                            meta.setdefault("pdf_size_bytes", size_bytes)
+                            meta.setdefault("source_url", article.get("url"))
+                            documents.append((chunk.chunk_id, chunk.text, meta))
                         failures["successful_pdf_files"] += 1
                         pdf_status[doc_id] = {
                             "status": "indexed",
-                            "size": pdf_file.stat().st_size if pdf_file.exists() else 0,
+                            "size": size_bytes,
                             "chars": len(content),
+                            "chunk_count": len(chunks),
                         }
                     else:
                         failures["failed_pdf_files"].append(f"{pdf_file}: No meaningful text extracted")
@@ -667,6 +854,8 @@ def build_txtai_index(
             else:
                 failures["failed_pdf_files"].append(f"{pdf_file}: No PDF processing available")
                 pdf_status[str(pdf_file)] = {"status": "no_processing"}
+    if summary_documents:
+        documents.extend(summary_documents)
     if documents and not dry_run:
         logger.info(f"Indexing {len(documents)} documents...")
         logger.info("Building general embeddings index...")
@@ -697,6 +886,18 @@ def build_txtai_index(
             logger.info(f"Wrote PDF manifest to {embeddings_dir / 'pdf_manifest.json'}")
         except Exception as e:
             logger.warning(f"Failed to write pdf_manifest.json: {e}")
+        if auto_model_weights:
+            try:
+                with open(embeddings_dir / "auto_model_weights.json", "w", encoding="utf-8") as wf:
+                    json.dump(auto_model_weights, wf, indent=2)
+                logger.info(
+                    f"Wrote suggested model weights for {len(auto_model_weights)} docs to"
+                    f" {embeddings_dir / 'auto_model_weights.json'}"
+                )
+            except Exception as exc:
+                logger.warning(f"Failed to write auto_model_weights.json: {exc}")
+    if auto_model_weights:
+        failures["auto_model_weights"] = auto_model_weights
     return failures
 
 
@@ -790,8 +991,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--articles-config",
-        default="config/articles.yml",
-        help="Path to PDF articles configuration file",
+        default=None,
+        help="Path to PDF articles configuration file (optional)",
     )
     parser.add_argument(
         "--base-path",
@@ -818,6 +1019,19 @@ if __name__ == "__main__":
         "--dirty",
         action="store_true",
         help="Leave the raw repos and PDFs in place after embeddings are built",
+    )
+    parser.add_argument(
+        "--summaries",
+        dest="summaries",
+        action="store_true",
+        default=DEFAULT_SUMMARIES_ENABLED,
+        help="Generate Gemini summaries for each document (requires GEMINI_API_KEY)",
+    )
+    parser.add_argument(
+        "--no-summaries",
+        dest="summaries",
+        action="store_false",
+        help="Disable summary generation even if ENABLE_DOC_SUMMARIES is set",
     )
 
     args = parser.parse_args()
@@ -882,10 +1096,15 @@ if __name__ == "__main__":
             category: str = None,
             force_update: bool = False,
             dirty: bool = False,
+            summaries: bool = False,
         ) -> None:
             logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
             logger = logging.getLogger(__name__)
             all_failures = {"repos": {}, "articles": {}, "indexing": {}}
+            summary_generator = None
+            if summaries:
+                cache_dir = Path(embeddings_path).parent / "cache" / "summaries"
+                summary_generator = SummaryGenerator(cache_dir=cache_dir, enabled=True)
             emit_progress(5, stage="start", detail="Cloning repositories")
             all_failures["repos"] = clone_repositories(config_path, base_path, dry_run, category, force_update)
 
@@ -903,6 +1122,7 @@ if __name__ == "__main__":
                 embeddings_path,
                 dry_run,
                 category,
+                summary_generator,
             )
             emit_progress(85, stage="indexing_done", detail="Indexing completed")
             if not dirty and not dry_run:
@@ -922,4 +1142,5 @@ if __name__ == "__main__":
         category=args.category,
         force_update=args.force_update,
         dirty=args.dirty,
+        summaries=args.summaries,
     )

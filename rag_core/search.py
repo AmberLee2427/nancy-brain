@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Dict
 import re
 import difflib
+from nancy_brain.chunking import strip_chunk_suffix
 from .types import get_file_type_category
 
 logger = logging.getLogger(__name__)
@@ -153,8 +154,19 @@ class Search:
             general_score = general_result["score"] if general_result else 0.0
             code_score = code_result["score"] if code_result else 0.0
 
+            # Gather metadata and derive base document id for weighting
+            metadata = {}
+            try:
+                if isinstance(base_result.get("data"), dict):
+                    metadata = base_result.get("data", {}) or {}
+                elif isinstance(base_result.get("metadata"), dict):
+                    metadata = base_result.get("metadata", {}) or {}
+            except Exception:
+                metadata = {}
+            base_doc_id = metadata.get("source_document") or strip_chunk_suffix(doc_id)
+
             # Apply file-type-aware weighting
-            file_type = get_file_type_category(doc_id)
+            file_type = get_file_type_category(base_doc_id)
             if file_type == "code":
                 # Code files: reduce code model influence to avoid too many low-level files
                 dual_score = 0.6 * general_score + 0.4 * code_score
@@ -168,11 +180,13 @@ class Search:
             # Create merged result
             merged_result = {
                 "id": doc_id,
-                "text": base_result["text"],
+                "text": base_result.get("text", ""),
                 "score": dual_score,  # Use dual score as primary score
                 "general_score": general_score,
                 "code_score": code_score,
                 "file_type": file_type,
+                "data": metadata,
+                "source_document": base_doc_id,
             }
             merged_results.append(merged_result)
 
@@ -214,9 +228,16 @@ class Search:
 
         for result in results:
             doc_id = result["id"]
-            ext = Path(doc_id).suffix
+            metadata = {}
+            if isinstance(result.get("data"), dict):
+                metadata = result.get("data") or {}
+            elif isinstance(result.get("metadata"), dict):
+                metadata = result.get("metadata") or {}
+            base_doc_id = metadata.get("source_document") or strip_chunk_suffix(doc_id)
+
+            ext = Path(base_doc_id).suffix
             weight = ext_weights.get(ext, 1.0)
-            doc_id_lower = doc_id.lower()
+            doc_id_lower = base_doc_id.lower()
 
             # Apply path-based multipliers
             for keyword, mult in path_includes.items():
@@ -224,7 +245,7 @@ class Search:
                     weight *= mult
 
             # Apply model weight
-            model_score = self.model_weights.get(doc_id, 1.0)
+            model_score = self.model_weights.get(base_doc_id, self.model_weights.get(doc_id, 1.0))
             try:
                 model_score = float(model_score)
             except Exception:
@@ -238,12 +259,16 @@ class Search:
             # Build result dictionary
             result_dict = {
                 "id": doc_id,
-                "text": result["text"],
+                "source_document": base_doc_id,
+                "text": result.get("text", ""),
                 "score": base_score,
                 "extension_weight": weight,
                 "model_score": model_score,
                 "adjusted_score": adjusted_score,
+                "data": metadata,
             }
+            if result.get("highlights") is not None:
+                result_dict["highlights"] = result.get("highlights")
 
             # Add dual embedding info if available
             if dual_scores:

@@ -196,6 +196,7 @@
 - [x] Add configuration file validation
 - [ ] Create sample configuration templates
 - [ ] Add health check for dependencies
+- [ ] Add category back as a build option
 
 ## 🤝 Community & Adoption
 - [ ] Create GitHub issue templates

@@ -1,1 +1,4 @@
-{}
+general_tools:
+  - name: Dazzle
+    url: https://github.com/MichaelDAlbrow/Dazzle.git
+    description: "A python package for over-sampled image construction, difference-imaging, transient detection, and difference-image PSF photometry for the Nancy Grace Roman Space Telescope"

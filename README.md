@@ -65,6 +65,20 @@ nancy-brain serve                 # Start HTTP API server
 nancy-brain ui                    # Launch web admin interface
 ```
 
+### Optional: Gemini-powered summaries
+
+Set an API key and opt-in to generate document-level summaries and suggested search weights during a build:
+
+```bash
+export GEMINI_API_KEY="sk-..."
+export ENABLE_DOC_SUMMARIES=true   # or pass --summaries on the build command
+nancy-brain build --summaries
+```
+
+Summaries are cached under `knowledge_base/cache/summaries/` using the document content hash, so reruns only
+call Gemini when files change. Suggested weights are written to `knowledge_base/embeddings/auto_model_weights.json`
+for review before merging into your active `model_weights.yml`.
+
 ## Technical Architecture
 
 A lightweight Retrieval-Augmented Generation (RAG) knowledge base with:
@@ -168,6 +182,15 @@ Optional static per-document multipliers (legacy / seed). Runtime updates via `/
 | `USE_DUAL_EMBEDDING` | Enable dual (general + code) embedding scoring | true |
 | `CODE_EMBEDDING_MODEL` | Model name for code index (if dual) | microsoft/codebert-base |
 | `KMP_DUPLICATE_LIB_OK` | Set to TRUE to avoid OpenMP macOS clash | TRUE |
+| `GEMINI_API_KEY` |||
+| `ENABLE_DOC_SUMMARIES` |||
+| `NB_JWT_ALGORITHM` | | HS256 |
+| `NB_SECRET_KEY` | dev key ||
+| `NB_ACCESS_EXPIRE_MINUTES` | | 60 |
+| `NB_REFRESH_EXPIRE_MINUTES` | | 1440 |
+| `NB_USERS_DB` | | users.db |
+
+[ ] check these defaults
 
 ---
 ## 4. Building the Knowledge Base

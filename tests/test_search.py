@@ -173,6 +173,31 @@ def test_search_dual_mode_logic(tmp_path):
     assert search.use_dual_embedding is True
 
 
+def test_process_results_prefers_source_document(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    embeddings_path.mkdir()
+
+    search = Search(embeddings_path=embeddings_path)
+
+    results = [
+        {
+            "id": "repo/pkg/module.py#chunk-0003",
+            "score": 0.42,
+            "text": "print('hello')",
+            "data": {
+                "source_document": "repo/pkg/module.py",
+                "chunk_index": 3,
+                "chunk_count": 5,
+            },
+        }
+    ]
+
+    processed = search._process_and_rank_results(results, limit=5)
+
+    assert processed[0]["source_document"] == "repo/pkg/module.py"
+    assert processed[0]["data"]["chunk_index"] == 3
+
+
 def test_search_file_type_weighting(tmp_path):
     """Test file type weighting in search results."""
     embeddings_path = tmp_path / "embeddings"

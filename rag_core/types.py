@@ -39,13 +39,16 @@ class Passage:
 # File-type categorization for weighting
 from pathlib import Path
 
+from nancy_brain.chunking import strip_chunk_suffix
+
 
 def get_file_type_category(doc_id: str) -> str:
     """
     Determine if a document should be treated as code, mixed content, or docs.
     Returns 'code', 'mixed', or 'docs'.
     """
-    path = Path(doc_id)
+    base_id = strip_chunk_suffix(doc_id)
+    path = Path(base_id)
 
     # Direct code files
     code_extensions = {

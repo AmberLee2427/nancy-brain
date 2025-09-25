@@ -91,7 +91,12 @@ def init(project_name):
 @click.option("--force-update", is_flag=True, help="Force update all repositories")
 @click.option("--dry-run", is_flag=True, help="Show what would be done without executing the build")
 @click.option("--dirty", is_flag=True, help="Leave raw repos and PDFs in place after build (don't cleanup)")
-def build(config, articles_config, embeddings_path, force_update, dry_run, dirty):
+@click.option(
+    "--summaries/--no-summaries",
+    default=None,
+    help="Generate Gemini summaries during build (defaults to ENABLE_DOC_SUMMARIES env)",
+)
+def build(config, articles_config, embeddings_path, force_update, dry_run, dirty, summaries):
     """Build the knowledge base from configured repositories.
 
     The build command validates `config/repositories.yml` (and `config/articles.yml`
@@ -153,6 +158,10 @@ def build(config, articles_config, embeddings_path, force_update, dry_run, dirty
         cmd.append("--force-update")
     if dirty:
         cmd.append("--dirty")
+    if summaries is True:
+        cmd.append("--summaries")
+    elif summaries is False:
+        cmd.append("--no-summaries")
 
     # If dry-run requested, show planned actions and exit without running
     if dry_run:
