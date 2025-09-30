@@ -1,6 +1,0 @@
-{
-  "knowledge_base/raw/general_tools/Dazzle/dazzle_paper.pdf": {
-    "status": "error",
-    "error": "SummaryGenerator._build_prompt() missing 1 required keyword-only argument: 'repo_readme'"
-  }
-}

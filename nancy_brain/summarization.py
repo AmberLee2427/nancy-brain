@@ -32,7 +32,7 @@ class SummaryGenerator:
         self,
         cache_dir: Path,
         enabled: bool = True,
-        model_name: str = "gemini-1.5-flash",
+        model_name: str = "gemini-2.5-flash",
         max_chars: int = 200000,
         readme_bonus_chars: int = 30000,
     ) -> None:
@@ -223,26 +223,43 @@ class SummaryGenerator:
         readme_path: Optional[str],
     ) -> Optional[Dict[str, object]]:
         try:
-            import google.generativeai as genai
+            from google import genai
         except ImportError:
-            logger.error("google-generativeai not installed; cannot create summaries")
+            logger.error("google-genai not installed; cannot create summaries")
             return None
         try:
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=prompt,
-                generation_config={"response_mime_type": "application/json"},
-            )
-            messages = [{"role": "user", "parts": [{"text": f"Full document:\n{content}"}]}]
+            client = genai.Client()
+
+            # Build the full request content
+            full_content = f"Full document:\n{content}"
             if readme:
                 header = "Repository README excerpt"
                 if readme_path:
                     header += f" ({readme_path})"
-                messages.append({"role": "user", "parts": [{"text": f"{header}:\n{readme}"}]})
-            response = model.generate_content(messages)
-            text = (response.text or "").strip()
-            return json.loads(text)
+                full_content += f"\n\n{header}:\n{readme}"
+
+            # Make the API call with system instruction as part of content
+            request_content = f"{prompt}\n\n{full_content}"
+            response = client.models.generate_content(model=self.model_name, contents=request_content)
+
+            # Get response text and strip markdown code blocks if present
+            raw_text = (response.text or "").strip()
+            json_text = self._strip_markdown_json(raw_text)
+
+            return json.loads(json_text)
         except Exception as exc:
             logger.warning("Gemini summarization failed: %s", exc)
             return None
+
+    def _strip_markdown_json(self, text: str) -> str:
+        """Strip markdown code block formatting from JSON response."""
+        json_text = text
+        if text.startswith("```json"):
+            json_text = json_text[7:]  # Remove "```json"
+            if json_text.startswith("\n"):
+                json_text = json_text[1:]  # Remove leading newline
+        if json_text.endswith("```"):
+            json_text = json_text[:-3]  # Remove trailing "```"
+            if json_text.endswith("\n"):
+                json_text = json_text[:-1]  # Remove trailing newline
+        return json_text

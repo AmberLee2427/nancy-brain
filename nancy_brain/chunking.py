@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+import os
 import re
 
 __all__ = [
@@ -77,17 +78,43 @@ class SmartChunker:
         self,
         text_chunk_chars: int = 1400,
         text_overlap_chars: int = 220,
-        code_chunk_lines: int = 90,
-        code_overlap_lines: int = 20,
+        code_chunk_lines: Optional[int] = None,
+        code_overlap_lines: Optional[int] = None,
         min_index_chars: int = 60,
     ) -> None:
         self.text_chunk_chars = text_chunk_chars
         self.text_overlap_chars = text_overlap_chars
+
+        # Allow environment overrides for code chunk sizing
+        if code_chunk_lines is None:
+            env_lines = os.environ.get("SMART_CHUNK_CODE_LINES")
+            if env_lines:
+                try:
+                    code_chunk_lines = max(1, int(env_lines))
+                except ValueError:
+                    code_chunk_lines = None
+        if code_chunk_lines is None:
+            code_chunk_lines = 80
+
+        if code_overlap_lines is None:
+            env_overlap = os.environ.get("SMART_CHUNK_CODE_OVERLAP")
+            if env_overlap:
+                try:
+                    code_overlap_lines = max(0, int(env_overlap))
+                except ValueError:
+                    code_overlap_lines = None
+        if code_overlap_lines is None:
+            code_overlap_lines = 10
+
+        # Prevent pathological configurations
+        if code_overlap_lines >= code_chunk_lines:
+            code_overlap_lines = max(0, code_chunk_lines - 1)
+
         self.code_chunk_lines = code_chunk_lines
         self.code_overlap_lines = code_overlap_lines
         self.min_index_chars = max(0, min_index_chars)
         self._text_boundary_lookahead = 180
-        self._code_boundary_lookahead = 12
+        self._code_boundary_lookahead = 0  # unused with simplified chunking
 
     # ------------------------------------------------------------------
     # Public API
@@ -172,76 +199,65 @@ class SmartChunker:
         if total_lines == 0:
             return []
 
-        if total_lines <= self.code_chunk_lines and len(text) <= self.text_chunk_chars:
+        window = max(1, self.code_chunk_lines)
+        overlap = max(0, min(self.code_overlap_lines, window - 1))
+        step = max(1, window - overlap)
+
+        # If the file is shorter than a single window, keep it whole
+        if total_lines <= window:
+            chunk_text = "\n".join(lines).strip()
+            if not chunk_text:
+                return []
             return [
                 Chunk(
                     chunk_id=self._make_chunk_id(doc_id, 0),
-                    text=text.strip(),
+                    text=chunk_text,
                     metadata={
                         "line_start": 1,
                         "line_end": total_lines,
-                        "token_estimate": self._estimate_tokens(text),
+                        "token_estimate": self._estimate_tokens(chunk_text),
                     },
                 )
             ]
 
         chunks: List[Chunk] = []
         start = 0
+        index = 0
         while start < total_lines:
-            end = min(total_lines, start + self.code_chunk_lines)
-            # Try to extend to a logical boundary (blank line or decorator/def/class)
-            boundary = end
-            # Look backwards first to avoid over-shooting if possible
-            for offset in range(0, min(self.code_chunk_lines, end - start)):
-                candidate = end - offset
-                if candidate <= start:
-                    break
-                line = lines[candidate - 1]
-                if not line.strip():
-                    boundary = candidate
-                    break
-            else:
-                # Look ahead a little for better breakpoint
-                lookahead = min(total_lines, end + self._code_boundary_lookahead)
-                for candidate in range(end, lookahead):
-                    line = lines[candidate].strip()
-                    if not line:
-                        boundary = candidate + 1
-                        break
-                    if re.match(r"^(def |class |@)", line):
-                        boundary = candidate
-                        break
-            end = max(boundary, start + 1)
+            end = min(total_lines, start + window)
             chunk_lines = lines[start:end]
             chunk_text = "\n".join(chunk_lines).strip()
-            if not chunk_text:
-                if end <= start:
-                    start += 1
-                else:
-                    start = end
-                continue
-            chunk = Chunk(
-                chunk_id=self._make_chunk_id(doc_id, len(chunks)),
-                text=chunk_text,
-                metadata={
-                    "line_start": start + 1,
-                    "line_end": start + len(chunk_lines),
-                    "token_estimate": self._estimate_tokens(chunk_text),
-                },
-            )
-            chunks.append(chunk)
+            if chunk_text:
+                line_start = start + 1
+                line_end = line_start + len(chunk_lines) - 1
+                chunks.append(
+                    Chunk(
+                        chunk_id=self._make_chunk_id(doc_id, index),
+                        text=chunk_text,
+                        metadata={
+                            "line_start": line_start,
+                            "line_end": line_end,
+                            "token_estimate": self._estimate_tokens(chunk_text),
+                        },
+                    )
+                )
+                index += 1
             if end >= total_lines:
                 break
-            start = max(0, end - self.code_overlap_lines)
+            start += step
+
         if not chunks:
+            chunk_text = text.strip()
+            if not chunk_text:
+                return []
             return [
                 Chunk(
                     chunk_id=self._make_chunk_id(doc_id, 0),
-                    text=text.strip(),
+                    text=chunk_text,
                     metadata={
                         "line_start": 1,
                         "line_end": total_lines,
-                        "token_estimate": self._estimate_tokens(text),
+                        "token_estimate": self._estimate_tokens(chunk_text),
                     },
                 )
             ]

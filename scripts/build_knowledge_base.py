@@ -18,6 +18,8 @@ import logging
 import argparse
 import requests
 import json
+import time
+import threading
 from typing import Optional, Set, Dict
 
 try:
@@ -43,6 +45,9 @@ if load_dotenv is not None:
             load_dotenv(env_path)
     except Exception:
         pass
+
+# Ensure OpenMP duplicate setting persists after dotenv loads
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # Add import for direct Tika PDF processing
 # Suppress a noisy deprecation warning coming from tika's use of pkg_resources
@@ -85,6 +90,20 @@ ENV_EXCLUDES = [e.strip() for e in os.environ.get("PDF_EXCLUDE_SUBSTRINGS", "").
 EXCLUDE_PDF_SUBSTRINGS = DEFAULT_EXCLUDE_PDF_SUBSTRINGS + ENV_EXCLUDES
 README_CANDIDATES = ["README.md", "README.rst", "README.txt"]
 DEFAULT_SUMMARIES_ENABLED = os.environ.get("ENABLE_DOC_SUMMARIES", "false").lower() == "true"
+SKIP_PDFS = os.environ.get("SKIP_PDF_PROCESSING", "").strip().lower() == "true"
+TEXT_EXTENSIONS = {".py", ".md", ".txt", ".rst", ".tex", ".yaml", ".yml", ".json"}
+SKIP_DIR_NAMES = {
+    ".git",
+    ".github",
+    "__pycache__",
+    "node_modules",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".idea",
+    ".venv",
+    "env",
+    "venv",
+}
 
 
 def is_excluded_pdf(path: str) -> bool:
@@ -108,6 +127,21 @@ def load_repo_readme(repo_dir: Path) -> Optional[dict]:
                 relative = str(readme_path.name)
             return {"content": text, "path": relative}
     return None
+
+
+def collect_repo_files(repo_dir: Path) -> tuple[list[Path], list[Path]]:
+    text_files: list[Path] = []
+    pdf_files: list[Path] = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIR_NAMES]
+        for filename in files:
+            path = Path(root) / filename
+            suffix = path.suffix.lower()
+            if suffix in TEXT_EXTENSIONS or filename.endswith(".nb.txt"):
+                text_files.append(path)
+            elif suffix == ".pdf" and not SKIP_PDFS:
+                pdf_files.append(path)
+    return text_files, pdf_files
 
 
 def emit_progress(percent: int, stage: str = "", detail: str = ""):
@@ -184,7 +218,7 @@ def extract_text_fallback(pdf_path):
 def process_pdf_with_fallback(pdf_path, repo_info=None, article_info=None):
     logger = logging.getLogger(__name__)
     global tika_ready
-    if TIKA_AVAILABLE and not tika_ready and not os.environ.get("SKIP_PDF_PROCESSING", "").lower() == "true":
+    if TIKA_AVAILABLE and not tika_ready and not SKIP_PDFS:
         try:
             os.environ.setdefault("TIKA_CLIENT_TIMEOUT", "60")
             os.environ.setdefault("TIKA_SERVER_TIMEOUT", "60")
@@ -194,7 +228,7 @@ def process_pdf_with_fallback(pdf_path, repo_info=None, article_info=None):
             logger.info("✅ Tika VM initialized (lazy) for PDF processing")
         except Exception as e:
             logger.warning(f"Failed lazy Tika init: {e}")
-    if TIKA_AVAILABLE and tika_ready and not os.environ.get("SKIP_PDF_PROCESSING", "").lower() == "true":
+    if TIKA_AVAILABLE and tika_ready and not SKIP_PDFS:
         try:
             parsed = tika_parser.from_file(str(pdf_path))
             content = parsed.get("content", "") if parsed else ""
@@ -432,6 +466,8 @@ def build_txtai_index(
     logger.info(f"Dual embedding enabled: {use_dual_embedding}")
     if use_dual_embedding:
         logger.info(f"Code model: {code_model}")
+    if SKIP_PDFS:
+        logger.info("SKIP_PDF_PROCESSING enabled; PDF documents will be ignored during build.")
     global tika_ready
     pdf_fallback_available = False
     try:
@@ -447,7 +483,7 @@ def build_txtai_index(
             logger.info("✅ pdfplumber available as fallback")
         except Exception:
             pass
-    if TIKA_AVAILABLE and not tika_ready and not os.environ.get("SKIP_PDF_PROCESSING", "").lower() == "true":
+    if TIKA_AVAILABLE and not tika_ready and not SKIP_PDFS:
         try:
             os.environ.setdefault("TIKA_CLIENT_TIMEOUT", "60")
             os.environ.setdefault("TIKA_SERVER_TIMEOUT", "60")
@@ -521,17 +557,40 @@ def build_txtai_index(
             pass
     embeddings_dir = Path(embeddings_path)
     embeddings_dir.mkdir(parents=True, exist_ok=True)
-    general_embeddings = Embeddings(
-        {
-            "path": "sentence-transformers/all-MiniLM-L6-v2",
-            "content": True,
-            "backend": "faiss",
-        }
-    )
+    text_model = os.environ.get("NB_TEXT_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    logger.info(f"Loading general embedding model: {text_model}")
+    model_start = time.time()
+    try:
+        general_embeddings = Embeddings(
+            {
+                "path": text_model,
+                "content": True,
+                "backend": "faiss",
+            }
+        )
+    except Exception as exc:
+        logger.error(f"Failed to load general embedding model '{text_model}': {exc}")
+        logger.error(
+            "If this is the first run, ensure the model is reachable or set NB_TEXT_EMBEDDING_MODEL"
+            " to a smaller/local SentenceTransformer."
+        )
+        raise
+    logger.info(f"General embedding model ready in {time.time() - model_start:.2f}s")
     code_embeddings = None
     if use_dual_embedding:
-        code_embeddings = Embeddings({"path": code_model, "content": True, "backend": "faiss"})
-        logger.info(f"Initialized code embeddings with model: {code_model}")
+        code_model_override = os.environ.get("NB_CODE_EMBEDDING_MODEL", code_model)
+        logger.info(f"Loading code embedding model: {code_model_override}")
+        code_start = time.time()
+        try:
+            code_embeddings = Embeddings({"path": code_model_override, "content": True, "backend": "faiss"})
+        except Exception as exc:
+            logger.error(f"Failed to load code embedding model '{code_model_override}': {exc}")
+            logger.error(
+                "Disable dual embeddings with USE_DUAL_EMBEDDING=false or set NB_CODE_EMBEDDING_MODEL"
+                " to a lighter model."
+            )
+            raise
+        logger.info(f"Code embedding model ready in {time.time() - code_start:.2f}s")
     try:
         with open("config/index_weights.yaml", "r") as f:
             ext_weights = yaml.safe_load(f)
@@ -583,47 +642,40 @@ def build_txtai_index(
                             failures["successful_notebook_conversions"] += 1
                         except Exception as e:
                             failures["failed_notebook_conversions"].append(f"{ipynb_file}: {str(e)}")
-            text_files = []
-            for ext in [".py", ".md", ".txt", ".rst", ".tex", ".yaml", ".yml", ".json"]:
-                text_files.extend(repo_dir.rglob(f"*{ext}"))
-            text_files.extend(repo_dir.rglob("*.nb.txt"))
-            pdf_files = []
-            if tika_ready:
-                pdf_files.extend(repo_dir.rglob("*.pdf"))
-            # Apply exclusions & size filter pre-read
-            filtered_pdf_files = []
-            for pf in pdf_files:
-                try:
-                    if is_excluded_pdf(pf):
-                        pdf_status[str(pf)] = {
-                            "status": "excluded",
-                            "reason": "pattern",
-                            "size": pf.stat().st_size if pf.exists() else 0,
-                        }
+            text_files, pdf_files = collect_repo_files(repo_dir)
+            if SKIP_PDFS:
+                pdf_files = []
+            else:
+                filtered_pdf_files = []
+                for pf in pdf_files:
+                    try:
+                        if is_excluded_pdf(pf):
+                            pdf_status[str(pf)] = {
+                                "status": "excluded",
+                                "reason": "pattern",
+                                "size": pf.stat().st_size if pf.exists() else 0,
+                            }
+                            continue
+                        size = pf.stat().st_size
+                        if size < MIN_PDF_BYTES:
+                            pdf_status[str(pf)] = {
+                                "status": "skipped",
+                                "reason": f"small({size})",
+                                "size": size,
+                            }
+                            continue
+                        filtered_pdf_files.append(pf)
+                    except Exception:
                         continue
-                    size = pf.stat().st_size
-                    if size < MIN_PDF_BYTES:
-                        pdf_status[str(pf)] = {
-                            "status": "skipped",
-                            "reason": f"small({size})",
-                            "size": size,
-                        }
-                        continue
-                    filtered_pdf_files.append(pf)
-                except Exception:
-                    continue
-            pdf_files = filtered_pdf_files
-            skip_dirs = {
-                ".git",
-                ".github",
-                "__pycache__",
-                "node_modules",
-                ".pytest_cache",
-                ".mypy_cache",
-            }
-            text_files = [f for f in text_files if not any(skip in f.parts for skip in skip_dirs)]
-            pdf_files = [f for f in pdf_files if not any(skip in f.parts for skip in skip_dirs)]
+                pdf_files = filtered_pdf_files
             text_files = [f for f in text_files if "docs/build" not in str(f) and not str(f).endswith(".rst.txt")]
+            if (
+                os.environ.get("NB_SCAN_LOG", "false").lower() == "true"
+                or os.environ.get("NB_PER_FILE_LOG", "false").lower() == "true"
+            ):
+                logger.info(
+                    f"Repo {repo_name}: {len(text_files)} candidate text files, {len(pdf_files)} candidate PDFs"
+                )
             # Use text extraction helpers for .rst and .tex files when available
             try:
                 from scripts.text_extract import extract_text_from_rst, extract_text_from_tex
@@ -633,6 +685,7 @@ def build_txtai_index(
 
             for file_path in text_files:
                 try:
+                    logger.info(f"Reading file {file_path.relative_to(repo_dir)}")
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
                     if not content.strip():
@@ -652,6 +705,7 @@ def build_txtai_index(
                         continue
                     relative_path = file_path.relative_to(repo_dir)
                     doc_id = f"{cat}/{repo_name}/{relative_path}"
+                    logger.info(f"Chunking file {doc_id}")
                     if summary_generator is not None and doc_id not in summarized_docs:
                         summary_payload = summary_generator.summarize(
                             doc_id=doc_id,
@@ -662,23 +716,21 @@ def build_txtai_index(
                             metadata={"category": cat, "source": "repository_file"},
                         )
                         if summary_payload is not None:
+                            summary_meta = {
+                                "source_document": doc_id,
+                                "category": cat,
+                                "repository": repo_name,
+                                "doc_type": "summary",
+                                "model": summary_payload.model,
+                                "cached": summary_payload.cached,
+                            }
+                            if summary_payload.repo_readme_path:
+                                summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
                             summary_documents.append(
                                 (
                                     f"summaries/{doc_id}",
                                     summary_payload.summary,
-                                    {
-                                        "source_document": doc_id,
-                                        "category": cat,
-                                        "repository": repo_name,
-                                        "doc_type": "summary",
-                                        "model": summary_payload.model,
-                                        "cached": summary_payload.cached,
-                                        **(
-                                            {"repo_readme_path": summary_payload.repo_readme_path}
-                                            if summary_payload.repo_readme_path
-                                            else {}
-                                        ),
-                                    },
+                                    json.dumps(summary_meta, ensure_ascii=False),
                                 )
                             )
                             auto_model_weights[doc_id] = summary_payload.weight
@@ -693,7 +745,13 @@ def build_txtai_index(
                         meta.setdefault("extension", suffix)
                         meta.setdefault("relative_path", str(relative_path))
                         meta.setdefault("repository", repo_name)
-                        documents.append((chunk.chunk_id, chunk.text, meta))
+                        documents.append(
+                            (
+                                chunk.chunk_id,
+                                chunk.text,
+                                json.dumps(meta, ensure_ascii=False),
+                            )
+                        )
                     failures["successful_text_files"] += 1
                 except Exception as e:
                     failures["failed_text_files"].append(f"{file_path}: {str(e)}")
@@ -719,23 +777,21 @@ def build_txtai_index(
                                 metadata={"category": cat, "source": "repository_pdf"},
                             )
                             if summary_payload is not None:
+                                summary_meta = {
+                                    "source_document": doc_id,
+                                    "category": cat,
+                                    "repository": repo_name,
+                                    "doc_type": "summary",
+                                    "model": summary_payload.model,
+                                    "cached": summary_payload.cached,
+                                }
+                                if summary_payload.repo_readme_path:
+                                    summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
                                 summary_documents.append(
                                     (
                                         f"summaries/{doc_id}",
                                         summary_payload.summary,
-                                        {
-                                            "source_document": doc_id,
-                                            "category": cat,
-                                            "repository": repo_name,
-                                            "doc_type": "summary",
-                                            "model": summary_payload.model,
-                                            "cached": summary_payload.cached,
-                                            **(
-                                                {"repo_readme_path": summary_payload.repo_readme_path}
-                                                if summary_payload.repo_readme_path
-                                                else {}
-                                            ),
-                                        },
+                                        json.dumps(summary_meta, ensure_ascii=False),
                                     )
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
@@ -751,7 +807,13 @@ def build_txtai_index(
                             meta.setdefault("repository", repo_name)
                             meta.setdefault("pdf_size_bytes", size)
                             meta.setdefault("source_url", repo.get("url"))
-                            documents.append((chunk.chunk_id, chunk.text, meta))
+                            documents.append(
+                                (
+                                    chunk.chunk_id,
+                                    chunk.text,
+                                    json.dumps(meta, ensure_ascii=False),
+                                )
+                            )
                         failures["successful_pdf_files"] += 1
                         pdf_status[doc_id] = {
                             "status": "indexed",
@@ -802,22 +864,20 @@ def build_txtai_index(
                                 metadata={"category": cat, "source": "journal_pdf", "article": article_name},
                             )
                             if summary_payload is not None:
+                                summary_meta = {
+                                    "source_document": doc_id,
+                                    "category": cat,
+                                    "doc_type": "summary",
+                                    "model": summary_payload.model,
+                                    "cached": summary_payload.cached,
+                                }
+                                if summary_payload.repo_readme_path:
+                                    summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
                                 summary_documents.append(
                                     (
                                         f"summaries/{doc_id}",
                                         summary_payload.summary,
-                                        {
-                                            "source_document": doc_id,
-                                            "category": cat,
-                                            "doc_type": "summary",
-                                            "model": summary_payload.model,
-                                            "cached": summary_payload.cached,
-                                            **(
-                                                {"repo_readme_path": summary_payload.repo_readme_path}
-                                                if summary_payload.repo_readme_path
-                                                else {}
-                                            ),
-                                        },
+                                        json.dumps(summary_meta, ensure_ascii=False),
                                     )
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
@@ -834,7 +894,13 @@ def build_txtai_index(
                             meta.setdefault("category", meta.get("category", "docs"))
                             meta.setdefault("pdf_size_bytes", size_bytes)
                             meta.setdefault("source_url", article.get("url"))
-                            documents.append((chunk.chunk_id, chunk.text, meta))
+                            documents.append(
+                                (
+                                    chunk.chunk_id,
+                                    chunk.text,
+                                    json.dumps(meta, ensure_ascii=False),
+                                )
+                            )
                         failures["successful_pdf_files"] += 1
                         pdf_status[doc_id] = {
                             "status": "indexed",
@@ -856,15 +922,19 @@ def build_txtai_index(
                 pdf_status[str(pdf_file)] = {"status": "no_processing"}
     if summary_documents:
         documents.extend(summary_documents)
-    if documents and not dry_run:
-        logger.info(f"Indexing {len(documents)} documents...")
-        logger.info("Building general embeddings index...")
-        general_embeddings.index(documents)
-        general_embeddings.save(str(embeddings_dir / "index"))
-        if use_dual_embedding and code_embeddings:
-            logger.info("Building code embeddings index...")
-            code_embeddings.index(documents)
-            code_embeddings.save(str(embeddings_dir / "code_index"))
+        if documents and not dry_run:
+            logger.info(f"Indexing {len(documents)} documents...")
+            logger.info("Building general embeddings index… (first run may download embedding model weights)")
+            start = time.time()
+            general_embeddings.index(documents)
+            logger.info(f"General index built in {time.time() - start:.2f}s")
+            general_embeddings.save(str(embeddings_dir / "index"))
+            if use_dual_embedding and code_embeddings:
+                logger.info("Building code embeddings index...")
+                cstart = time.time()
+                code_embeddings.index(documents)
+                logger.info(f"Code index built in {time.time() - cstart:.2f}s")
+                code_embeddings.save(str(embeddings_dir / "code_index"))
         results = general_embeddings.search("function", 3)
         logger.info("Test search results (general model):")
         for result in results:

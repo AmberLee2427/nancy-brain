@@ -177,20 +177,30 @@ Categories become path prefixes inside the knowledge base (e.g. `cat1/repoA/...`
 Optional static per-document multipliers (legacy / seed). Runtime updates via `/weight` endpoint or MCP `set_weight` tool override or augment in-memory weights.
 
 ### 3.4 Environment Variables
-| Var | Purpose | Default |
-|-----|---------|---------|
-| `USE_DUAL_EMBEDDING` | Enable dual (general + code) embedding scoring | true |
-| `CODE_EMBEDDING_MODEL` | Model name for code index (if dual) | microsoft/codebert-base |
-| `KMP_DUPLICATE_LIB_OK` | Set to TRUE to avoid OpenMP macOS clash | TRUE |
-| `GEMINI_API_KEY` |||
-| `ENABLE_DOC_SUMMARIES` |||
-| `NB_JWT_ALGORITHM` | | HS256 |
-| `NB_SECRET_KEY` | dev key ||
-| `NB_ACCESS_EXPIRE_MINUTES` | | 60 |
-| `NB_REFRESH_EXPIRE_MINUTES` | | 1440 |
-| `NB_USERS_DB` | | users.db |
+Common knobs you can export (or place in `config/.env`) to tune builds and the admin UI:
 
-[ ] check these defaults
+| Var | Purpose | Default / Typical |
+|-----|---------|-------------------|
+| `KMP_DUPLICATE_LIB_OK` | Avoid OpenMP clashes on macOS | TRUE |
+| `USE_DUAL_EMBEDDING` | Enable dual (text + code) embedding scoring | true |
+| `CODE_EMBEDDING_MODEL` | Code embedding model when dual mode enabled | microsoft/codebert-base |
+| `NB_TEXT_EMBEDDING_MODEL` | Override text embedding model path | sentence-transformers/all-MiniLM-L6-v2 |
+| `NB_CODE_EMBEDDING_MODEL` | Override code embedding model path | inherits `CODE_EMBEDDING_MODEL` |
+| `SKIP_PDF_PROCESSING` | Skip PDF downloads/extraction during build | false |
+| `GEMINI_API_KEY` | Enable Gemini summaries (used with `--summaries`) | unset |
+| `ENABLE_DOC_SUMMARIES` | Toggle summaries in builds by default | false |
+| `NB_SUMMARY_TIMEOUT_SECONDS` | Per-doc summary timeout | 25 |
+| `NB_PER_FILE_LOG` | Log each file’s chunk count (diagnostics) | false |
+| `NB_SKIP_TEST_SEARCH` | Skip post-build sample queries | false |
+| `NB_SECRET_KEY` | JWT signing key for API/UI auth | dev key (change in prod) |
+| `NB_JWT_ALGORITHM` | JWT algorithm | HS256 |
+| `NB_ACCESS_EXPIRE_MINUTES` | Access token lifetime | 60 |
+| `NB_REFRESH_EXPIRE_MINUTES` | Refresh token lifetime | 1440 |
+| `NB_USERS_DB` | SQLite users DB path | users.db |
+| `OMP_NUM_THREADS` / `MKL_NUM_THREADS` / `NUMEXPR_MAX_THREADS` | Cap CPU threading for heavy libs | unset |
+| `TOKENIZERS_PARALLELISM` | Suppress HF tokenizer warning | false |
+
+> Tip: First builds download Hugging Face models; set `NB_TEXT_EMBEDDING_MODEL` to a local path (or run a quick `python - <<'PY' …` prefetch) if your network is slow.
 
 ---
 ## 4. Building the Knowledge Base

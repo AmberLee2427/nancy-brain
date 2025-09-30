@@ -96,7 +96,25 @@ def init(project_name):
     default=None,
     help="Generate Gemini summaries during build (defaults to ENABLE_DOC_SUMMARIES env)",
 )
-def build(config, articles_config, embeddings_path, force_update, dry_run, dirty, summaries):
+@click.option(
+    "--batch-size",
+    default=0,
+    type=int,
+    help="Index documents in batches (requires embeddings.upsert support). 0 = disable batching.",
+)
+@click.option(
+    "--max-docs",
+    default=0,
+    type=int,
+    help="Stop after indexing this many document chunks (for testing / limiting resource use). 0 = no limit.",
+)
+@click.option(
+    "--category",
+    help="Limit build to a single repository category (as defined in repositories.yml)",
+)
+def build(
+    config, articles_config, embeddings_path, force_update, dry_run, dirty, summaries, batch_size, max_docs, category
+):
     """Build the knowledge base from configured repositories.
 
     The build command validates `config/repositories.yml` (and `config/articles.yml`
@@ -162,19 +180,22 @@ def build(config, articles_config, embeddings_path, force_update, dry_run, dirty
         cmd.append("--summaries")
     elif summaries is False:
         cmd.append("--no-summaries")
+    if batch_size and batch_size > 0:
+        cmd.extend(["--batch-size", str(batch_size)])
+    if max_docs and max_docs > 0:
+        cmd.extend(["--max-docs", str(max_docs)])
+    if category:
+        cmd.extend(["--category", category])
 
-    # If dry-run requested, show planned actions and exit without running
+    # If dry-run requested, still run the underlying script with --dry-run so that
+    # repository cloning/downloading/indexing intentions and validation summaries
+    # are produced by the central pipeline logic rather than a hollow preview.
     if dry_run:
-        msg = "🔎 Dry run: the following command would be executed:"
+        cmd.append("--dry-run")
         if RICH_AVAILABLE:
-            _console.print(f"[yellow]{msg}[/yellow]")
-            _console.print(f"[cyan]{' '.join(cmd)}[/cyan]")
-            _console.print("[yellow](no changes were made)[/yellow]")
+            _console.print("[yellow]🔎 Dry run: executing pipeline in no-op mode[/yellow]")
         else:
-            click.echo(click.style(msg, fg="yellow"))
-            click.echo(click.style(" ".join(cmd), fg="cyan"))
-            click.echo(click.style("(no changes were made)", fg="yellow"))
-        return
+            click.echo(click.style("🔎 Dry run: executing pipeline in no-op mode", fg="yellow"))
 
     # Run the build script from the package directory
     try:
