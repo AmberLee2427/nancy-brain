@@ -2,7 +2,7 @@
 
 ## 1. Background & Motivation
 
-Our existing `SmartChunker` performs a hybrid of sliding windows and heuristic boundary searches. When processing medium-sized code files the forward/backward scans can explode in CPU and memory, causing build failures. We also have no semantic awareness for other file types, leading to arbitrary splits. To make the knowledge-base pipeline reliable and extensible we want a modular chunking library that:
+Our existing `SmartChunker` performs a hybrid of sliding windows and heuristic boundary searches. When processing medium-sized code files the forward/backward scans can explode in CPU and memory, causing build failures. We also have no semantic awareness for other file types, leading to arbitrary splits. To make the knowledge-base pipeline reliable and extensible we want a modular chunking library that plugs cleanly into the Nancy Brain build as well as the new MCP-based RAG service powering the Slack bot. The same library will ship as a standalone package (working name `chunky`) so other indexing services can reuse it. We want that library to:
 
 - Handles our common file types (Python, Markdown, JSON/YAML, plain text) with sensible defaults.
 - Lets us plug in stronger semantic strategies (AST, embeddings) as optional enhancements.
@@ -40,6 +40,8 @@ semantic_chunks/
 └── utils.py           # Shared helpers (token counting, environment hooks)
 ```
 
+The code will live in the dedicated `chunky` package and be imported by Nancy Brain (and future MCP clients) like any other dependency. Keeping the chunker in its own package keeps agent scopes narrow and makes reuse easier.
+
 ## 4. Core Concepts
 
 - **Document**: normalized representation of a file with (path, content, metadata, language).
@@ -60,14 +62,16 @@ Minimum viable set:
 | `JSONYamlChunker` | Treats top-level keys/arrays as chunks; flatten nested objects | Uses `json` / `yaml` |
 | `PlainTextChunker` | Sentence/paragraph segmentation using regex or spaCy optional | Configurable sentence splitter |
 | `SemanticEmbeddingChunker` (optional) | Embedding-based breakpoints (cosine drift) | Depends on configured embedding model; opt-in |
+| `NotebookChunker` (via `nb4llm`) | Works with notebook-derived fenced text | Delegates heavy lifting to `nb4llm`; enforces Markdown/Python fence boundaries |
 
 Each chunker adheres to the `Chunker` protocol and accepts a `ChunkerConfig`. The fallback chunker is always used last to guarantee progress.
 
 ## 6. Configuration Strategy
 
 - `ChunkerConfig` stores generic knobs (`max_chars`, `max_tokens`, `code_window_lines`, `code_overlap_lines`, `semantic_model`, etc.).
-- Defaults come from environment variables (`SMART_CHUNK_CODE_LINES`, `SMART_CHUNK_CODE_OVERLAP`, `SMART_CHUNK_TEXT_CHARS`, `SEMANTIC_MODEL`) or a YAML file (`semantic_chunker.yaml`).
+- Defaults come from environment variables (`SMART_CHUNK_CODE_LINES`, `SMART_CHUNK_CODE_OVERLAP`, `SMART_CHUNK_TEXT_CHARS`, `SEMANTIC_MODEL`) or a YAML file (`semantic_chunker.yaml`). For MCP deployments we also respect `MCP_CHUNKER_CONFIG`, pointing to a remote-friendly YAML/JSON config path.
 - The pipeline allows per-call overrides, e.g., `pipeline.chunk_file(path, config=ChunkerConfig(code_window_lines=60))`.
+- All chunkers attach useful metadata (`line_start`, `line_end`, `language`, optional `semantic_score`) so MCP clients and Nancy's Slack responses can surface precise citations.
 
 ## 7. API Sketch
 
@@ -95,7 +99,7 @@ Pipeline steps internally:
 2. Resolve chunker from registry (falls back to sliding window).
 3. Invoke chunker with provided config.
 4. Optionally post-process (e.g., summarization hook, metadata enrichment).
-5. Return list of `Chunk` objects ready for indexing.
+5. Return list of `Chunk` objects ready for indexing. Downstream consumers (Nancy Brain builders, MCP adapters, Slack bot citation tooling) rely on `chunk_id`, `source_document`, and line metadata to link answers back to source material.
 
 ## 8. Integration with KB Build
 
