@@ -31,7 +31,8 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4", 
     "python-jose>=3.3.0",
     "python-dotenv",
-    "google-genai" 
+    "google-genai",
+    "chunky-files[tree]>=1.0.0", 
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

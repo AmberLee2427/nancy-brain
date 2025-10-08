@@ -69,7 +69,7 @@ Each chunker adheres to the `Chunker` protocol and accepts a `ChunkerConfig`. Th
 ## 6. Configuration Strategy
 
 - `ChunkerConfig` stores generic knobs (`max_chars`, `max_tokens`, `code_window_lines`, `code_overlap_lines`, `semantic_model`, etc.).
-- Defaults come from environment variables (`SMART_CHUNK_CODE_LINES`, `SMART_CHUNK_CODE_OVERLAP`, `SMART_CHUNK_TEXT_CHARS`, `SEMANTIC_MODEL`) or a YAML file (`semantic_chunker.yaml`). For MCP deployments we also respect `MCP_CHUNKER_CONFIG`, pointing to a remote-friendly YAML/JSON config path.
+- Defaults come from environment variables (`CHUNKY_LINES_PER_CHUNK`, `CHUNKY_LINE_OVERLAP`, `CHUNKY_MAX_CHARS`). The `ChunkerConfig` also exposes `doc_id_key` and `chunk_id_template` so callers can control the identifier format (Nancy Brain relies on `<doc_id>#chunk-0000`).
 - The pipeline allows per-call overrides, e.g., `pipeline.chunk_file(path, config=ChunkerConfig(code_window_lines=60))`.
 - All chunkers attach useful metadata (`line_start`, `line_end`, `language`, optional `semantic_score`) so MCP clients and Nancy's Slack responses can surface precise citations.
 

@@ -65,6 +65,19 @@ nancy-brain serve                 # Start HTTP API server
 nancy-brain ui                    # Launch web admin interface
 ```
 
+
+### Chunking
+
+Nancy Brain uses the [`chunky-files`](https://pypi.org/project/chunky-files/) package for chunking repositories. Configure chunk boundaries with environment variables before running a build:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `CHUNKY_LINES_PER_CHUNK` | Maximum lines per chunk window | 80 |
+| `CHUNKY_LINE_OVERLAP` | Overlap between consecutive chunks | 10 |
+| `CHUNKY_MAX_CHARS` | Maximum characters per chunk | 2000 |
+
+To adjust chunks per file programmatically, supply a custom `ChunkerConfig` through the build pipeline. For advanced semantic chunkers (Tree-sitter, language-specific splits), install extras: `pip install chunky-files[tree]`.
+
 ### Optional: Gemini-powered summaries
 
 Set an API key and opt-in to generate document-level summaries and suggested search weights during a build:

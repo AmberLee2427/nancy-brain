@@ -6,6 +6,7 @@ Orchestrates the full knowledge base build pipeline (cloning, direct txtai index
 import os
 
 import warnings
+import sys
 
 # Allow duplicate OpenMP runtime loading when not explicitly configured. This mirrors
 # the CLI behavior so builds don't abort due to multiple libomp copies.
@@ -27,7 +28,8 @@ try:
 except Exception:
     load_dotenv = None
 
-from nancy_brain.chunking import SmartChunker, strip_chunk_suffix
+from chunky import ChunkPipeline, ChunkerConfig, Document
+from nancy_brain.chunking import strip_chunk_suffix
 from nancy_brain.summarization import SummaryGenerator
 
 # Optional imports
@@ -598,7 +600,12 @@ def build_txtai_index(
         ext_weights = {}
     categories = [category] if category else list(config.keys())
     documents = []
-    chunker = SmartChunker()
+    pipeline = ChunkPipeline()
+    chunk_config = ChunkerConfig(
+        max_chars=int(os.environ.get("CHUNKY_MAX_CHARS", "2000")),
+        lines_per_chunk=int(os.environ.get("CHUNKY_LINES_PER_CHUNK", "80")),
+        line_overlap=int(os.environ.get("CHUNKY_LINE_OVERLAP", "10")),
+    )
     pdf_status = {}  # doc_id -> {status, size, chars, method}
     failures = {
         "failed_text_files": [],
@@ -610,7 +617,10 @@ def build_txtai_index(
         "skipped_repositories": [],
         "skipped_articles": [],
         "skipped_low_value": [],
+        "fatal_errors": [],
     }
+    text_candidate_count = 0
+    pdf_candidate_count = 0
     summary_documents = []
     auto_model_weights: Dict[str, float] = {}
     summarized_docs: Set[str] = set()
@@ -685,6 +695,7 @@ def build_txtai_index(
 
             for file_path in text_files:
                 try:
+                    text_candidate_count += 1
                     logger.info(f"Reading file {file_path.relative_to(repo_dir)}")
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
@@ -735,7 +746,8 @@ def build_txtai_index(
                             )
                             auto_model_weights[doc_id] = summary_payload.weight
                             summarized_docs.add(doc_id)
-                    chunks = chunker.chunk(doc_id, content, source_kind="repository_file")
+                    document = Document(path=file_path, content=content, metadata={"doc_id": doc_id})
+                    chunks = pipeline.chunk_documents([document], config=chunk_config)
                     if not chunks:
                         logger.debug(f"Skipping low-value document: {doc_id}")
                         failures["skipped_low_value"].append(doc_id)
@@ -757,6 +769,7 @@ def build_txtai_index(
                     failures["failed_text_files"].append(f"{file_path}: {str(e)}")
             for pdf_path in pdf_files:
                 try:
+                    pdf_candidate_count += 1
                     content, success = process_pdf_with_fallback(pdf_path, repo_info=repo)
                     size = pdf_path.stat().st_size if pdf_path.exists() else 0
                     if success and content:
@@ -796,7 +809,8 @@ def build_txtai_index(
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
                                 summarized_docs.add(doc_id)
-                        chunks = chunker.chunk(doc_id, full_content, source_kind="repository_pdf")
+                        document = Document(path=pdf_path, content=full_content, metadata={"doc_id": doc_id})
+                        chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
                             logger.debug(f"Skipping low-value PDF: {doc_id}")
                             failures["skipped_low_value"].append(doc_id)
@@ -846,6 +860,7 @@ def build_txtai_index(
                 continue
             if tika_ready or pdf_fallback_available:
                 try:
+                    pdf_candidate_count += 1
                     content, success = process_pdf_with_fallback(pdf_file, article_info=article)
                     if success and content:
                         doc_id = f"journal_articles/{cat}/{article_name}"
@@ -882,7 +897,8 @@ def build_txtai_index(
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
                                 summarized_docs.add(doc_id)
-                        chunks = chunker.chunk(doc_id, full_content, source_kind="journal_pdf")
+                        document = Document(path=pdf_file, content=full_content, metadata={"doc_id": doc_id})
+                        chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
                             logger.debug(f"Skipping low-value journal PDF: {doc_id}")
                             failures["skipped_low_value"].append(doc_id)
@@ -922,19 +938,36 @@ def build_txtai_index(
                 pdf_status[str(pdf_file)] = {"status": "no_processing"}
     if summary_documents:
         documents.extend(summary_documents)
-        if documents and not dry_run:
-            logger.info(f"Indexing {len(documents)} documents...")
-            logger.info("Building general embeddings index… (first run may download embedding model weights)")
-            start = time.time()
-            general_embeddings.index(documents)
-            logger.info(f"General index built in {time.time() - start:.2f}s")
-            general_embeddings.save(str(embeddings_dir / "index"))
-            if use_dual_embedding and code_embeddings:
-                logger.info("Building code embeddings index...")
-                cstart = time.time()
-                code_embeddings.index(documents)
-                logger.info(f"Code index built in {time.time() - cstart:.2f}s")
-                code_embeddings.save(str(embeddings_dir / "code_index"))
+    total_indexed_documents = len(documents)
+    failures["indexed_document_count"] = total_indexed_documents
+    failures["text_file_candidates"] = text_candidate_count
+    failures["pdf_file_candidates"] = pdf_candidate_count
+    if not documents:
+        if not dry_run:
+            if text_candidate_count or pdf_candidate_count:
+                failures["fatal_errors"].append(
+                    "No documents were indexed even though source files were discovered. "
+                    "Check for upstream processing failures (e.g., summarization errors) in the logs."
+                )
+            else:
+                failures["fatal_errors"].append(
+                    "No documents were indexed because no eligible source files were found in the configured sources."
+                )
+        else:
+            logger.info("Dry run: no documents would be indexed.")
+    elif not dry_run:
+        logger.info(f"Indexing {len(documents)} documents...")
+        logger.info("Building general embeddings index… (first run may download embedding model weights)")
+        start = time.time()
+        general_embeddings.index(documents)
+        logger.info(f"General index built in {time.time() - start:.2f}s")
+        general_embeddings.save(str(embeddings_dir / "index"))
+        if use_dual_embedding and code_embeddings:
+            logger.info("Building code embeddings index...")
+            cstart = time.time()
+            code_embeddings.index(documents)
+            logger.info(f"Code index built in {time.time() - cstart:.2f}s")
+            code_embeddings.save(str(embeddings_dir / "code_index"))
         results = general_embeddings.search("function", 3)
         logger.info("Test search results (general model):")
         for result in results:
@@ -949,8 +982,6 @@ def build_txtai_index(
     # Write manifest
     if not dry_run:
         try:
-            import json
-
             with open(embeddings_dir / "pdf_manifest.json", "w", encoding="utf-8") as mf:
                 json.dump(pdf_status, mf, indent=2)
             logger.info(f"Wrote PDF manifest to {embeddings_dir / 'pdf_manifest.json'}")
@@ -1143,12 +1174,27 @@ if __name__ == "__main__":
                     f"  ✅ Successfully indexed text files: {indexing_failures.get('successful_text_files', 0)}"
                 )
                 logger.info(f"  ✅ Successfully indexed PDF files: {indexing_failures.get('successful_pdf_files', 0)}")
+                if indexing_failures.get("indexed_document_count") is not None:
+                    logger.info(f"  📄 Indexed document chunks: {indexing_failures.get('indexed_document_count', 0)}")
+                if indexing_failures.get("text_file_candidates") or indexing_failures.get("pdf_file_candidates"):
+                    logger.info(
+                        "  🔎 Source candidates — text: "
+                        f"{indexing_failures.get('text_file_candidates', 0)}, "
+                        f"PDF: {indexing_failures.get('pdf_file_candidates', 0)}"
+                    )
+                if indexing_failures.get("failed_text_files"):
+                    logger.info(f"  ❌ Failed text files: {len(indexing_failures['failed_text_files'])}")
                 if indexing_failures.get("skipped_articles"):
                     logger.info(f"  ⏭️  Skipped articles: {len(indexing_failures['skipped_articles'])}")
                 if indexing_failures.get("failed_pdf_files"):
                     logger.info(f"  ❌ Failed PDF files: {len(indexing_failures['failed_pdf_files'])}")
-            total_failures = sum(len(v) for k, v in indexing_failures.items() if k.startswith("failed")) + len(
-                article_failures.get("failed_downloads", [])
+                if indexing_failures.get("fatal_errors"):
+                    for err in indexing_failures["fatal_errors"]:
+                        logger.error(f"  🚫 Fatal: {err}")
+            total_failures = (
+                sum(len(v) for k, v in indexing_failures.items() if k.startswith("failed"))
+                + len(indexing_failures.get("fatal_errors", []))
+                + len(article_failures.get("failed_downloads", []))
             )
             logger.info("\n" + "=" * 60)
             if total_failures == 0:
@@ -1201,6 +1247,19 @@ if __name__ == "__main__":
                     cleanup_pdf_articles(articles_config_path, base_path, category)
             emit_progress(95, stage="cleanup", detail="Cleaning up raw files")
             print_pipeline_summary(all_failures, dry_run)
+            if not dry_run:
+                indexing_failures = all_failures.get("indexing") or {}
+                fatal_errors = indexing_failures.get("fatal_errors") or []
+                if fatal_errors:
+                    for msg in fatal_errors:
+                        logger.error(msg)
+                    sys.exit(1)
+                failed_texts = indexing_failures.get("failed_text_files") or []
+                failed_pdfs = indexing_failures.get("failed_pdf_files") or []
+                if failed_texts or failed_pdfs:
+                    logger.warning(
+                        "Indexing completed with failures. See log output for details on the affected files."
+                    )
             emit_progress(100, stage="done", detail="Pipeline finished")
 
     build_pipeline(

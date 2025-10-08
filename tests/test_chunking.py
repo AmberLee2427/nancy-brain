@@ -1,80 +1,67 @@
-import pytest
+from pathlib import Path
 
-from nancy_brain.chunking import SmartChunker, strip_chunk_suffix
+from chunky import ChunkPipeline, ChunkerConfig, Document
 
-
-def test_chunker_splits_long_markdown():
-    chunker = SmartChunker(text_chunk_chars=120, text_overlap_chars=20)
-    paragraph = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
-    content = "# Title\n\n" + (paragraph * 20)
-
-    chunks = chunker.chunk("docs/README.md", content)
-
-    assert len(chunks) >= 2
-    assert chunks[0].chunk_id.endswith("#chunk-0000")
-    assert chunks[0].metadata["chunk_index"] == 0
-    assert chunks[0].metadata["source_document"] == "docs/README.md"
-    assert all(chunk.metadata["chunk_count"] == len(chunks) for chunk in chunks)
+from nancy_brain.chunking import strip_chunk_suffix
 
 
-@pytest.mark.parametrize(
-    "doc_id",
-    [
-        "pkg/module.py#chunk-0002",
-        "pkg/module.py::chunk-0002",
-        "pkg/module.py|chunk:3",
-    ],
-)
-def test_strip_chunk_suffix(doc_id):
-    assert strip_chunk_suffix(doc_id) == "pkg/module.py"
+def _make_content(lines: int) -> str:
+    return "\n".join(f"line {i}" for i in range(1, lines + 1))
 
 
-def test_chunker_skips_empty_init():
-    chunker = SmartChunker()
-    content = "# generated file\n__all__ = []\n"
+def test_pipeline_respects_line_window(tmp_path: Path) -> None:
+    pipeline = ChunkPipeline()
+    lines_per_chunk = 40
+    line_overlap = 5
+    config = ChunkerConfig(lines_per_chunk=lines_per_chunk, line_overlap=line_overlap)
 
-    chunks = chunker.chunk("pkg/__init__.py", content)
+    path = tmp_path / "sample.py"
+    path.write_text(_make_content(120), encoding="utf-8")
 
-    assert chunks == []
+    doc_id = "cat/repo/sample.py"
+    document = Document(path=path, content=path.read_text(), metadata={"doc_id": doc_id})
+    chunks = pipeline.chunk_documents([document], config=config)
 
+    step = max(1, lines_per_chunk - line_overlap)
+    total_lines = 120
+    expected = 1 if total_lines <= lines_per_chunk else ((total_lines - lines_per_chunk + step - 1) // step) + 1
 
-def test_chunker_code_chunks_overlap():
-    chunker = SmartChunker(code_chunk_lines=6, code_overlap_lines=2)
-    code = """
-from typing import Any
-
-
-def foo():
-    return 1
-
-
-def bar(x):
-    if x:
-        return foo()
-    return None
-
-
-def baz(y):
-    return bar(y)
-""".strip()
-
-    chunks = chunker.chunk("pkg/sample.py", code)
-
-    assert len(chunks) >= 2
+    assert len(chunks) == expected
+    assert chunks[0].chunk_id == f"{doc_id}#chunk-0000"
     assert chunks[0].metadata["line_start"] == 1
-    assert chunks[0].metadata["line_end"] >= chunks[0].metadata["line_start"]
-    assert chunks[1].metadata["line_start"] <= chunks[0].metadata["line_end"]
+    assert chunks[0].metadata["line_end"] == lines_per_chunk
+    for previous, current in zip(chunks, chunks[1:]):
+        assert current.metadata["line_start"] == previous.metadata["line_end"] - line_overlap + 1
+        assert previous.metadata["chunk_count"] == expected
+        assert current.metadata["chunk_count"] == expected
+        assert previous.metadata["source_document"] == doc_id
+        assert current.metadata["source_document"] == doc_id
+    assert chunks[-1].metadata["line_end"] == total_lines
 
 
-def test_chunker_skips_tiny_docs_with_few_words():
-    chunker = SmartChunker(min_index_chars=80)
-    tiny = "todo"
-    assert chunker.chunk("docs/todo.txt", tiny) == []
+def test_pipeline_handles_empty_files(tmp_path: Path) -> None:
+    pipeline = ChunkPipeline()
+    path = tmp_path / "empty.txt"
+    path.write_text("", encoding="utf-8")
 
+    document = Document(path=path, content="", metadata={"doc_id": "docs/empty.txt"})
+    chunks = pipeline.chunk_documents([document])
 
-def test_chunker_keeps_short_docs_with_enough_words():
-    chunker = SmartChunker(min_index_chars=80)
-    content = "one two three four"  # four words, should be kept
-    chunks = chunker.chunk("docs/short.txt", content)
     assert len(chunks) == 1
-    assert chunks[0].text == content
+    chunk = chunks[0]
+    assert chunk.chunk_id == "docs/empty.txt#chunk-0000"
+    assert chunk.text == ""
+    assert chunk.metadata["line_start"] == 0
+    assert chunk.metadata["line_end"] == 0
+    assert chunk.metadata["chunk_count"] == 1
+
+
+def test_strip_chunk_suffix():
+    cases = [
+        ("pkg/module.py#chunk-0002", "pkg/module.py"),
+        ("pkg/module.py::chunk-0002", "pkg/module.py"),
+        ("pkg/module.py|chunk:3", "pkg/module.py"),
+        ("pkg/module.py", "pkg/module.py"),
+    ]
+    for doc_id, expected in cases:
+        assert strip_chunk_suffix(doc_id) == expected
