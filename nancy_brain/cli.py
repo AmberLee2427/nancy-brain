@@ -94,7 +94,7 @@ def init(project_name):
 @click.option(
     "--summaries/--no-summaries",
     default=None,
-    help="Generate Gemini summaries during build (defaults to ENABLE_DOC_SUMMARIES env)",
+    help="Generate Anthropic summaries during build (defaults to ENABLE_DOC_SUMMARIES env)",
 )
 @click.option(
     "--batch-size",

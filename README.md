@@ -78,18 +78,18 @@ Nancy Brain uses the [`chunky-files`](https://pypi.org/project/chunky-files/) pa
 
 To adjust chunks per file programmatically, supply a custom `ChunkerConfig` through the build pipeline. For advanced semantic chunkers (Tree-sitter, language-specific splits), install extras: `pip install chunky-files[tree]`.
 
-### Optional: Gemini-powered summaries
+### Optional: Anthropic-powered summaries
 
 Set an API key and opt-in to generate document-level summaries and suggested search weights during a build:
 
 ```bash
-export GEMINI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 export ENABLE_DOC_SUMMARIES=true   # or pass --summaries on the build command
 nancy-brain build --summaries
 ```
 
 Summaries are cached under `knowledge_base/cache/summaries/` using the document content hash, so reruns only
-call Gemini when files change. Suggested weights are written to `knowledge_base/embeddings/auto_model_weights.json`
+call Anthropic when files change. Suggested weights are written to `knowledge_base/embeddings/auto_model_weights.json`
 for review before merging into your active `model_weights.yml`.
 
 ## Technical Architecture
@@ -200,7 +200,7 @@ Common knobs you can export (or place in `config/.env`) to tune builds and the a
 | `NB_TEXT_EMBEDDING_MODEL` | Override text embedding model path | sentence-transformers/all-MiniLM-L6-v2 |
 | `NB_CODE_EMBEDDING_MODEL` | Override code embedding model path | inherits `CODE_EMBEDDING_MODEL` |
 | `SKIP_PDF_PROCESSING` | Skip PDF downloads/extraction during build | false |
-| `GEMINI_API_KEY` | Enable Gemini summaries (used with `--summaries`) | unset |
+| `ANTHROPIC_API_KEY` | Enable Anthropic summaries (used with `--summaries`) | unset |
 | `ENABLE_DOC_SUMMARIES` | Toggle summaries in builds by default | false |
 | `NB_SUMMARY_TIMEOUT_SECONDS` | Per-doc summary timeout | 25 |
 | `NB_PER_FILE_LOG` | Log each file’s chunk count (diagnostics) | false |

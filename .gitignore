@@ -149,12 +149,15 @@ knowledge_base/embeddings/models/
 cache
 tmp_emb
 test_summary_cache
+tmp*
+test_*
 
 # Local stuff
 bot/config/*
 bot/config/.env
 config/model_weights.yaml  # Dynamic learning weights from Nancy's WEIGHT: tool
 .env
+*GEMINI.md
 
 # Documentation
 docs/_build/

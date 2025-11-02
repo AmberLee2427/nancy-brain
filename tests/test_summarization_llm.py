@@ -12,8 +12,8 @@ def test_llm_summary_json_and_weight():
     """
     # Load environment variables
     load_dotenv("config/.env")
-    api_key = os.environ.get("GEMINI_API_KEY")
-    assert api_key, "GEMINI_API_KEY must be set in environment or .env file"
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    assert api_key, "ANTHROPIC_API_KEY must be set in environment or .env file"
 
     cache_dir = Path("./test_llm_cache")
     summary_gen = SummaryGenerator(cache_dir=cache_dir, enabled=True)

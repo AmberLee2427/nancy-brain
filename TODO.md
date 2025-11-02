@@ -121,6 +121,8 @@
   - Better table extraction
   - Image and figure processing
   - Citation link extraction
+  - [ ] ADS API integration for article downloads
+  - [ ] Implement DeepSeek OCR pipeline
 
 ## 🔧 Technical Debt & Maintenance
 

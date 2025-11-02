@@ -1,4 +1,4 @@
-"""Document summarization helpers using Gemini models."""
+"""Document summarization helpers using Anthropic Claude models."""
 
 from __future__ import annotations
 
@@ -32,15 +32,17 @@ class SummaryGenerator:
         self,
         cache_dir: Path,
         enabled: bool = True,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "claude-haiku-4-5",
         max_chars: int = 200000,
         readme_bonus_chars: int = 30000,
+        max_output_tokens: int = 1024,
     ) -> None:
-        self.api_key = os.environ.get("GEMINI_API_KEY")
+        self.api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.enabled = enabled and bool(self.api_key)
         self.model_name = model_name
         self.max_chars = max_chars
         self.readme_bonus_chars = readme_bonus_chars
+        self.max_output_tokens = max_output_tokens
         self.cache_dir = Path(cache_dir)
         if self.enabled:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -222,8 +224,8 @@ class SummaryGenerator:
         readme: Optional[str],
         readme_path: Optional[str],
     ) -> Optional[Dict[str, object]]:
-        backend, client = self._create_genai_client()
-        if backend is None or client is None:
+        client = self._create_client()
+        if client is None:
             return None
 
         try:
@@ -237,42 +239,34 @@ class SummaryGenerator:
 
             request_content = f"{prompt}\n\n{full_content}"
 
-            if backend == "google-genai":
-                response = client.models.generate_content(model=self.model_name, contents=request_content)
-                raw_text = (response.text or "").strip()
-            else:  # google-generativeai fallback
-                model = client.GenerativeModel(self.model_name)
-                response = model.generate_content(request_content)
-                raw_text = (getattr(response, "text", "") or "").strip()
+            response = client.messages.create(
+                model=self.model_name,
+                max_tokens=self.max_output_tokens,
+                messages=[{"role": "user", "content": request_content}],
+            )
+            raw_text_parts = []
+            for block in getattr(response, "content", []) or []:
+                if getattr(block, "type", None) == "text":
+                    raw_text_parts.append(getattr(block, "text", ""))
+            raw_text = "".join(raw_text_parts).strip()
 
             json_text = self._strip_markdown_json(raw_text)
             return json.loads(json_text)
         except Exception as exc:
-            logger.warning("Gemini summarization failed: %s", exc)
+            logger.warning("Anthropic summarization failed: %s", exc)
             return None
 
-    def _create_genai_client(self):
-        """Return a tuple (backend, client_or_module) based on available SDK."""
+    def _create_client(self):
+        """Create an Anthropic client instance."""
         if not self.api_key:
-            logger.error("GEMINI_API_KEY not configured; cannot create summaries")
-            return None, None
+            logger.error("ANTHROPIC_API_KEY not configured; cannot create summaries")
+            return None
         try:
-            from google import genai
-
-            try:
-                client = genai.Client(api_key=self.api_key)
-            except TypeError:
-                # Older google-genai versions pick up API key from env
-                client = genai.Client()
-            return "google-genai", client
+            import anthropic
         except ImportError:
-            try:
-                import google.generativeai as genai_old
-            except ImportError:
-                logger.error("google-genai (>=1.0) or google-generativeai must be installed to enable summarization")
-                return None, None
-            genai_old.configure(api_key=self.api_key)
-            return "google-generativeai", genai_old
+            logger.error("anthropic SDK is not installed; `pip install anthropic` to enable summarization")
+            return None
+        return anthropic.Anthropic(api_key=self.api_key)
 
     def _strip_markdown_json(self, text: str) -> str:
         """Strip markdown code block formatting from JSON response."""

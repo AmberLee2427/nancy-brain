@@ -1,8 +1,4 @@
-name: nancy-brain
-channels:
-  - conda-forge
-  - defaults
-dependencies:
+
   - aiohappyeyeballs=2.6.1=pyhd8ed1ab_0
   - aiohttp=3.12.15=py311h2fe624c_0
   - aiosignal=1.4.0=pyhd8ed1ab_0

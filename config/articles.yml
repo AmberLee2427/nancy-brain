@@ -1,32 +1,7 @@
-journal_articles:
-- description: Gould (1992) - Proper motions of the Magellanic Clouds. I. First results
-    from Schmidt plates
-  name: Gould_1992_ApJ_392_442
-  url: https://ui.adsabs.harvard.edu/link_gateway/1992ApJ...392..442G/PUB_PDF
-- description: Paczynski (1986) - Gravitational microlensing by the galactic halo
-  name: Paczynski_1986_ApJ_304_1
-  url: https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF
-- description: Mao & Paczynski (1991) - Gravitational microlensing by double stars
-    and planetary systems
-  name: Mao_Paczynski_1991_ApJ_374_L37
-  url: https://ui.adsabs.harvard.edu/link_gateway/1991ApJ...374L..37M/PUB_PDF
-- description: Gould & Loeb (1992) - Discovering planetary systems through gravitational
-    microlenses
-  name: Gould_Loeb_1992_ApJ_396_104
-  url: https://ui.adsabs.harvard.edu/link_gateway/1992ApJ...396..104G/PUB_PDF
-microlensing_reviews:
-- description: Mao (2012) - Introduction to gravitational microlensing
-  name: Mao_2012_RAA_12_947
-  url: https://ui.adsabs.harvard.edu/link_gateway/2012RAA....12..947M/PUB_PDF
-- description: Gaudi (2012) - Microlensing Surveys for Exoplanets
-  name: Gaudi_2012_ARA&A_50_411
-  url: https://ui.adsabs.harvard.edu/link_gateway/2012ARA%26A..50..411G/PUB_PDF
+journal_articles: []
+microlensing_reviews: []
 roman_mission:
 - description: Spergel et al. (2015) - Wide-Field InfrarRed Survey Telescope-Astrophysics
     Focused Telescope Assets WFIRST-AFTA 2015 Report
   name: Spergel_2015_arXiv_1503.03757
   url: https://arxiv.org/pdf/1503.03757.pdf
-- description: Penny et al. (2019) - Predictions of the WFIRST Microlensing Survey.
-    I. Bound Planet Detection Rates
-  name: Penny_2019_ApJS_241_3
-  url: https://ui.adsabs.harvard.edu/link_gateway/2019ApJS..241....3P/PUB_PDF

@@ -31,8 +31,10 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4", 
     "python-jose>=3.3.0",
     "python-dotenv",
-    "google-genai",
+    "anthropic",
     "chunky-files[tree]>=1.0.0", 
+    "astropy>=4.2",
+    "zstandard",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
