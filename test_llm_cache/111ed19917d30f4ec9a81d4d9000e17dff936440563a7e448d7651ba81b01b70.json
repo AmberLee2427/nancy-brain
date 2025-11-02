@@ -1,0 +1,8 @@
+{
+  "summary": "The `summarization.py` file provides the core implementation for Nancy Brain's automated document summarization, utilizing Google Gemini language models. It features a `SummaryGenerator` class designed to produce concise yet informative summaries for repository files.\n\nKey functionalities include:\n*   **Efficient Caching**: Uses SHA256 hashing to cache generated summaries, reducing redundant API calls and improving performance.\n*   **Intelligent Content Trimming**: Manages token limits by trimming document content and repository READMEs to configurable maximum character counts.\n*   **Context-Aware Prompt Engineering**: Constructs detailed prompts for the LLM, incorporating crucial contextual information such as the document ID, repository name, relevant README content, and additional metadata, enhancing the quality and relevance of summaries.\n*   **Structured Output**: Summaries are returned in a `SummaryResult` dataclass, containing the `summary` string and a float `weight` (scaled between 0.5 and 2.0). This `weight` is intended to reflect the document's relative usefulness for retrieval, considering factors like scientific relevance, implementation depth, and uniqueness.\n*   **API Integration**: Handles interaction with the Gemini API, including support for different `google-genai` SDK versions and stripping markdown formatting from the LLM's JSON responses.\n\nThis module is fundamental to how Nancy Brain processes, understands, and organizes its knowledge base, providing a robust and efficient mechanism for content digestion and retrieval prioritization.",
+  "weight": 1.85,
+  "model": "gemini-2.5-flash",
+  "timestamp": 1759961654,
+  "doc_id": "nancy-brain/nancy_brain/summarization.py",
+  "repo_readme_path": null
+}

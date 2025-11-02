@@ -222,14 +222,11 @@ class SummaryGenerator:
         readme: Optional[str],
         readme_path: Optional[str],
     ) -> Optional[Dict[str, object]]:
-        try:
-            from google import genai
-        except ImportError:
-            logger.error("google-genai not installed; cannot create summaries")
+        backend, client = self._create_genai_client()
+        if backend is None or client is None:
             return None
-        try:
-            client = genai.Client()
 
+        try:
             # Build the full request content
             full_content = f"Full document:\n{content}"
             if readme:
@@ -238,18 +235,44 @@ class SummaryGenerator:
                     header += f" ({readme_path})"
                 full_content += f"\n\n{header}:\n{readme}"
 
-            # Make the API call with system instruction as part of content
             request_content = f"{prompt}\n\n{full_content}"
-            response = client.models.generate_content(model=self.model_name, contents=request_content)
 
-            # Get response text and strip markdown code blocks if present
-            raw_text = (response.text or "").strip()
+            if backend == "google-genai":
+                response = client.models.generate_content(model=self.model_name, contents=request_content)
+                raw_text = (response.text or "").strip()
+            else:  # google-generativeai fallback
+                model = client.GenerativeModel(self.model_name)
+                response = model.generate_content(request_content)
+                raw_text = (getattr(response, "text", "") or "").strip()
+
             json_text = self._strip_markdown_json(raw_text)
-
             return json.loads(json_text)
         except Exception as exc:
             logger.warning("Gemini summarization failed: %s", exc)
             return None
+
+    def _create_genai_client(self):
+        """Return a tuple (backend, client_or_module) based on available SDK."""
+        if not self.api_key:
+            logger.error("GEMINI_API_KEY not configured; cannot create summaries")
+            return None, None
+        try:
+            from google import genai
+
+            try:
+                client = genai.Client(api_key=self.api_key)
+            except TypeError:
+                # Older google-genai versions pick up API key from env
+                client = genai.Client()
+            return "google-genai", client
+        except ImportError:
+            try:
+                import google.generativeai as genai_old
+            except ImportError:
+                logger.error("google-genai (>=1.0) or google-generativeai must be installed to enable summarization")
+                return None, None
+            genai_old.configure(api_key=self.api_key)
+            return "google-generativeai", genai_old
 
     def _strip_markdown_json(self, text: str) -> str:
         """Strip markdown code block formatting from JSON response."""

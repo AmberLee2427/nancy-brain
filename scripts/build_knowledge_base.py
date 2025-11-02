@@ -622,6 +622,18 @@ def build_txtai_index(
     text_candidate_count = 0
     pdf_candidate_count = 0
     summary_documents = []
+    summary_enabled = False
+    if summary_generator is not None:
+        summary_enabled = bool(getattr(summary_generator, "enabled", True))
+    summary_stats = {
+        "configured": summary_generator is not None,
+        "enabled": summary_enabled,
+        "requests": 0,
+        "responses": 0,
+        "cached_hits": 0,
+        "failures": 0,
+        "documents_added": 0,
+    }
     auto_model_weights: Dict[str, float] = {}
     summarized_docs: Set[str] = set()
     repo_readme_cache: Dict[Path, Optional[dict]] = {}
@@ -717,16 +729,27 @@ def build_txtai_index(
                     relative_path = file_path.relative_to(repo_dir)
                     doc_id = f"{cat}/{repo_name}/{relative_path}"
                     logger.info(f"Chunking file {doc_id}")
-                    if summary_generator is not None and doc_id not in summarized_docs:
-                        summary_payload = summary_generator.summarize(
-                            doc_id=doc_id,
-                            content=content,
-                            repo_name=repo_name,
-                            repo_readme=repo_readme_content,
-                            repo_readme_path=repo_readme_path,
-                            metadata={"category": cat, "source": "repository_file"},
-                        )
+                    if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                        summary_stats["requests"] += 1
+                        summary_payload = None
+                        failed_due_to_exception = False
+                        try:
+                            summary_payload = summary_generator.summarize(
+                                doc_id=doc_id,
+                                content=content,
+                                repo_name=repo_name,
+                                repo_readme=repo_readme_content,
+                                repo_readme_path=repo_readme_path,
+                                metadata={"category": cat, "source": "repository_file"},
+                            )
+                        except Exception as exc:
+                            failed_due_to_exception = True
+                            summary_stats["failures"] += 1
+                            logger.warning("Summary generation failed for %s: %s", doc_id, exc)
                         if summary_payload is not None:
+                            summary_stats["responses"] += 1
+                            if summary_payload.cached:
+                                summary_stats["cached_hits"] += 1
                             summary_meta = {
                                 "source_document": doc_id,
                                 "category": cat,
@@ -746,6 +769,8 @@ def build_txtai_index(
                             )
                             auto_model_weights[doc_id] = summary_payload.weight
                             summarized_docs.add(doc_id)
+                        elif not failed_due_to_exception:
+                            summary_stats["failures"] += 1
                     document = Document(path=file_path, content=content, metadata={"doc_id": doc_id})
                     chunks = pipeline.chunk_documents([document], config=chunk_config)
                     if not chunks:
@@ -780,16 +805,27 @@ def build_txtai_index(
                             f"Path: {relative_path}\nType: Repository Document\n\n"
                         )
                         full_content = metadata + content
-                        if summary_generator is not None and doc_id not in summarized_docs:
-                            summary_payload = summary_generator.summarize(
-                                doc_id=doc_id,
-                                content=full_content,
-                                repo_name=repo_name,
-                                repo_readme=repo_readme_content,
-                                repo_readme_path=repo_readme_path,
-                                metadata={"category": cat, "source": "repository_pdf"},
-                            )
+                        if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                            summary_stats["requests"] += 1
+                            summary_payload = None
+                            failed_due_to_exception = False
+                            try:
+                                summary_payload = summary_generator.summarize(
+                                    doc_id=doc_id,
+                                    content=full_content,
+                                    repo_name=repo_name,
+                                    repo_readme=repo_readme_content,
+                                    repo_readme_path=repo_readme_path,
+                                    metadata={"category": cat, "source": "repository_pdf"},
+                                )
+                            except Exception as exc:
+                                failed_due_to_exception = True
+                                summary_stats["failures"] += 1
+                                logger.warning("Summary generation failed for %s: %s", doc_id, exc)
                             if summary_payload is not None:
+                                summary_stats["responses"] += 1
+                                if summary_payload.cached:
+                                    summary_stats["cached_hits"] += 1
                                 summary_meta = {
                                     "source_document": doc_id,
                                     "category": cat,
@@ -809,6 +845,8 @@ def build_txtai_index(
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
                                 summarized_docs.add(doc_id)
+                            elif not failed_due_to_exception:
+                                summary_stats["failures"] += 1
                         document = Document(path=pdf_path, content=full_content, metadata={"doc_id": doc_id})
                         chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
@@ -869,16 +907,27 @@ def build_txtai_index(
                             f"Source: {article.get('url', 'Unknown')}\nType: Journal Article\n\n"
                         )
                         full_content = metadata + content
-                        if summary_generator is not None and doc_id not in summarized_docs:
-                            summary_payload = summary_generator.summarize(
-                                doc_id=doc_id,
-                                content=full_content,
-                                repo_name=cat,
-                                repo_readme=None,
-                                repo_readme_path=None,
-                                metadata={"category": cat, "source": "journal_pdf", "article": article_name},
-                            )
+                        if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                            summary_stats["requests"] += 1
+                            summary_payload = None
+                            failed_due_to_exception = False
+                            try:
+                                summary_payload = summary_generator.summarize(
+                                    doc_id=doc_id,
+                                    content=full_content,
+                                    repo_name=cat,
+                                    repo_readme=None,
+                                    repo_readme_path=None,
+                                    metadata={"category": cat, "source": "journal_pdf", "article": article_name},
+                                )
+                            except Exception as exc:
+                                failed_due_to_exception = True
+                                summary_stats["failures"] += 1
+                                logger.warning("Summary generation failed for %s: %s", doc_id, exc)
                             if summary_payload is not None:
+                                summary_stats["responses"] += 1
+                                if summary_payload.cached:
+                                    summary_stats["cached_hits"] += 1
                                 summary_meta = {
                                     "source_document": doc_id,
                                     "category": cat,
@@ -897,6 +946,8 @@ def build_txtai_index(
                                 )
                                 auto_model_weights[doc_id] = summary_payload.weight
                                 summarized_docs.add(doc_id)
+                            elif not failed_due_to_exception:
+                                summary_stats["failures"] += 1
                         document = Document(path=pdf_file, content=full_content, metadata={"doc_id": doc_id})
                         chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
@@ -936,6 +987,8 @@ def build_txtai_index(
             else:
                 failures["failed_pdf_files"].append(f"{pdf_file}: No PDF processing available")
                 pdf_status[str(pdf_file)] = {"status": "no_processing"}
+    summary_stats["documents_added"] = len(summary_documents)
+    failures["summary_stats"] = summary_stats
     if summary_documents:
         documents.extend(summary_documents)
     total_indexed_documents = len(documents)
@@ -1191,6 +1244,26 @@ if __name__ == "__main__":
                 if indexing_failures.get("fatal_errors"):
                     for err in indexing_failures["fatal_errors"]:
                         logger.error(f"  🚫 Fatal: {err}")
+                summary_stats = indexing_failures.get("summary_stats")
+                if summary_stats:
+                    logger.info("\n🧠 LLM SUMMARIES:")
+                    configured = summary_stats.get("configured", False)
+                    enabled = summary_stats.get("enabled", False)
+                    if configured:
+                        status_icon = "✅" if enabled else "⛔️"
+                        logger.info(f"  {status_icon} Summaries enabled: {enabled}")
+                    else:
+                        logger.info("  ⏸️  Summaries disabled (flag not set)")
+                    if enabled:
+                        logger.info(f"  📨 Summary requests: {summary_stats.get('requests', 0)}")
+                        logger.info(f"  📝 Summaries returned: {summary_stats.get('responses', 0)}")
+                        if summary_stats.get("cached_hits"):
+                            logger.info(f"  ♻️ Cached hits: {summary_stats.get('cached_hits', 0)}")
+                        if summary_stats.get("failures"):
+                            logger.info(f"  ❌ Summary failures: {summary_stats.get('failures', 0)}")
+                        logger.info(f"  📦 Summary documents added: {summary_stats.get('documents_added', 0)}")
+                    elif configured:
+                        logger.info("  ℹ️  Summaries configured but disabled (check GEMINI_API_KEY or permissions).")
             total_failures = (
                 sum(len(v) for k, v in indexing_failures.items() if k.startswith("failed"))
                 + len(indexing_failures.get("fatal_errors", []))

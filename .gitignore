@@ -147,6 +147,8 @@ knowledge_base/embeddings_*/
 knowledge_base/embeddings/models/
 *.sqlite-journal
 cache
+tmp_emb
+test_summary_cache
 
 # Local stuff
 bot/config/*

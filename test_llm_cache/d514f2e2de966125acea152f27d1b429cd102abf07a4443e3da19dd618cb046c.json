@@ -1,0 +1,8 @@
+{
+  "summary": "This file implements the core utilities for generating structured summaries of repository documents using Google Gemini large language models. The central `SummaryGenerator` class orchestrates the process, featuring robust caching based on content hashes to optimize API calls and avoid redundant computations. It intelligently trims document content and repository READMEs to manage token limits and constructs detailed prompts for the LLM, incorporating general instructions, repository context (name, README), metadata, and illustrative examples to ensure high-quality, relevant summaries. Summaries are returned as `SummaryResult` objects, which include the summary text, a calculated `weight` (reflecting relative usefulness for retrieval), and the model used. The module requires a `GEMINI_API_KEY` and the `google-genai` library for LLM interaction, handling invocation, parsing JSON responses, and stripping markdown formatting. It serves as a critical component for populating Nancy Brain's knowledge base.",
+  "weight": 1.75,
+  "model": "gemini-2.5-flash",
+  "timestamp": 1759960739,
+  "doc_id": "nancy-brain/nancy_brain/summarization.py",
+  "repo_readme_path": null
+}
