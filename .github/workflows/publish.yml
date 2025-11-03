@@ -16,7 +16,7 @@ jobs:
     environment: release
     permissions:
       id-token: write  # For trusted publishing
-      contents: read
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
@@ -35,6 +35,9 @@ jobs:
       run: |
         echo "BUILD_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
         echo "BUILD_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
+        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          echo "PACKAGE_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+        fi
 
     - name: Build package
       run: |
@@ -48,3 +51,24 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         packages-dir: ./dist/
+        skip-existing: true
+
+    - name: Verify published package
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        python -m pip install --upgrade pip
+        pip install --no-cache-dir "nancy-brain==${PACKAGE_VERSION}"
+        python -c "import nancy_brain; print(nancy_brain.__version__)"
+
+    - name: Create GitHub release with artifacts
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: nancy-brain ${{ github.ref_name }}
+        generate_release_notes: true
+        files: |
+          dist/*.whl
+          dist/*.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
