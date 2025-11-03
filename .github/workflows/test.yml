@@ -46,6 +46,7 @@ jobs:
     - name: Test with pytest
       env:
         KMP_DUPLICATE_LIB_OK: "TRUE"
+        NB_ALLOW_INSECURE: "true"
       run: |
         coverage run -m pytest tests/ -v
         coverage report --include="rag_core/*,nancy_brain/*,connectors/*,scripts/*"
