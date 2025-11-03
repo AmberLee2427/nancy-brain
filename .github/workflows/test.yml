@@ -47,6 +47,7 @@ jobs:
       env:
         KMP_DUPLICATE_LIB_OK: "TRUE"
         NB_ALLOW_INSECURE: "true"
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       run: |
         coverage run -m pytest tests/ -v
         coverage report --include="rag_core/*,nancy_brain/*,connectors/*,scripts/*"
