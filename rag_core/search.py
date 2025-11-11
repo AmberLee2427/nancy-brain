@@ -5,9 +5,10 @@ Search for relevant documents using embeddings.
 # imports
 import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Set
 import re
 import difflib
+import sqlite3
 from nancy_brain.chunking import strip_chunk_suffix
 from .types import get_file_type_category
 
@@ -98,6 +99,9 @@ class Search:
     def _single_embedding_search(self, query: str, limit: int) -> List[Dict[str, str]]:
         """Perform search with single embedding model (backward compatibility)."""
         results = self.general_embeddings.search(query, limit * 50)
+        fallback = self._id_match_fallback(query, {r.get("id") for r in results}, limit * 2)
+        if fallback:
+            results.extend(fallback)
         # Attach highlights computed from query
         for r in results:
             r.setdefault("highlights", [])
@@ -214,6 +218,58 @@ class Search:
 
         # Send all merged results - let _process_and_rank_results do the reweighting and limiting
         return self._process_and_rank_results(merged_results, limit, dual_scores=True)
+
+    def _id_match_fallback(self, query: str, existing_ids: Set[str], limit: int) -> List[Dict]:
+        """Fallback that surfaces documents whose IDs contain query tokens (repo names, paths, etc.)."""
+        if not query or limit <= 0:
+            return []
+        tokens = []
+        for piece in re.split(r"[\\s/\\\\,_-]+", query):
+            token = piece.strip().lower()
+            if len(token) >= 3:
+                tokens.append(token)
+        if not tokens:
+            return []
+        db_path = self.embeddings_path / "index" / "documents"
+        if not db_path.exists():
+            return []
+        matches: List[Dict] = []
+        seen = set(existing_ids or set())
+        try:
+            conn = sqlite3.connect(str(db_path))
+        except Exception:
+            return []
+        try:
+            for tok in tokens[:3]:  # limit the LIKE scans
+                like = f"%{tok}%"
+                try:
+                    cursor = conn.execute(
+                        "SELECT id, text FROM sections WHERE lower(id) LIKE ? ORDER BY entry DESC LIMIT ?",
+                        (like, limit * 2),
+                    )
+                except Exception:
+                    continue
+                for doc_id, text in cursor.fetchall():
+                    if not doc_id or doc_id in seen:
+                        continue
+                    seen.add(doc_id)
+                    base_doc_id = strip_chunk_suffix(doc_id)
+                    matches.append(
+                        {
+                            "id": doc_id,
+                            "text": text or "",
+                            "score": 0.95,
+                            "data": {"source_document": base_doc_id, "match_reason": "id_substring"},
+                        }
+                    )
+                    if len(matches) >= limit:
+                        return matches
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return matches
 
     def _process_and_rank_results(
         self, results: List[Dict], limit: int, dual_scores: bool = False

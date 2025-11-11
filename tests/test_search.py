@@ -348,3 +348,76 @@ def test_search_no_embeddings_loaded(tmp_path):
 
     results = search.search("test query", limit=5)
     assert results == []
+
+
+def _build_minimal_index(base_path: Path):
+    """Utility to create a minimal sqlite sections table used by fallback tests."""
+    index_dir = base_path / "index"
+    index_dir.mkdir(parents=True, exist_ok=True)
+    db_path = index_dir / "documents"
+
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sections (
+                indexid INTEGER PRIMARY KEY AUTOINCREMENT,
+                id TEXT,
+                text TEXT,
+                tags TEXT,
+                entry DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute("DELETE FROM sections")
+        rows = [
+            (
+                "knowledge_base/raw/microlensing_tools/VBMicrolensing/README.md::chunk-0",
+                "# VBMicrolensing\n`VBMicrolensing` is a microlensing toolkit.",
+            ),
+            (
+                "knowledge_base/raw/microlensing_tools/SomeOtherRepo/README.md::chunk-0",
+                "Unrelated repository text.",
+            ),
+        ]
+        conn.executemany("INSERT INTO sections (id, text) VALUES (?, ?)", rows)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_id_match_fallback_returns_matches(tmp_path):
+    """_id_match_fallback should surface IDs that contain query tokens."""
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+
+    matches = Search._id_match_fallback(search, "VBMicrolensing", set(), limit=5)
+    assert matches, "Expected fallback to return results"
+    assert any("VBMicrolensing" in match["id"] for match in matches)
+    assert matches[0]["data"]["source_document"].startswith("knowledge_base/raw/microlensing_tools/VBMicrolensing")
+
+
+def test_search_includes_id_fallback_results(tmp_path):
+    """search() should return fallback matches when semantic search misses."""
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+    search.use_dual_embedding = False
+    search.code_embeddings = None
+    search.extension_weights = {}
+    search.model_weights = {}
+
+    mock_embeddings = Mock()
+    mock_embeddings.search.return_value = []
+    search.general_embeddings = mock_embeddings
+
+    results = search.search("VBMicrolensing", limit=3)
+    assert results, "Expected fallback results to be returned"
+    assert any("VBMicrolensing" in r["source_document"] for r in results)
