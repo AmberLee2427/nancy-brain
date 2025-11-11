@@ -12,11 +12,11 @@ load_dotenv("config/.env")
 
 @pytest.mark.integration
 def test_summary_on_readme(tmp_path):
-    """Ensure SummaryGenerator can produce a summary when GEMINI_API_KEY is available."""
+    """Ensure SummaryGenerator can produce a summary when ANTHROPIC_API_KEY is available."""
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        pytest.skip("GEMINI_API_KEY not configured")
+        pytest.skip("ANTHROPIC_API_KEY not configured")
 
     readme_path = Path("README.md")
     if not readme_path.exists():

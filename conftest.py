@@ -1,7 +1,7 @@
-import pathlib
+from pathlib import Path
 
 
-def pytest_ignore_collect(path, config):
+def pytest_ignore_collect(collection_path: Path, config):
     """Prevent pytest from collecting files under the `knowledge_base` folder.
 
     This is a defensive measure so that running `pytest` in the repository will
@@ -9,8 +9,8 @@ def pytest_ignore_collect(path, config):
     that pulls in heavy optional packages.
     """
     try:
-        p = pathlib.Path(path)
-        parts = {p_part for p_part in p.parts}
+        # Path.parts handles cross-platform separators; convert to set for contains check.
+        parts = set(collection_path.parts)
         if "knowledge_base" in parts:
             return True
     except Exception:

@@ -18,13 +18,13 @@ from nancy_brain.summarization import SummaryGenerator
 def test_real_summary_generator():
     """Test the actual SummaryGenerator class used in build_knowledge_base.py"""
 
-    # Check if GEMINI_API_KEY is set
-    if not os.environ.get("GEMINI_API_KEY"):
-        print("ERROR: GEMINI_API_KEY environment variable not set")
+    # Check if ANTHROPIC_API_KEY is set
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ERROR: ANTHROPIC_API_KEY environment variable not set")
         return
 
     print("Testing real SummaryGenerator class...")
-    print(f"Using API key: {os.environ.get('GEMINI_API_KEY')[:10]}...")
+    print(f"Using API key: {os.environ.get('ANTHROPIC_API_KEY')[:10]}...")
     print("=" * 60)
 
     # Create cache directory like the real build process
