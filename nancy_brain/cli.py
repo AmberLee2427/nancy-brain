@@ -583,5 +583,26 @@ def add_article(article_url, article_name, category, description):
         click.echo(f"❌ Error writing to {config_file}: {e}")
 
 
+@cli.command("add-new-user")
+@click.argument("username")
+@click.argument("password")
+def add_new_user(username: str, password: str):
+    """Create a new Nancy Brain login user (uses NB_USERS_DB)."""
+    try:
+        from connectors.http_api import auth
+    except ImportError as exc:
+        click.echo(f"❌ Failed to import auth module: {exc}")
+        sys.exit(1)
+
+    try:
+        auth.create_user_table()
+        auth.add_user(username, password)
+    except Exception as exc:
+        click.echo(f"❌ Failed to add user '{username}': {exc}")
+        sys.exit(1)
+
+    click.echo(f"✅ Added user '{username}'")
+
+
 if __name__ == "__main__":
     cli()

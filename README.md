@@ -59,6 +59,7 @@ Perfect for non-technical users and rapid prototyping!
 nancy-brain init <project>        # Initialize new project
 nancy-brain add-repo <url>        # Add GitHub repositories  
 nancy-brain add-article <url> <name>  # Add PDF articles
+nancy-brain add-new-user <user> <pass>  # Create login credentials
 nancy-brain build                 # Build knowledge base
 nancy-brain search "query"        # Search knowledge base
 nancy-brain serve                 # Start HTTP API server
@@ -214,6 +215,18 @@ Common knobs you can export (or place in `config/.env`) to tune builds and the a
 | `TOKENIZERS_PARALLELISM` | Suppress HF tokenizer warning | false |
 
 > Tip: First builds download Hugging Face models; set `NB_TEXT_EMBEDDING_MODEL` to a local path (or run a quick `python - <<'PY' …` prefetch) if your network is slow.
+
+### Creating login users
+
+Nancy Brain’s HTTP API and Streamlit UI expect credentials stored in `NB_USERS_DB` (default `users.db`).  
+Use the CLI to add hashed logins without touching the database directly:
+
+```bash
+nancy-brain add-new-user <username> <password>
+```
+
+The command bootstraps the auth tables (if they do not exist), hashes the password with `passlib`, and saves the record in the configured SQLite file.  
+Point `NB_USERS_DB` to a shared path before running the command if you need a centralized user store.
 
 ---
 ## 4. Building the Knowledge Base
