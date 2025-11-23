@@ -286,11 +286,33 @@ class NancyMCPServer:
 
         text = result.get("text", "")
         github_url = result.get("github_url", "")
+        # Get total lines in document
+        try:
+            from rag_core.store import Store
 
+            store = Store(self.rag_service.embeddings_path.parent)
+            doc_path = store.base_path / doc_id
+            if not doc_path.exists():
+                doc_path = store.base_path / f"{doc_id}.txt"
+            total_lines = 0
+            if doc_path.exists():
+                with open(doc_path, "r") as f:
+                    total_lines = sum(1 for _ in f)
+        except Exception:
+            total_lines = None
+
+        # Explicitly indicate line range and partial/full
+        partial = start != 0 or (end is not None and total_lines is not None and end < total_lines)
         response_text = f"📄 **Document:** {doc_id}\n"
         if github_url:
             response_text += f"🔗 **GitHub:** {github_url}\n"
-        response_text += f"\n```\n{text}\n```"
+        response_text += f"**Lines:** {start} - {end if end is not None else 'EOF'}"
+        if total_lines is not None:
+            response_text += f" / {total_lines} total"
+        if partial:
+            response_text += "\n⚠️ *Partial passage returned*"
+        fence = "```"
+        response_text += f"\n\n{fence}\n{text}\n{fence}"
 
         return [types.TextContent(type="text", text=response_text)]
 
@@ -305,16 +327,39 @@ class NancyMCPServer:
 
         response_text = f"📄 **Retrieved {len(results)} passages:**\n\n"
 
+        from rag_core.store import Store
+
+        store = Store(self.rag_service.embeddings_path.parent)
         for i, result in enumerate(results, 1):
             doc_id = result.get("doc_id", "unknown")
             text = result.get("text", "")
             github_url = result.get("github_url", "")
-
+            start = items[i - 1].get("start", 0)
+            end = items[i - 1].get("end")
+            # Get total lines in document
+            try:
+                doc_path = store.base_path / doc_id
+                if not doc_path.exists():
+                    doc_path = store.base_path / f"{doc_id}.txt"
+                total_lines = 0
+                if doc_path.exists():
+                    with open(doc_path, "r") as f:
+                        total_lines = sum(1 for _ in f)
+            except Exception:
+                total_lines = None
+            partial = start != 0 or (end is not None and total_lines is not None and end < total_lines)
             response_text += f"**{i}. {doc_id}**\n"
             if github_url:
                 response_text += f"🔗 {github_url}\n"
-            response_text += f"```\n{text}\n```\n\n"
-
+            response_text += f"**Lines:** {start} - {end if end is not None else 'EOF'}"
+            if total_lines is not None:
+                response_text += f" / {total_lines} total"
+            if partial:
+                response_text += "\n⚠️ *Partial passage returned*"
+            fence = "```"
+            response_text += f"\n\n{fence}\n{text}\n{fence}"
+            if i < len(results):
+                response_text += "\n"
         return [types.TextContent(type="text", text=response_text)]
 
     async def _handle_tree(self, args: Dict[str, Any]) -> list[types.TextContent]:
