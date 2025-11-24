@@ -131,6 +131,9 @@
   - Cleaner dependency injection
   - Better error handling
   - Configuration validation
+- [ ] **Fix retrieve to use indexed content instead of raw files**
+  - `retrieve` should serve passages from the embeddings/indexed store (what search returns), not depend on raw files existing on disk
+  - Ensure GitHub URLs and line ranges are derived from indexed metadata
 - [ ] **Improve logging**
   - Structured logging with levels
   - Better error messages

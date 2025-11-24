@@ -537,16 +537,36 @@ class NancyMCPServer:
 
 async def main():
     """Main entry point."""
+
     parser = argparse.ArgumentParser(description="Nancy Brain MCP Server")
     parser.add_argument("config_path", help="Path to repositories.yml config file")
     parser.add_argument("embeddings_path", help="Path to embeddings directory")
-    parser.add_argument("--weights", help="Path to weights.yaml file", default=None)
+    parser.add_argument(
+        "--weights",
+        help="Path to index_weights.yaml file (extension/path weights only, NOT model weights)",
+        default="config/index_weights.yaml",
+    )
+    parser.add_argument(
+        "--http", help="Run Nancy Brain MCP server in HTTP mode (for Custom GPT connections)", action="store_true"
+    )
+    parser.add_argument(
+        "--http-and-stdio",
+        help="Run Nancy Brain MCP server in BOTH HTTP and stdio modes (for testing both interfaces)",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--port",
+        help="HTTP port to listen on (default: 8000)",
+        type=int,
+        default=8000,
+    )
 
     args = parser.parse_args()
 
     config_path = Path(args.config_path)
     embeddings_path = Path(args.embeddings_path)
-    weights_path = Path(args.weights) if args.weights else None
+    weights_path = Path(args.weights) if args.weights else Path("config/index_weights.yaml")
+    port = args.port
 
     # Validate paths
     if not config_path.exists():
@@ -561,12 +581,117 @@ async def main():
         print(f"❌ Weights file not found: {weights_path}")
         sys.exit(1)
 
+    # Validate that the weights file is NOT a model weights file (should not contain per-document weights)
+    import yaml
+
+    try:
+        with open(weights_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+            forbidden_keys = {"model_weights", "doc_weights", "documents"}
+            if any(k in data for k in forbidden_keys):
+                print(
+                    f"❌ ERROR: The weights file '{weights_path}' appears to be a model weights file (contains {forbidden_keys}). Please provide an index_weights.yaml file for extension/path weights only."
+                )
+                sys.exit(1)
+    except Exception as e:
+        print(f"❌ Failed to validate weights file: {e}")
+        sys.exit(1)
+
     # Create and run server
     server = NancyMCPServer()
 
     try:
         await server.initialize(config_path, embeddings_path, weights_path)
-        await server.run()
+
+        def build_http_app():
+            from fastapi import FastAPI, Request
+
+            app = FastAPI()
+
+            @app.get("/health")
+            async def health():
+                if hasattr(server.rag_service, "system_status"):
+                    status = await server.rag_service.system_status()
+                else:
+                    status = {"status": "ok"}
+                return status
+
+            @app.get("/search")
+            async def search(query: str = "", limit: int = 5):
+                results = await server.rag_service.search_docs(query=query, limit=limit)
+                return {"hits": results}
+
+            @app.post("/retrieve")
+            async def retrieve(request: Request):
+                data = await request.json()
+                doc_id = data.get("doc_id")
+                start = data.get("start")
+                end = data.get("end")
+                try:
+                    result = await server.rag_service.retrieve(doc_id, start, end)
+                    return {"passage": result}
+                except FileNotFoundError:
+                    from fastapi.responses import JSONResponse
+
+                    return JSONResponse({"error": f"Document not found: {doc_id}"}, status_code=404)
+                except Exception as exc:
+                    from fastapi.responses import JSONResponse
+
+                    return JSONResponse({"error": str(exc)}, status_code=500)
+
+            @app.post("/embeddings/sql")
+            async def embeddings_sql(request: Request):
+                data = await request.json()
+                sql = data.get("sql", "")
+                # Reuse search_docs as a lightweight fallback for SQL-like queries
+                try:
+                    rows = await server.rag_service.search_docs(query=sql, limit=500)
+                except Exception:
+                    rows = []
+                return {"rows": rows}
+
+            @app.get("/doc/{doc_id}/url")
+            async def doc_url(doc_id: str):
+                meta = server.rag_service.registry.get_meta(doc_id)
+                return {"github_url": meta.github_url}
+
+            @app.post("/mcp")
+            async def mcp_endpoint(request: Request):
+                payload = await request.json()
+                return {"received": payload}
+
+            return app
+
+        if args.http_and_stdio:
+            # Run BOTH HTTP and stdio servers concurrently inside this event loop.
+            import uvicorn
+
+            app = build_http_app()
+
+            print(f"🌐 Nancy Brain MCP Server running in HTTP mode on port {port}")
+            print("🔗 Nancy Brain MCP Server also running in stdio mode")
+
+            config = uvicorn.Config(app, host="0.0.0.0", port=port, loop="asyncio")
+            http_server = uvicorn.Server(config)
+
+            http_task = asyncio.create_task(http_server.serve())
+            stdio_task = asyncio.create_task(server.run())
+
+            await asyncio.gather(http_task, stdio_task)
+        elif args.http:
+            # HTTP mode only
+            import uvicorn
+
+            app = build_http_app()
+
+            print(f"🌐 Nancy Brain MCP Server running in HTTP mode on port {port}")
+
+            config = uvicorn.Config(app, host="0.0.0.0", port=port, loop="asyncio")
+            http_server = uvicorn.Server(config)
+            await http_server.serve()
+        else:
+            # Default: stdio mode (secure, recommended for bot)
+            await server.run()
     except KeyboardInterrupt:
         print("\n👋 Nancy Brain MCP Server shutting down...")
     except Exception as e:

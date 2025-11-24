@@ -1,3 +1,14 @@
+
+# Nancy Brain Index Weights File
+# This file defines extension and path-based weights for document retrieval.
+# Intended weight type: EXTENSION/PATH weights ONLY (not per-document model weights)
+#
+# Do NOT include per-document model weights here. For model weights, use model_weights.yaml.
+#
+# Example tags:
+#   extensions:   # file extension weights
+#   path_includes: # path substring weights
+#
 extensions:
   .json: 0.7
   .md: 0.98
