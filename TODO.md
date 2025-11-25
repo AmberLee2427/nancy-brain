@@ -138,6 +138,8 @@
   - Structured logging with levels
   - Better error messages
   - Debug mode support
+- [ ] **Commit minimal KB artifacts for slack-bot tests**
+  - Include enough embeddings/configs in `ref/nancy-brain/knowledge_base` so slack-bot MCP integration tests run without manual KB builds
 - [ ] **Performance optimizations**
   - Lazy loading of models
   - Caching improvements
