@@ -76,7 +76,7 @@
 ## 🎨 Polish & UX (Future Versions)
 
 ### Web Interface Improvements
-- [ ] **Enhanced Streamlit UI**
+- ✅ **Enhanced Streamlit UI**
   - ✅ Better error handling and feedback
   - ✅ Progress bars for long operations
   - ✅ Export/import configurations
@@ -88,14 +88,12 @@
 ### CLI Enhancements
 - [ ] **Improved CLI error handling**
   - Better error messages with actionable suggestions
-  - Graceful handling of missing dependencies
   - Clear validation errors for configuration files
-  - Helpful hints for common user mistakes
 - [ ] **Better CLI experience**
-  - Progress bars for build operations
+  -  [ ]Progress bars for build operations
   - ✅ Colored output for better readability
-  - Interactive configuration wizard
-  - Auto-completion support
+  - [ ] Interactive configuration wizard
+  - [ ] Auto-completion support
 - [ ] **More build options**
   - ✅ `--dry-run` 
   - ✅ `--category` 
@@ -115,14 +113,26 @@
   - Search history and favorites
 - [ ] **Multi-model Support**
   - ✅ Support for different embedding models
-  - Model comparison and benchmarking
+  - [ ] Model comparison and benchmarking
   - ✅ Automatic model selection
 - [ ] **Advanced PDF Processing**
-  - Better table extraction
-  - Image and figure processing
-  - Citation link extraction
+  - ~~[x] Better table extraction~~
+  - ~~[x] Image and figure processing~~
+  - [ ] Citation link extraction
   - [ ] ADS API integration for article downloads
+      - [ ]
+  - [ ] ADS library config
+      - [ ] https://github.com/adsabs/adsabs-dev-api/blob/master/API_documentation_Python/Libraries_API_Python.ipynb
+  - [ ] bibtex library config
+      - [ ] https://nlesc.github.io/litstudy/api/types.html#litstudy.types.DocumentSet
   - [ ] Implement DeepSeek OCR pipeline
+- [ ] **ADS Library Integration**
+- [ ] **MCP Re-hosted Tools**
+  - memory mcp
+  - wikipedia mcp
+  - arxiv mcp
+  - github mcp
+  
 
 ## 🔧 Technical Debt & Maintenance
 
@@ -140,6 +150,8 @@
   - Debug mode support
 - [ ] **Commit minimal KB artifacts for slack-bot tests**
   - Include enough embeddings/configs in `ref/nancy-brain/knowledge_base` so slack-bot MCP integration tests run without manual KB builds
+  - include them in the manifest and fetch them from package files with `nancy-brain get-test-KB`, or somehting like that.
+  The goal is a minimal running KB that can be built from a PyPI install of nancy-brain
 - [ ] **Performance optimizations**
   - Lazy loading of models
   - Caching improvements
@@ -155,7 +167,19 @@
   - ✅ Rate limiting
   - ✅ Authentication improvements
 
-## 📸 Content Creation (When Ready)
+### Hosting
+- [ ] Host a remote MCP server
+- [ ] Actions
+- [ ] Custom GPT
+
+### Chunking
+- [ ] Delegate to a subpackage (`chunky`)
+- [ ] Upgrade chunking strategy
+  - Notebooks
+  - Deepseek OCR
+  - Visual inspection checks
+
+## 📸 Content Creation (lowest priority)
 
 ### Screenshots & Media
 - [ ] **Web UI Screenshots**
@@ -179,7 +203,7 @@
 
 ### v0.2.x (Documentation Release)
 - [x] Complete Read the Docs setup
-- [ ] All integration examples
+- [ ] ~~All integration examples~~
 - [x] Improved test coverage
 - [x] Better error handling
 
@@ -206,14 +230,10 @@
 - [ ] Add category back as a build option
 
 ## 🤝 Community & Adoption
-- [ ] Create GitHub issue templates
 - [ ] Set up contributing guidelines
 - [ ] Add code of conduct
-- [ ] Create community discussion forum
-- [ ] Reach out to potential users/contributors
 
 ## 🐞 Bug Squashing (User Feedback)
-
 - [ ] **`explore_document_tree` returns only "unknown" entries.**
     - **Description:** The `explore_document_tree` tool is not working correctly. It should display the file and directory structure of the knowledge base, but instead it only shows "unknown" for all entries. This makes it impossible to browse the knowledge base.
 - [ ] **`retrieve_document_passage` fails to find documents from search results.**
