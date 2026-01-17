@@ -207,6 +207,19 @@
 - [x] Improved test coverage
 - [x] Better error handling
 
+### v0.4.x (Containerize)
+- [ ] MCP Server Dockerization (in ref/nancy-brain/)
+ * [ ] Create Dockerfile with embeddings build step
+ * [ ] Add /rebuild API endpoint for triggering updates
+ * [ ] Implement simple API key auth middleware
+- [ ] Slack Bot Docker Setup (root directory)
+ * [ ] Dockerfile for the bot service
+ * [ ] docker-compose.yml connecting bot → MCP server
+ * [ ] Environment variable management
+- [ ] API Key Configuration
+ * Add MCP_API_KEY to both services
+ * Update MCPRAGAdapter to send auth headers
+
 ### v0.3.x (Polish Release)
 - [ ] Enhanced UI/UX
 - [ ] Performance improvements
