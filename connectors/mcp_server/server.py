@@ -604,9 +604,17 @@ async def main():
         await server.initialize(config_path, embeddings_path, weights_path)
 
         def build_http_app():
-            from fastapi import FastAPI, Request
+            from fastapi import FastAPI, Request, HTTPException, Header, Depends
+            from typing import Optional
 
             app = FastAPI()
+
+            # Simple API key authentication
+            def verify_api_key(x_api_key: Optional[str] = Header(None)):
+                expected_key = os.environ.get("MCP_API_KEY")
+                if expected_key and x_api_key != expected_key:
+                    raise HTTPException(status_code=401, detail="Invalid API key")
+                return x_api_key
 
             @app.get("/health")
             async def health():
@@ -617,12 +625,12 @@ async def main():
                 return status
 
             @app.get("/search")
-            async def search(query: str = "", limit: int = 5):
+            async def search(query: str = "", limit: int = 5, api_key: str = Depends(verify_api_key)):
                 results = await server.rag_service.search_docs(query=query, limit=limit)
                 return {"hits": results}
 
             @app.post("/retrieve")
-            async def retrieve(request: Request):
+            async def retrieve(request: Request, api_key: str = Depends(verify_api_key)):
                 data = await request.json()
                 doc_id = data.get("doc_id")
                 start = data.get("start")
@@ -640,7 +648,7 @@ async def main():
                     return JSONResponse({"error": str(exc)}, status_code=500)
 
             @app.post("/embeddings/sql")
-            async def embeddings_sql(request: Request):
+            async def embeddings_sql(request: Request, api_key: str = Depends(verify_api_key)):
                 data = await request.json()
                 sql = data.get("sql", "")
                 # Reuse search_docs as a lightweight fallback for SQL-like queries
@@ -651,9 +659,30 @@ async def main():
                 return {"rows": rows}
 
             @app.get("/doc/{doc_id}/url")
-            async def doc_url(doc_id: str):
+            async def doc_url(doc_id: str, api_key: str = Depends(verify_api_key)):
                 meta = server.rag_service.registry.get_meta(doc_id)
                 return {"github_url": meta.github_url}
+
+            @app.post("/rebuild")
+            async def rebuild_embeddings(request: Request, api_key: str = Depends(verify_api_key)):
+                """Trigger a rebuild of the embeddings index"""
+                import subprocess
+
+                try:
+                    # Run the build script in the background
+                    subprocess.Popen(
+                        [
+                            sys.executable,
+                            "-m",
+                            "nancy_brain.cli",
+                            "build",
+                            str(config_path),
+                            str(embeddings_path.parent),
+                        ]
+                    )
+                    return {"status": "rebuild_triggered", "message": "Embedding rebuild started in background"}
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to trigger rebuild: {str(e)}")
 
             @app.post("/mcp")
             async def mcp_endpoint(request: Request):
