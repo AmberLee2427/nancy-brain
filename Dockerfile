@@ -14,11 +14,13 @@ RUN apt-get update && apt-get install -y \
 
 # Copy project files
 COPY pyproject.toml ./
+COPY README.md ./
 COPY nancy_brain ./nancy_brain
 COPY rag_core ./rag_core
 COPY connectors ./connectors
 COPY scripts ./scripts
 COPY hatch_hooks.py ./
+COPY run_mcp_server.py ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
