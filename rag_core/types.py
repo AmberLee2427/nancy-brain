@@ -1,6 +1,6 @@
 # Data models for RAG core
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, Dict, Any
 
 
 @dataclass
@@ -23,6 +23,11 @@ class SearchHit:
     id: str
     text: str
     score: float
+    source_document: Optional[str] = None
+    line_start: Optional[int] = None
+    line_end: Optional[int] = None
+    chunk_index: Optional[int] = None
+    chunk_count: Optional[int] = None
 
 
 @dataclass
@@ -34,6 +39,11 @@ class Passage:
     github_url: str
     content_sha256: str
     index_version: str = ""
+    start: Optional[int] = None
+    end: Optional[int] = None
+    total_lines: Optional[int] = None
+    mode: Optional[str] = None
+    chunks: Optional[List[Dict[str, Any]]] = None
 
 
 # File-type categorization for weighting

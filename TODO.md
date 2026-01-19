@@ -218,6 +218,7 @@
  * [ ] Environment variable management
 - [ ] API Key Configuration
  * Add MCP_API_KEY to both services
+ * How does someone get an MCP_API_KEY from nancy?
  * Update MCPRAGAdapter to send auth headers
 
 ### v0.3.x (Polish Release)

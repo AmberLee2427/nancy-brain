@@ -16,18 +16,12 @@ The API will be available at `http://localhost:8000`.
 
 ### Search Documents
 
-**POST** `/search`
+**GET** `/search`
 
 Search the knowledge base for relevant documents.
 
 ```bash
-curl -X POST http://localhost:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "machine learning algorithms",
-    "limit": 5,
-    "threshold": 0.7
-  }'
+curl "http://localhost:8000/search?query=machine%20learning%20algorithms&limit=5&threshold=0.7"
 ```
 
 **Parameters:**
@@ -40,55 +34,83 @@ curl -X POST http://localhost:8000/search \
 **Response:**
 ```json
 {
-  "results": [
+  "hits": [
     {
-      "id": "repo/path/to/file.py",
+      "id": "repo/path/to/file.py::chunk-0003",
       "text": "relevant content...",
       "score": 0.85,
-      "github_url": "https://github.com/user/repo/blob/main/path/to/file.py"
+      "source_document": "repo/path/to/file.py",
+      "line_start": 121,
+      "line_end": 240,
+      "chunk_index": 2,
+      "chunk_count": 9
     }
-  ]
+  ],
+  "index_version": "1.0.0",
+  "trace_id": "trace-123"
 }
 ```
 
 ### Retrieve Document
 
-**GET** `/documents/{doc_id}`
+**POST** `/retrieve`
 
 Retrieve a specific document passage.
 
 ```bash
-curl "http://localhost:8000/documents/repo%2Fpath%2Fto%2Ffile.py?start=10&end=20"
+curl -X POST http://localhost:8000/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "doc_id": "repo/path/to/file.py",
+    "start": 10,
+    "end": 20
+  }'
 ```
 
 **Parameters:**
-- `doc_id` (string, required): Document identifier (URL-encoded)
-- `start` (integer, optional): Starting line number (default: 0)
-- `end` (integer, optional): Ending line number (default: full document)
+- `doc_id` (string, required): Document identifier
+- `start` (integer, optional): Starting line number (1-based, inclusive)
+- `end` (integer, optional): Ending line number (1-based, inclusive)
+- `window` (integer, optional): Chunk window size when `doc_id` is a chunk (default: 1)
 
 **Response:**
 ```json
 {
-  "doc_id": "repo/path/to/file.py",
-  "text": "document content...",
-  "start": 10,
-  "end": 20,
-  "github_url": "https://github.com/user/repo/blob/main/path/to/file.py"
+  "passage": {
+    "doc_id": "repo/path/to/file.py",
+    "text": "document content...",
+    "github_url": "https://github.com/user/repo/blob/main/path/to/file.py",
+    "content_sha256": "abcdef123456",
+    "start": 10,
+    "end": 20,
+    "total_lines": 420
+  },
+  "trace_id": "trace-123"
 }
+```
+
+**Chunk-window example (no line range):**
+```bash
+curl -X POST http://localhost:8000/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "doc_id": "repo/path/to/file.py::chunk-0003",
+    "window": 1
+  }'
 ```
 
 ### Batch Retrieve
 
-**POST** `/documents/batch`
+**POST** `/retrieve/batch`
 
 Retrieve multiple document passages in one request.
 
 ```bash
-curl -X POST http://localhost:8000/documents/batch \
+curl -X POST http://localhost:8000/retrieve/batch \
   -H "Content-Type: application/json" \
   -d '{
     "items": [
-      {"doc_id": "repo/file1.py", "start": 0, "end": 10},
+      {"doc_id": "repo/file1.py", "start": 1, "end": 10},
       {"doc_id": "repo/file2.py", "start": 5, "end": 15}
     ]
   }'
@@ -96,17 +118,17 @@ curl -X POST http://localhost:8000/documents/batch \
 
 ### List Documents
 
-**GET** `/documents`
+**GET** `/tree`
 
 Get a hierarchical list of all documents in the knowledge base.
 
 ```bash
-curl "http://localhost:8000/documents?max_depth=3&path=microlensing_tools"
+curl "http://localhost:8000/tree?depth=3&prefix=microlensing_tools"
 ```
 
 **Parameters:**
-- `max_depth` (integer, optional): Maximum tree depth (default: 3)
-- `path` (string, optional): Filter by path prefix
+- `depth` (integer, optional): Maximum tree depth (default: 3)
+- `prefix` (string, optional): Filter by path prefix
 
 ### Health Check
 
@@ -130,7 +152,7 @@ curl http://localhost:8000/health
 
 ## Authentication
 
-Currently, the HTTP API does not require authentication. In production deployments, you should add authentication and authorization layers.
+The HTTP API uses bearer authentication. Provide `Authorization: Bearer <token>` for protected endpoints. For development, you can set `NB_ALLOW_INSECURE=true`.
 
 ## Rate Limiting
 
@@ -166,15 +188,19 @@ Error responses include details:
 import requests
 
 # Search for documents
-response = requests.post("http://localhost:8000/search", json={
-    "query": "neural networks",
-    "limit": 5
+response = requests.get("http://localhost:8000/search", params={
+  "query": "neural networks",
+  "limit": 5
 })
-results = response.json()["results"]
+results = response.json()["hits"]
 
 # Retrieve a specific document
 doc_id = results[0]["id"]
-response = requests.get(f"http://localhost:8000/documents/{doc_id}")
+response = requests.post("http://localhost:8000/retrieve", json={
+  "doc_id": doc_id,
+  "start": 1,
+  "end": 40
+})
 document = response.json()
 ```
 
@@ -182,19 +208,20 @@ document = response.json()
 
 ```javascript
 // Search for documents
-const searchResponse = await fetch('http://localhost:8000/search', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({
-    query: 'machine learning',
-    limit: 5
-  })
-});
+const searchResponse = await fetch('http://localhost:8000/search?query=machine%20learning&limit=5');
 const results = await searchResponse.json();
 
 // Retrieve a document
-const docId = encodeURIComponent(results.results[0].id);
-const docResponse = await fetch(`http://localhost:8000/documents/${docId}`);
+const docId = results.hits[0].id;
+const docResponse = await fetch('http://localhost:8000/retrieve', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    doc_id: docId,
+    start: 1,
+    end: 40
+  })
+});
 const document = await docResponse.json();
 ```
 

@@ -52,6 +52,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys
 import asyncio
 import argparse
+import json
+import re
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -60,6 +63,7 @@ from mcp import types
 from mcp import stdio_server
 
 from rag_core.service import RAGService
+from nancy_brain.chunking import strip_chunk_suffix
 
 
 class NancyMCPServer:
@@ -123,12 +127,16 @@ class NancyMCPServer:
                             },
                             "start": {
                                 "type": "integer",
-                                "description": "Starting line number (0-based)",
-                                "default": 0,
+                                "description": "Starting line number (1-based, inclusive)",
                             },
                             "end": {
                                 "type": "integer",
-                                "description": "Ending line number (exclusive)",
+                                "description": "Ending line number (1-based, inclusive)",
+                            },
+                            "window": {
+                                "type": "integer",
+                                "description": "Number of surrounding chunks to include when doc_id is a chunk (default: 1)",
+                                "default": 1,
                             },
                         },
                         "required": ["doc_id"],
@@ -233,6 +241,111 @@ class NancyMCPServer:
             except Exception as e:
                 return [types.TextContent(type="text", text=f"❌ Error executing {name}: {str(e)}")]
 
+    def _parse_chunk_id(self, doc_id: str):
+        """Parse chunk identifiers and return (base, marker, index, width)."""
+        if not doc_id:
+            return None
+        match = re.match(r"^(?P<base>.+?)(?P<marker>(::chunk-|#chunk-|@chunk:|\|chunk:))(?P<idx>\d+)$", doc_id)
+        if not match:
+            return None
+        base = match.group("base")
+        marker = match.group("marker")
+        idx_str = match.group("idx")
+        return base, marker, int(idx_str), len(idx_str)
+
+    def _get_embeddings_db_path(self) -> Optional[Path]:
+        if not self.rag_service:
+            return None
+        try:
+            return Path(self.rag_service.embeddings_path) / "index" / "documents"
+        except Exception:
+            return None
+
+    def _fetch_section_row(self, conn: sqlite3.Connection, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a section row by id and return a dict with text/metadata if available."""
+        try:
+            columns = [row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()]
+        except Exception:
+            columns = []
+
+        if not columns:
+            return None
+
+        select_cols = ["id", "text"]
+        if "data" in columns:
+            select_cols.append("data")
+        if "metadata" in columns and "data" not in columns:
+            select_cols.append("metadata")
+
+        query = f"SELECT {', '.join(select_cols)} FROM sections WHERE id = ? LIMIT 1"
+        try:
+            row = conn.execute(query, (doc_id,)).fetchone()
+        except Exception:
+            return None
+        if not row:
+            return None
+
+        result = {"id": row[0], "text": row[1]}
+        if len(row) >= 3 and row[2]:
+            try:
+                meta = json.loads(row[2])
+                if isinstance(meta, dict):
+                    result["data"] = meta
+            except Exception:
+                pass
+        return result
+
+    def _retrieve_chunk_window(self, doc_id: str, window: int = 1) -> Optional[Dict[str, Any]]:
+        parsed = self._parse_chunk_id(doc_id)
+        if not parsed:
+            return None
+        base, marker, idx, width = parsed
+        db_path = self._get_embeddings_db_path()
+        if not db_path or not db_path.exists():
+            return None
+
+        fmt = f"{{:0{width}d}}" if width > 1 else "{}"
+        chunk_ids = []
+        for i in range(max(0, idx - window), idx + window + 1):
+            chunk_ids.append(f"{base}{marker}{fmt.format(i)}")
+
+        chunks = []
+        try:
+            conn = sqlite3.connect(str(db_path))
+        except Exception:
+            return None
+        try:
+            for cid in chunk_ids:
+                row = self._fetch_section_row(conn, cid)
+                if not row:
+                    continue
+                data = row.get("data") if isinstance(row.get("data"), dict) else {}
+                chunks.append(
+                    {
+                        "doc_id": row.get("id"),
+                        "text": row.get("text", ""),
+                        "line_start": data.get("line_start"),
+                        "line_end": data.get("line_end"),
+                        "chunk_index": data.get("chunk_index"),
+                        "chunk_count": data.get("chunk_count"),
+                        "source_document": data.get("source_document") or strip_chunk_suffix(row.get("id", "")),
+                    }
+                )
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        if not chunks:
+            return None
+
+        combined = []
+        for ch in chunks:
+            label = ch.get("doc_id") or "chunk"
+            combined.append(f"[Chunk] {label}\n{ch.get('text', '')}")
+        return {"text": "\n\n".join(combined), "chunks": chunks}
+
     async def _handle_search(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle search_knowledge_base tool."""
         if not self.rag_service:
@@ -276,41 +389,77 @@ class NancyMCPServer:
     async def _handle_retrieve(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle retrieve_document_passage tool."""
         doc_id = args["doc_id"]
-        start = args.get("start", 0)
+        start = args.get("start")
         end = args.get("end")
+        window = args.get("window", 1)
 
-        result = await self.rag_service.retrieve(doc_id, start, end)
+        result = None
+        total_lines = None
+        base_doc_id = strip_chunk_suffix(doc_id)
+
+        # If line range specified, retrieve from the base document (1-based inclusive)
+        if start is not None or end is not None:
+            start0 = max(int(start) - 1, 0) if start is not None else None
+            end0 = int(end) if end is not None else None
+            result = await self.rag_service.retrieve(base_doc_id, start0, end0)
+        else:
+            # Default: if chunk id, return surrounding chunks
+            chunk_window = self._retrieve_chunk_window(doc_id, window=window)
+            if chunk_window:
+                result = {
+                    "doc_id": doc_id,
+                    "text": chunk_window.get("text", ""),
+                    "chunks": chunk_window.get("chunks", []),
+                    "mode": "chunk_window",
+                }
+            else:
+                # Fallback: full document
+                result = await self.rag_service.retrieve(base_doc_id, None, None)
 
         if not result:
             return [types.TextContent(type="text", text=f"❌ Document not found: {doc_id}")]
 
         text = result.get("text", "")
-        github_url = result.get("github_url", "")
-        # Get total lines in document
-        try:
-            from rag_core.store import Store
+        github_url = result.get("github_url", "") or self.rag_service.registry.get_github_url(base_doc_id)
 
-            store = Store(self.rag_service.embeddings_path.parent)
-            doc_path = store.base_path / doc_id
-            if not doc_path.exists():
-                doc_path = store.base_path / f"{doc_id}.txt"
-            total_lines = 0
-            if doc_path.exists():
-                with open(doc_path, "r") as f:
-                    total_lines = sum(1 for _ in f)
-        except Exception:
-            total_lines = None
+        # Get total lines in document for file-based retrievals
+        if result.get("mode") != "chunk_window":
+            try:
+                from rag_core.store import Store
 
-        # Explicitly indicate line range and partial/full
-        partial = start != 0 or (end is not None and total_lines is not None and end < total_lines)
+                store = Store(self.rag_service.embeddings_path.parent)
+                doc_path = store.base_path / base_doc_id
+                if not doc_path.exists():
+                    doc_path = store.base_path / f"{base_doc_id}.txt"
+                if doc_path.exists():
+                    with open(doc_path, "r") as f:
+                        total_lines = sum(1 for _ in f)
+            except Exception:
+                total_lines = None
+
         response_text = f"📄 **Document:** {doc_id}\n"
         if github_url:
             response_text += f"🔗 **GitHub:** {github_url}\n"
-        response_text += f"**Lines:** {start} - {end if end is not None else 'EOF'}"
-        if total_lines is not None:
-            response_text += f" / {total_lines} total"
-        if partial:
-            response_text += "\n⚠️ *Partial passage returned*"
+
+        if result.get("mode") == "chunk_window":
+            chunks = result.get("chunks", [])
+            response_text += f"**Chunks:** {len(chunks)}\n"
+            for ch in chunks:
+                line_start = ch.get("line_start")
+                line_end = ch.get("line_end")
+                if line_start and line_end:
+                    response_text += f"• {ch.get('doc_id')}: lines {line_start}-{line_end}\n"
+                else:
+                    response_text += f"• {ch.get('doc_id')}\n"
+        else:
+            line_start = start if start is not None else 1
+            line_end = end if end is not None else "EOF"
+            response_text += f"**Lines:** {line_start} - {line_end}"
+            if total_lines is not None:
+                response_text += f" / {total_lines} total"
+            if start is not None or end is not None:
+                response_text += "\n⚠️ *Partial passage returned*"
+
         fence = "```"
         response_text += f"\n\n{fence}\n{text}\n{fence}"
 
@@ -660,6 +809,13 @@ async def main():
             @app.get("/search")
             async def search(query: str = "", limit: int = 5, api_key: str = Depends(verify_api_key)):
                 results = await server.rag_service.search_docs(query=query, limit=limit)
+                # Promote common chunk metadata fields to top-level for convenience
+                for r in results:
+                    data = r.get("data") if isinstance(r.get("data"), dict) else {}
+                    if data:
+                        for key in ("line_start", "line_end", "chunk_index", "chunk_count", "source_document"):
+                            if key in data and key not in r:
+                                r[key] = data[key]
                 return {"hits": results}
 
             @app.post("/retrieve")
@@ -668,8 +824,46 @@ async def main():
                 doc_id = data.get("doc_id")
                 start = data.get("start")
                 end = data.get("end")
+                window = data.get("window", 1)
                 try:
-                    result = await server.rag_service.retrieve(doc_id, start, end)
+                    base_doc_id = strip_chunk_suffix(doc_id)
+                    result = None
+                    if start is not None or end is not None:
+                        start0 = max(int(start) - 1, 0) if start is not None else None
+                        end0 = int(end) if end is not None else None
+                        result = await server.rag_service.retrieve(base_doc_id, start0, end0)
+                        if result is not None:
+                            result["start"] = start
+                            result["end"] = end
+                    else:
+                        chunk_window = server._retrieve_chunk_window(doc_id, window=window)
+                        if chunk_window:
+                            result = {
+                                "doc_id": doc_id,
+                                "text": chunk_window.get("text", ""),
+                                "chunks": chunk_window.get("chunks", []),
+                                "mode": "chunk_window",
+                            }
+                        else:
+                            result = await server.rag_service.retrieve(base_doc_id, None, None)
+
+                    # Attach github_url and total_lines when possible
+                    if result is not None and result.get("mode") != "chunk_window":
+                        result.setdefault("doc_id", base_doc_id)
+                        result.setdefault("github_url", server.rag_service.registry.get_github_url(base_doc_id) or "")
+                        try:
+                            from rag_core.store import Store
+
+                            store = Store(server.rag_service.embeddings_path.parent)
+                            doc_path = store.base_path / base_doc_id
+                            if not doc_path.exists():
+                                doc_path = store.base_path / f"{base_doc_id}.txt"
+                            if doc_path.exists():
+                                with open(doc_path, "r") as f:
+                                    result["total_lines"] = sum(1 for _ in f)
+                        except Exception:
+                            pass
+
                     return {"passage": result}
                 except FileNotFoundError:
                     from fastapi.responses import JSONResponse

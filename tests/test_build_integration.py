@@ -103,6 +103,7 @@ class StubSummaryGenerator:
         repo_name=None,
         repo_readme=None,
         repo_readme_path=None,
+        repo_description=None,
         metadata=None,
     ):
         self.calls.append(doc_id)

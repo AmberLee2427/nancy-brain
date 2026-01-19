@@ -6,6 +6,9 @@ Provides REST endpoints for search, retrieve, tree, weight, version, and health 
 import os
 from pathlib import Path
 import logging
+import json
+import re
+import sqlite3
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from connectors.http_api import auth
@@ -36,6 +39,7 @@ from pathlib import Path
 
 from rag_core.service import RAGService
 from rag_core.types import SearchHit, Passage
+from nancy_brain.chunking import strip_chunk_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +56,9 @@ class SearchResponse(BaseModel):
 
 class RetrieveRequest(BaseModel):
     doc_id: str
-    start: int
-    end: int
+    start: Optional[int] = None
+    end: Optional[int] = None
+    window: Optional[int] = None
 
 
 class RetrieveBatchRequest(BaseModel):
@@ -61,13 +66,19 @@ class RetrieveBatchRequest(BaseModel):
 
 
 class RetrieveResponse(BaseModel):
-    passage: Passage
+    passage: Dict[str, Any]
     trace_id: str
+
+    class Config:
+        extra = "allow"
 
 
 class RetrieveBatchResponse(BaseModel):
-    passages: List[Passage]
+    passages: List[Dict[str, Any]]
     trace_id: str
+
+    class Config:
+        extra = "allow"
 
 
 class TreeResponse(BaseModel):
@@ -147,6 +158,109 @@ if (
 
 # Global RAG service instance
 rag_service: Optional[RAGService] = None
+
+
+def _parse_chunk_id(doc_id: str):
+    if not doc_id:
+        return None
+    match = re.match(r"^(?P<base>.+?)(?P<marker>(::chunk-|#chunk-|@chunk:|\|chunk:))(?P<idx>\d+)$", doc_id)
+    if not match:
+        return None
+    base = match.group("base")
+    marker = match.group("marker")
+    idx_str = match.group("idx")
+    return base, marker, int(idx_str), len(idx_str)
+
+
+def _get_embeddings_db_path(rag: RAGService) -> Optional[Path]:
+    try:
+        return Path(rag.embeddings_path) / "index" / "documents"
+    except Exception:
+        return None
+
+
+def _fetch_section_row(conn: sqlite3.Connection, doc_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()]
+    except Exception:
+        columns = []
+    if not columns:
+        return None
+
+    select_cols = ["id", "text"]
+    if "data" in columns:
+        select_cols.append("data")
+    if "metadata" in columns and "data" not in columns:
+        select_cols.append("metadata")
+
+    query = f"SELECT {', '.join(select_cols)} FROM sections WHERE id = ? LIMIT 1"
+    try:
+        row = conn.execute(query, (doc_id,)).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+
+    result = {"id": row[0], "text": row[1]}
+    if len(row) >= 3 and row[2]:
+        try:
+            meta = json.loads(row[2])
+            if isinstance(meta, dict):
+                result["data"] = meta
+        except Exception:
+            pass
+    return result
+
+
+def _retrieve_chunk_window(rag: RAGService, doc_id: str, window: int = 1) -> Optional[Dict[str, Any]]:
+    parsed = _parse_chunk_id(doc_id)
+    if not parsed:
+        return None
+    base, marker, idx, width = parsed
+    db_path = _get_embeddings_db_path(rag)
+    if not db_path or not db_path.exists():
+        return None
+
+    fmt = f"{{:0{width}d}}" if width > 1 else "{}"
+    chunk_ids = []
+    for i in range(max(0, idx - window), idx + window + 1):
+        chunk_ids.append(f"{base}{marker}{fmt.format(i)}")
+
+    chunks = []
+    try:
+        conn = sqlite3.connect(str(db_path))
+    except Exception:
+        return None
+    try:
+        for cid in chunk_ids:
+            row = _fetch_section_row(conn, cid)
+            if not row:
+                continue
+            data = row.get("data") if isinstance(row.get("data"), dict) else {}
+            chunks.append(
+                {
+                    "doc_id": row.get("id"),
+                    "text": row.get("text", ""),
+                    "line_start": data.get("line_start"),
+                    "line_end": data.get("line_end"),
+                    "chunk_index": data.get("chunk_index"),
+                    "chunk_count": data.get("chunk_count"),
+                    "source_document": data.get("source_document") or strip_chunk_suffix(row.get("id", "")),
+                }
+            )
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if not chunks:
+        return None
+    combined = []
+    for ch in chunks:
+        label = ch.get("doc_id") or "chunk"
+        combined.append(f"[Chunk] {label}\n{ch.get('text', '')}")
+    return {"text": "\n\n".join(combined), "chunks": chunks}
 
 
 def reset_rag_service():
@@ -291,7 +405,98 @@ async def retrieve(
     """Retrieve a specific passage from a document."""
     trace_id = str(uuid.uuid4())
     try:
-        passage = await rag.retrieve(doc_id=request.doc_id, start=request.start, end=request.end)
+        import connectors.http_api.app as app_module
+
+        base_doc_id = strip_chunk_suffix(request.doc_id)
+        passage = None
+        chunk_window = None
+        is_chunk_id = _parse_chunk_id(request.doc_id) is not None
+
+        if request.start is not None or request.end is not None:
+            start0 = max(int(request.start) - 1, 0) if request.start is not None else None
+            end0 = int(request.end) if request.end is not None else None
+            passage = await rag.retrieve(doc_id=base_doc_id, start=start0, end=end0)
+            if passage is not None:
+                passage["start"] = request.start
+                passage["end"] = request.end
+        else:
+            chunk_window = app_module._retrieve_chunk_window(rag, request.doc_id, window=request.window or 1)
+            if chunk_window:
+                passage = {
+                    "doc_id": request.doc_id,
+                    "text": chunk_window.get("text", ""),
+                    "github_url": rag.registry.get_github_url(base_doc_id) or "",
+                    "content_sha256": "",
+                    "mode": "chunk_window",
+                    "chunks": chunk_window.get("chunks", []),
+                }
+            else:
+                passage = await rag.retrieve(doc_id=base_doc_id, start=None, end=None)
+
+        # If chunk id and no line range, always prefer chunk window payload
+        if is_chunk_id and request.start is None and request.end is None:
+            chunk_window = app_module._retrieve_chunk_window(rag, request.doc_id, window=request.window or 1)
+            if chunk_window:
+                passage = {
+                    "doc_id": request.doc_id,
+                    "text": chunk_window.get("text", ""),
+                    "github_url": rag.registry.get_github_url(base_doc_id) or "",
+                    "content_sha256": "",
+                    "chunks": chunk_window.get("chunks", []),
+                    "mode": "chunk_window",
+                }
+
+        # Attach total_lines when possible for file-based retrievals
+        if passage is not None and passage.get("mode") != "chunk_window":
+            try:
+                from rag_core.store import Store
+
+                store = Store(rag.embeddings_path.parent)
+                doc_path = store.base_path / base_doc_id
+                if not doc_path.exists():
+                    doc_path = store.base_path / f"{base_doc_id}.txt"
+                if doc_path.exists():
+                    with open(doc_path, "r") as f:
+                        passage["total_lines"] = sum(1 for _ in f)
+            except Exception:
+                pass
+
+        if passage is not None and (
+            chunk_window or getattr(passage, "chunks", None) or passage.get("chunks")
+            if isinstance(passage, dict)
+            else False
+        ):
+            if isinstance(passage, dict):
+                passage["mode"] = "chunk_window"
+            else:
+                setattr(passage, "mode", "chunk_window")
+        if is_chunk_id:
+            if not chunk_window:
+                chunk_window = _retrieve_chunk_window(rag, request.doc_id, window=request.window or 1)
+            if chunk_window:
+                base_payload = {}
+                if isinstance(passage, dict):
+                    base_payload = dict(passage)
+                elif passage is not None:
+                    base_payload = passage.model_dump() if hasattr(passage, "model_dump") else dict(passage)
+                passage = {
+                    **base_payload,
+                    "doc_id": request.doc_id,
+                    "text": chunk_window.get("text", base_payload.get("text", "")),
+                    "github_url": base_payload.get("github_url") or rag.registry.get_github_url(base_doc_id) or "",
+                    "content_sha256": base_payload.get("content_sha256", ""),
+                    "chunks": chunk_window.get("chunks", []),
+                    "mode": "chunk_window",
+                }
+        if isinstance(passage, dict) and "mode" not in passage:
+            passage["mode"] = "chunk_window" if (chunk_window or passage.get("chunks") or is_chunk_id) else "range"
+        if isinstance(passage, dict) and passage.get("mode") == "chunk_window":
+            chunk_window = app_module._retrieve_chunk_window(rag, request.doc_id, window=request.window or 1)
+            if chunk_window:
+                passage["chunks"] = chunk_window.get("chunks", [])
+                passage["text"] = chunk_window.get("text", passage.get("text", ""))
+            if not passage.get("chunks"):
+                passage["chunks"] = [{"doc_id": request.doc_id}]
         return RetrieveResponse(passage=passage, trace_id=trace_id)
     except Exception as e:
         logger.error(f"Retrieve failed: {e}", extra={"trace_id": trace_id})
