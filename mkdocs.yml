@@ -70,6 +70,8 @@ nav:
     - Claude Desktop: integrations/claude-desktop.md
     - Gemini Code Assist: integrations/gemini-code-assist.md
     - HTTP API: integrations/http-api.md
+  - Deployment:
+    - Self-Hosting Guide: deployment/self-hosted.md
   - Tutorials:
     - Research Workflow: tutorials/research-workflow.md
     - Python API: tutorials/python-api.md
