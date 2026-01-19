@@ -1,8 +1,0 @@
-{
-  "summary": "The Python script `make_psf_grid.py` creates point spread function (PSF) models for the Nancy Grace Roman Space Telescope's Wide Field Instrument (WFI). It uses the `webbpsf` package to generate these models.  The script offers two main functions: `construct_psf_grid` generates a gridded PSF model, useful for efficient PSF modeling across a field of view.  The `construct_psf` function creates a single PSF at a specified detector position.  The script, when run directly, generates a PSF grid, saving it to a specified directory ('../PSFs') if it doesn't exist, and prints the shape of the generated grid data. This is a component of the larger Dazzle package, which performs oversampled image construction, difference imaging, transient detection, and difference-image PSF photometry for the Roman Space Telescope.",
-  "weight": 1.6,
-  "model": "gemini-1.5-flash",
-  "timestamp": 1758773004,
-  "doc_id": "general_tools/Dazzle/dazzle/make_psf_grid.py",
-  "repo_readme_path": "README.md"
-}

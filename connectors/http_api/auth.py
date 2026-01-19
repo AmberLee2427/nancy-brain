@@ -120,7 +120,12 @@ def get_user(username: str):
 
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # bcrypt has a 72 byte limit. passlib usually handles this but recent versions/backends can be strict.
+        # If the password is ridiculously long (like an API key pasted by mistake), it will raise ValueError.
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError:
+        return False
 
 
 def authenticate_user(username: str, password: str):

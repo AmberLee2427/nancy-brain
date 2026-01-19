@@ -1,8 +1,0 @@
-{
-  "summary": "The Python package Dazzle processes images from the Nancy Grace Roman Space Telescope to detect transients.  It constructs oversampled images from dithered, undersampled input images using forward modeling.  The core functionality includes difference imaging, transient detection, and difference-image PSF photometry. The algorithms leverage bi-polynomial basis functions for image reconstruction and employ iterative refinement of image offsets to improve accuracy. The package uses FITS files as input and provides options for parallel processing of large images by splitting them into smaller sections. Difference images and associated data are saved to an output directory, facilitating further analysis.",
-  "weight": 1.8,
-  "model": "gemini-1.5-flash",
-  "timestamp": 1758773010,
-  "doc_id": "general_tools/Dazzle/dazzle/dazzle.py",
-  "repo_readme_path": "README.md"
-}

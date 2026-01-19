@@ -54,17 +54,16 @@ def _init_session_state_safe():
 
 
 def safe_rerun():
-    """Try to call Streamlit's experimental rerun; fallback to an instruction message if unavailable."""
+    """Try to call Streamlit's rerun; fallback to experimental or message."""
     try:
-        # Some Streamlit versions provide experimental_rerun, others may not
-        getattr(st, "experimental_rerun")()
-    except Exception:
-        try:
-            # Newer API may expose experimental functions under runtime; try best-effort
+        if hasattr(st, "rerun"):
+            st.rerun()
+        elif hasattr(st, "experimental_rerun"):
+            st.experimental_rerun()
+        else:
             st.info("Please refresh the page to apply changes.")
-        except Exception:
-            # Silently ignore when not running in Streamlit
-            pass
+    except Exception:
+        st.info("Please refresh the page to apply changes.")
 
 
 def show_error(message: str, exc: Exception = None, hint: str = None):
@@ -910,18 +909,27 @@ def run_ui():
                                 lines.append(f"[progress] {obj.get('stage', '')}: {obj.get('detail', '')}\n")
                             except Exception:
                                 pass
-                        else:
-                            # Heuristic fallback increment if no structured progress seen
-                            progress_val = min(100, progress_val + 1)
-                            progress.progress(progress_val)
+                        # Fallback heuristic removed to prevent progress bar race conditions
 
                         # Update log area
                         log_box.text("".join(lines[-200:]))
 
                 returncode = process.poll()
-            except Exception as e:
-                process.kill()
-                st.error(f"Build process failed: {e}")
+            except BaseException as e:
+                # detailed catch to ensure process is killed on Stop or Error
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+
+                # Check if it was a standard exception or just a stop signal
+                # If e is StopException (internal), we probably just want to exit silently or show a message
+                if isinstance(e, Exception):
+                    st.error(f"Build process failed: {e}")
+                else:
+                    st.warning("Build process interrupted.")
                 return
 
             # Finalize progress and show results

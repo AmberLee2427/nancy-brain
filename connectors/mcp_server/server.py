@@ -605,9 +605,42 @@ async def main():
 
         def build_http_app():
             from fastapi import FastAPI, Request, HTTPException, Header, Depends
+            from fastapi.security import OAuth2PasswordRequestForm
             from typing import Optional
+            from connectors.http_api import auth
+
+            # Initialize user tables
+            auth.create_user_table()
+            auth.create_refresh_table()
 
             app = FastAPI()
+
+            # --- Authentication Endpoints ---
+            @app.post("/login")
+            def login(form_data: OAuth2PasswordRequestForm = Depends()):
+                user = auth.authenticate_user(form_data.username, form_data.password)
+                if not user:
+                    raise HTTPException(status_code=400, detail="Incorrect username or password")
+                access_token = auth.create_access_token(data={"sub": user["username"]})
+                refresh_token = auth.create_refresh_token(data={"sub": user["username"]})
+                try:
+                    auth.store_refresh_token(user["username"], refresh_token)
+                except Exception:
+                    pass
+                return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+            @app.post("/refresh")
+            def refresh_token_endpoint(payload: dict):
+                token = payload.get("refresh_token")
+                username = auth.verify_token(token)
+                if not username:
+                    raise HTTPException(status_code=401, detail="Invalid refresh token")
+                if not auth.is_refresh_valid(token):
+                    raise HTTPException(status_code=401, detail="Refresh token revoked or unknown")
+                new_access = auth.create_access_token(data={"sub": username})
+                return {"access_token": new_access, "token_type": "bearer"}
+
+            # --------------------------------
 
             # Simple API key authentication
             def verify_api_key(x_api_key: Optional[str] = Header(None)):
