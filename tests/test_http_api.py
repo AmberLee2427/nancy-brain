@@ -108,15 +108,15 @@ def test_http_auth_required():
     try:
         client = TestClient(app)
 
-        # Test without authorization header - should get 403 because security dependency fails first
+        # Test without authorization header - expect auth failure (401/403 depending on FastAPI version)
         response = client.get("/health")
-        assert response.status_code == 403  # Forbidden due to missing auth
+        assert response.status_code in (401, 403)
 
         response = client.get("/version")
-        assert response.status_code == 403
+        assert response.status_code in (401, 403)
 
         response = client.get("/search?query=test")
-        assert response.status_code == 403
+        assert response.status_code in (401, 403)
     finally:
         # Clean up dependency override
         app.dependency_overrides.clear()
