@@ -6,11 +6,13 @@
 - **Description:** Retrieve a specific passage from a document by ID and line range.
 - **Input Schema:**
   - `doc_id` (string): Document ID (e.g., 'microlensing_tools/MulensModel/README.md')
-  - `start` (integer, default 0): Starting line number (0-based)
-  - `end` (integer): Ending line number (exclusive)
+  - `start` (integer, optional): Starting line number (1-based, inclusive)
+  - `end` (integer, optional): Ending line number (1-based, inclusive)
+  - `window` (integer, optional): Chunk window size when doc_id is a chunk (default: 1)
 - **Output:**
   - Always includes `doc_id`, `start`, `end`, `text`, and `github_url` (if available).
   - If a partial passage is returned, the response must clearly indicate the line range and total lines in the document.
+  - If `doc_id` is a chunk id and no line range is provided, the response returns surrounding chunks by default.
 
 ### `retrieve_multiple_passages`
 - **Description:** Retrieve multiple document passages in a single request.

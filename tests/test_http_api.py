@@ -108,15 +108,15 @@ def test_http_auth_required():
     try:
         client = TestClient(app)
 
-        # Test without authorization header - should get 403 because security dependency fails first
+        # Test without authorization header - expect auth failure (401/403 depending on FastAPI version)
         response = client.get("/health")
-        assert response.status_code == 403  # Forbidden due to missing auth
+        assert response.status_code in (401, 403)
 
         response = client.get("/version")
-        assert response.status_code == 403
+        assert response.status_code in (401, 403)
 
         response = client.get("/search?query=test")
-        assert response.status_code == 403
+        assert response.status_code in (401, 403)
     finally:
         # Clean up dependency override
         app.dependency_overrides.clear()
@@ -166,7 +166,7 @@ def test_http_retrieve_endpoint(tmp_path):
         # Test single retrieve
         response = client.post(
             "/retrieve",
-            json={"doc_id": "cat1/repoA/test.md", "start": 0, "end": 2},
+            json={"doc_id": "cat1/repoA/test.md", "start": 1, "end": 2},
             headers=headers,
         )
         assert response.status_code == 200
@@ -180,8 +180,8 @@ def test_http_retrieve_endpoint(tmp_path):
             "/retrieve/batch",
             json={
                 "items": [
-                    {"doc_id": "cat1/repoA/test1.md", "start": 0, "end": 2},
-                    {"doc_id": "cat1/repoA/test2.md", "start": 1, "end": 3},
+                    {"doc_id": "cat1/repoA/test1.md", "start": 1, "end": 2},
+                    {"doc_id": "cat1/repoA/test2.md", "start": 2, "end": 3},
                 ]
             },
             headers=headers,
@@ -193,6 +193,57 @@ def test_http_retrieve_endpoint(tmp_path):
         assert "trace_id" in data
     finally:
         # Clean up dependency override
+        app.dependency_overrides.clear()
+
+
+def test_http_retrieve_chunk_window():
+    """Test chunk-window retrieval when no line range is provided."""
+    mock_rag = Mock()
+
+    async def mock_retrieve(doc_id, start=None, end=None):
+        return {
+            "doc_id": doc_id,
+            "text": "full file content",
+            "github_url": "https://github.com/user/repoA/blob/master/test.md",
+            "content_sha256": "abcdef123456",
+        }
+
+    async def mock_health():
+        return {"status": "ok"}
+
+    mock_rag.retrieve = mock_retrieve
+    mock_rag.health = mock_health
+    mock_rag.registry = Mock()
+    mock_rag.registry.get_github_url.return_value = "https://github.com/user/repoA/blob/master/test.md"
+
+    def mock_get_rag_service():
+        return mock_rag
+
+    app.dependency_overrides[get_rag_service] = mock_get_rag_service
+
+    import connectors.http_api.app as app_module
+
+    app_module._retrieve_chunk_window = Mock(
+        return_value={
+            "text": "[Chunk] doc::chunk-0001\nchunk one",
+            "chunks": [{"doc_id": "doc::chunk-0001", "line_start": 1, "line_end": 10}],
+        }
+    )
+
+    try:
+        client = TestClient(app)
+        headers = {"Authorization": "Bearer test-token"}
+        response = client.post(
+            "/retrieve",
+            json={"doc_id": "doc::chunk-0001"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["passage"]["mode"] == "chunk_window"
+        assert len(data["passage"]["chunks"]) == 1
+        assert "chunk one" in data["passage"]["text"]
+    finally:
         app.dependency_overrides.clear()
 
 

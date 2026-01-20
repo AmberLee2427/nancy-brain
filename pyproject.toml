@@ -29,12 +29,13 @@ dependencies = [
     "fastapi>=0.110.0",  
     "uvicorn>=0.29.0",   
     "passlib[bcrypt]>=1.7.4", 
+    "bcrypt<4.0.0",
     "python-jose>=3.3.0",
-    "python-dotenv",
     "anthropic",
     "chunky-files[tree]>=1.0.0", 
     "astropy>=4.2",
     "zstandard",
+    "accelerate>=0.26.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -65,7 +66,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
-    "black>=25.1.0",
+    "black==24.4.2",
     "flake8>=7.3.0",
     "rich>=13.0.0",
     "coverage>=7.0.0",
@@ -146,3 +147,6 @@ replace = '__version__ = "{new_version}"'
 filename = "rag_core/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'
+
+[tool.black]
+line-length = 120

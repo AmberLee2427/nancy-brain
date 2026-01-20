@@ -1,0 +1,66 @@
+services:
+  # Nancy Brain MCP Server
+  nancy-brain:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: nancy-brain-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      - MCP_PORT=8000
+      - MCP_API_KEY=${MCP_API_KEY}    # Generate a random strong key
+      - NB_SECRET_KEY=${NB_SECRET_KEY} # Generate a random strong key for UI JWT tokens
+      - NB_USE_LOCAL_SUMMARY=true      # Set to 'false' if using Anthropic for summaries
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} # Required if NB_USE_LOCAL_SUMMARY=false
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./config:/app/config:ro
+      - ./knowledge_base:/app/knowledge_base
+      - ./rag_core:/app/rag_core         # Optional: for hot-reloading dev
+      - nancy-brain-cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nancy Brain Web UI
+  nancy-ui:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: nancy-brain-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - MCP_API_KEY=${MCP_API_KEY}
+      - NB_SECRET_KEY=${NB_SECRET_KEY}
+      - NB_API_URL=http://nancy-brain:8000
+    volumes:
+      - ./config:/app/config
+      - nancy-brain-cache:/app/cache
+    command: streamlit run nancy_brain/admin_ui.py --server.port 8501 --server.address 0.0.0.0
+    restart: unless-stopped
+
+  # Cloudflare Tunnel (Optional - for remote access)
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: nancy-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN} # From Cloudflare Dashboard
+    # Configure ingress in dashboard:
+    # - UI: http://nancy-ui:8501
+    # - API: http://nancy-brain:8000
+    #
+    # Legacy / CLI File-based Tunnel (If not using Token):
+    # volumes:
+    #   - ./cloudflared:/home/nonroot/.cloudflared
+    # command: tunnel run my-tunnel-name
+
+volumes:
+  nancy-brain-cache:
+    driver: local

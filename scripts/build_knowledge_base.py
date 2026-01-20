@@ -599,6 +599,16 @@ def build_txtai_index(
     except Exception:
         ext_weights = {}
     categories = [category] if category else list(config.keys())
+
+    # Count total repositories for progress tracking
+    total_repos = 0
+    for cat in categories:
+        repos_list = config.get(cat)
+        if isinstance(repos_list, list):
+            total_repos += len(repos_list)
+
+    repos_processed = 0
+
     documents = []
     pipeline = ChunkPipeline()
     chunk_config = ChunkerConfig(
@@ -643,6 +653,12 @@ def build_txtai_index(
             continue
         for repo in repos:
             repo_name = repo["name"]
+
+            # Emit repo progress (50-85% range)
+            repos_processed += 1
+            pct = 50 + int(((repos_processed - 0.5) / max(1, total_repos)) * 35)
+            emit_progress(pct, stage="indexing", detail=f"Indexing {repo_name} ({repos_processed}/{total_repos})")
+
             repo_dir = Path(base_path) / cat / repo_name
             if not repo_dir.exists():
                 failures["skipped_repositories"].append(f"{cat}/{repo_name}")
@@ -740,6 +756,7 @@ def build_txtai_index(
                                 repo_name=repo_name,
                                 repo_readme=repo_readme_content,
                                 repo_readme_path=repo_readme_path,
+                                repo_description=repo.get("description"),
                                 metadata={"category": cat, "source": "repository_file"},
                             )
                         except Exception as exc:

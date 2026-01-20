@@ -106,13 +106,38 @@ async def test_mcp_server_retrieve_tool(mock_rag_service):
     server.rag_service = mock_rag_service
 
     # Test retrieve
-    args = {"doc_id": "microlensing_tools/MulensModel/README.md", "start": 0, "end": 10}
+    args = {"doc_id": "microlensing_tools/MulensModel/README.md", "start": 1, "end": 3}
     result = await server._handle_retrieve(args)
 
     assert len(result) == 1
     assert result[0].type == "text"
     assert "microlensing_tools/MulensModel/README.md" in result[0].text
     assert "Sample document content" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_retrieve_chunk_window(mock_rag_service):
+    """Test chunk-window retrieval when doc_id is a chunk and no line range is provided."""
+    server = NancyMCPServer()
+    server.rag_service = mock_rag_service
+
+    server._retrieve_chunk_window = Mock(
+        return_value={
+            "text": "[Chunk] doc::chunk-0001\nchunk one\n\n[Chunk] doc::chunk-0002\nchunk two",
+            "chunks": [
+                {"doc_id": "doc::chunk-0001", "line_start": 1, "line_end": 10},
+                {"doc_id": "doc::chunk-0002", "line_start": 11, "line_end": 20},
+            ],
+        }
+    )
+
+    args = {"doc_id": "doc::chunk-0001"}
+    result = await server._handle_retrieve(args)
+
+    assert len(result) == 1
+    assert result[0].type == "text"
+    assert "**Chunks:** 2" in result[0].text
+    assert "lines 1-10" in result[0].text
 
 
 @pytest.mark.asyncio

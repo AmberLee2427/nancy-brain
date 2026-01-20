@@ -1,9 +1,18 @@
 openapi: 3.1.0
 info:
   title: Nancy Slack-RAG Bridge
-  version: "0.1.0"
+  version: "0.2.0"
 servers:
-  - url: https://nancy.example.org
+  - url: https://nancy-brain.malpas.nz
+components:
+  schemas: {}
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+security:
+  - ApiKeyAuth: []
 paths:
   /search:
     get:
@@ -11,7 +20,7 @@ paths:
       summary: SEARCH <query> limit n
       parameters:
         - in: query
-          name: q
+          name: query
           required: true
           schema:
             type: string
@@ -30,41 +39,53 @@ paths:
               schema:
                 type: object
                 properties:
-                  results:
+                  hits:
                     type: array
                     items:
                       type: object
                       properties:
-                        source_path:
-                          type: string
-                        github_url:
-                          type: string
-                        title:
+                        id:
                           type: string
                         score:
                           type: number
-                        snippet:
+                        text:
                           type: string
+                        source_document:
+                          type: string
+                        line_start:
+                          type: integer
+                        line_end:
+                          type: integer
+                        chunk_index:
+                          type: integer
+                        chunk_count:
+                          type: integer
+                  index_version:
+                    type: string
+                  trace_id:
+                    type: string
   /retrieve:
-    get:
+    post:
       operationId: retrieveFile
       summary: RETRIEVE <file_path>
-      parameters:
-        - in: query
-          name: path
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: start
-          required: false
-          schema:
-            type: integer
-        - in: query
-          name: end
-          required: false
-          schema:
-            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                doc_id:
+                  type: string
+                start:
+                  type: integer
+                  description: 1-based line start (inclusive)
+                end:
+                  type: integer
+                  description: 1-based line end (inclusive)
+                window:
+                  type: integer
+                  description: Chunk window size for chunk ids
       responses:
         "200":
           description: OK
@@ -73,11 +94,30 @@ paths:
               schema:
                 type: object
                 properties:
-                  path:
-                    type: string
-                  github_url:
-                    type: string
-                  text:
+                  passage:
+                    type: object
+                    properties:
+                      doc_id:
+                        type: string
+                      text:
+                        type: string
+                      github_url:
+                        type: string
+                      content_sha256:
+                        type: string
+                      start:
+                        type: integer
+                      end:
+                        type: integer
+                      total_lines:
+                        type: integer
+                      mode:
+                        type: string
+                      chunks:
+                        type: array
+                        items:
+                          type: object
+                  trace_id:
                     type: string
   /tree:
     get:
@@ -85,10 +125,22 @@ paths:
       summary: TREE <dir>
       parameters:
         - in: query
-          name: dir
-          required: true
+          name: prefix
+          required: false
           schema:
             type: string
+        - in: query
+          name: depth
+          required: false
+          schema:
+            type: integer
+            default: 2
+        - in: query
+          name: max_entries
+          required: false
+          schema:
+            type: integer
+            default: 500
       responses:
         "200":
           description: OK
@@ -102,9 +154,9 @@ paths:
                     items:
                       type: object
                       properties:
-                        name:
+                        path:
                           type: string
-                        kind:
+                        type:
                           type: string
                           enum: [file, dir]
   /weight:

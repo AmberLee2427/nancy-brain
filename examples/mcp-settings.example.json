@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "nancy-brain-docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--env", "MCP_API_KEY=your-api-key",
+        "-v", "nancy-brain-cache:/app/cache",
+        "nancy-brain",
+        "python", "run_mcp_server.py"
+      ]
+    },
+    "nancy-brain-remote": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sse",
+        "--url", "http://your-server-ip:8000/sse",
+        "--api-key", "your-api-key"
+      ],
+      "env": {
+         "NOTE": "Use this to connect to a running Docker instance (Self-Hosted) via SSE proxy"
+      }
+    },
+    "nancy-brain-local-dev": {
+      "command": "python",
+      "args": [
+        "run_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": ".",
+        "MCP_PORT": "8000"
+      }
+    }
+  }
+}

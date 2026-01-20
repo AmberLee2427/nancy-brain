@@ -259,4 +259,4 @@ def test_invalid_search_hit_schema():
 def test_invalid_retrieve_request():
     """Test RetrieveRequestSchema validation with invalid data."""
     with pytest.raises(ValidationError):
-        RetrieveRequestSchema(doc_id="test")  # Missing start and end
+        RetrieveRequestSchema(doc_id=None)  # Missing doc_id

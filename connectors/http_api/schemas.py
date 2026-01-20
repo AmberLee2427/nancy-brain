@@ -13,6 +13,11 @@ class SearchHitSchema(BaseModel):
     id: str = Field(description="Document ID")
     text: str = Field(description="Snippet text")
     score: float = Field(description="Relevance score")
+    source_document: Optional[str] = Field(description="Base document ID", default=None)
+    line_start: Optional[int] = Field(description="Start line (1-based, inclusive)", default=None)
+    line_end: Optional[int] = Field(description="End line (1-based, inclusive)", default=None)
+    chunk_index: Optional[int] = Field(description="Chunk index (0-based)", default=None)
+    chunk_count: Optional[int] = Field(description="Total chunks for document", default=None)
 
 
 class SearchResponseSchema(BaseModel):
@@ -31,14 +36,20 @@ class PassageSchema(BaseModel):
     github_url: str = Field(description="GitHub URL for citation")
     content_sha256: str = Field(description="Content hash for reproducibility")
     index_version: str = Field(description="Knowledge base version", default="")
+    start: Optional[int] = Field(description="Start line (1-based, inclusive)", default=None)
+    end: Optional[int] = Field(description="End line (1-based, inclusive)", default=None)
+    total_lines: Optional[int] = Field(description="Total lines in document", default=None)
+    mode: Optional[str] = Field(description="Retrieval mode (e.g., chunk_window)", default=None)
+    chunks: Optional[List[Dict[str, Any]]] = Field(description="Chunk window details", default=None)
 
 
 class RetrieveRequestSchema(BaseModel):
     """Request schema for retrieve endpoint."""
 
     doc_id: str = Field(description="Document ID to retrieve from")
-    start: int = Field(description="Starting line number (1-based)")
-    end: int = Field(description="Ending line number (inclusive)")
+    start: Optional[int] = Field(description="Starting line number (1-based, inclusive)", default=None)
+    end: Optional[int] = Field(description="Ending line number (1-based, inclusive)", default=None)
+    window: Optional[int] = Field(description="Chunk window size for chunk ids", default=None)
 
 
 class RetrieveBatchRequestSchema(BaseModel):
