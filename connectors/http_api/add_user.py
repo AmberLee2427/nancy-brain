@@ -4,6 +4,7 @@ Quick script to add a user to the auth database for dev/demo.
 Usage:
   python connectors/http_api/add_user.py <username> <password>
 """
+
 import sys
 from connectors.http_api import auth
 
