@@ -145,6 +145,7 @@ app = FastAPI(
 )
 auth.create_user_table()  # Ensure user table exists at startup
 auth.create_refresh_table()  # Ensure refresh token table exists
+auth.create_api_key_table()  # Ensure API key table exists
 
 # Enforce secret key in non-dev mode
 if (

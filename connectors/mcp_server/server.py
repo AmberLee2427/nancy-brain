@@ -55,6 +55,7 @@ import argparse
 import json
 import re
 import sqlite3
+import secrets
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -761,6 +762,7 @@ async def main():
             # Initialize user tables
             auth.create_user_table()
             auth.create_refresh_table()
+            auth.create_api_key_table()
 
             app = FastAPI()
 
@@ -791,11 +793,60 @@ async def main():
 
             # --------------------------------
 
+            def _get_invite_codes() -> List[str]:
+                raw = os.environ.get("MCP_INVITE_CODES", "")
+                return [code.strip() for code in raw.split(",") if code.strip()]
+
+            def _invite_code_valid(code: str, allowed: List[str]) -> bool:
+                return any(secrets.compare_digest(code, candidate) for candidate in allowed)
+
+            def _require_admin_api_key(x_api_key: Optional[str] = Header(None)) -> str:
+                expected_key = os.environ.get("MCP_API_KEY")
+                if not expected_key:
+                    raise HTTPException(status_code=503, detail="MCP_API_KEY not configured")
+                if not x_api_key or not secrets.compare_digest(x_api_key, expected_key):
+                    raise HTTPException(status_code=401, detail="Invalid API key")
+                return x_api_key
+
+            @app.post("/v2/api-keys/request")
+            async def issue_api_key(request: Request):
+                data = await request.json()
+                invite_code = (data.get("invite_code") or "").strip()
+                contact = data.get("contact")
+                label = data.get("label")
+
+                if not invite_code:
+                    raise HTTPException(status_code=400, detail="invite_code is required")
+
+                allowed = _get_invite_codes()
+                if not allowed:
+                    raise HTTPException(status_code=503, detail="Invite codes not configured")
+
+                if not _invite_code_valid(invite_code, allowed):
+                    raise HTTPException(status_code=401, detail="Invalid invite code")
+
+                api_key = auth.issue_api_key(contact=contact, label=label)
+                return {"api_key": api_key, "token_type": "api_key"}
+
+            @app.post("/v2/api-keys/issue")
+            async def issue_api_key_admin(request: Request, _admin_key: str = Depends(_require_admin_api_key)):
+                data = await request.json()
+                contact = data.get("contact")
+                label = data.get("label")
+                api_key = auth.issue_api_key(contact=contact, label=label)
+                return {"api_key": api_key, "token_type": "api_key"}
+
             # Simple API key authentication
             def verify_api_key(x_api_key: Optional[str] = Header(None)):
                 expected_key = os.environ.get("MCP_API_KEY")
-                if expected_key and x_api_key != expected_key:
+                if x_api_key:
+                    if expected_key and secrets.compare_digest(x_api_key, expected_key):
+                        return x_api_key
+                    if auth.is_api_key_valid(x_api_key):
+                        return x_api_key
                     raise HTTPException(status_code=401, detail="Invalid API key")
+                if expected_key or auth.any_api_keys_exist():
+                    raise HTTPException(status_code=401, detail="Missing API key")
                 return x_api_key
 
             @app.get("/health")

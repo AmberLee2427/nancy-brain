@@ -25,6 +25,7 @@ This guide covers deploying Nancy Brain on a self-hosted server using Docker and
     ```bash
     # .env
     MCP_API_KEY=your-secure-random-string
+    MCP_INVITE_CODES=code1,code2,code3
     NB_SECRET_KEY=another-secure-random-string
     TUNNEL_TOKEN=ey...  # Optional: see Cloudflare section below
     ```
@@ -70,6 +71,21 @@ docker compose logs -f tunnel
 ```
 
 You should see `INF Registered tunnel connection`. You can now access the Admin UI at `https://nancy-admin.your-domain.com`.
+
+## Issue MCP API Keys (Invite Codes)
+
+Nancy Brain issues per-user MCP keys via an invite-code endpoint. Keep invite codes in `.env` and share them out-of-band.
+
+```bash
+curl -X POST https://nancy-brain.malpas.nz/v2/api-keys/request \
+  -H "Content-Type: application/json" \
+  -d '{"invite_code":"code1","contact":"you@example.com"}'
+```
+
+Use the key with MCP endpoints:
+```bash
+curl -H "X-API-Key: <key>" "https://nancy-brain.malpas.nz/search?query=roman&limit=3"
+```
 
 ### Legacy: CLI/File-Based Tunnel
 

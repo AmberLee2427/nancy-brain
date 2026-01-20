@@ -1,9 +1,18 @@
 openapi: 3.1.0
 info:
   title: Nancy Slack-RAG Bridge
-  version: "0.1.0"
+  version: "0.2.0"
 servers:
   - url: https://nancy-brain.malpas.nz
+components:
+  schemas: {}
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+security:
+  - ApiKeyAuth: []
 paths:
   /search:
     get:

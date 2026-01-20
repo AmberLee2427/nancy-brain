@@ -1,6 +1,6 @@
 site_name: Nancy Brain
 site_description: Turn GitHub repos into AI-searchable knowledge bases
-site_url: https://amberlee2427.github.io/nancy-brain/
+site_url: https://nancy-docs.malpas.nz/
 repo_url: https://github.com/AmberLee2427/nancy-brain
 repo_name: AmberLee2427/nancy-brain
 
@@ -86,6 +86,8 @@ nav:
     - Troubleshooting: development/troubleshooting.md
   - Reference:
     - Original MCP Setup: reference/mcp-server-original.md
+  - Legal:
+    - Privacy Policy: privacy.md
 
 extra:
   social:

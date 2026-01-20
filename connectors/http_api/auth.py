@@ -1,5 +1,8 @@
 import sqlite3
 import os
+import hashlib
+import secrets
+from typing import Optional
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -12,6 +15,8 @@ ALGORITHM = os.environ.get("NB_JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("NB_ACCESS_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_MINUTES = int(os.environ.get("NB_REFRESH_EXPIRE_MINUTES", str(60 * 24 * 7)))
 DB_PATH = os.environ.get("NB_USERS_DB", "users.db")
+API_KEY_PREFIX = "nb_"
+API_KEY_BYTES = 32
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
@@ -69,6 +74,96 @@ def create_refresh_table():
     )
     conn.commit()
     conn.close()
+
+
+def create_api_key_table():
+    conn = get_db()
+    conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS api_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key_hash TEXT UNIQUE NOT NULL,
+        key_prefix TEXT NOT NULL,
+        contact TEXT,
+        label TEXT,
+        revoked INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_used TIMESTAMP
+    )
+    """
+    )
+    conn.commit()
+    conn.close()
+
+
+def _hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def _normalize_optional(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def generate_api_key() -> str:
+    return f"{API_KEY_PREFIX}{secrets.token_urlsafe(API_KEY_BYTES)}"
+
+
+def store_api_key(api_key: str, contact: Optional[str] = None, label: Optional[str] = None):
+    key_hash = _hash_api_key(api_key)
+    key_prefix = api_key[:8]
+    contact = _normalize_optional(contact)
+    label = _normalize_optional(label)
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO api_keys (key_hash, key_prefix, contact, label) VALUES (?, ?, ?, ?)",
+            (key_hash, key_prefix, contact, label),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def issue_api_key(contact: Optional[str] = None, label: Optional[str] = None, max_attempts: int = 5) -> str:
+    for _ in range(max_attempts):
+        api_key = generate_api_key()
+        try:
+            store_api_key(api_key, contact=contact, label=label)
+            return api_key
+        except sqlite3.IntegrityError:
+            continue
+    raise RuntimeError("Failed to generate a unique API key")
+
+
+def is_api_key_valid(api_key: str) -> bool:
+    if not api_key:
+        return False
+    key_hash = _hash_api_key(api_key)
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT revoked FROM api_keys WHERE key_hash = ?", (key_hash,)).fetchone()
+        if not row or row["revoked"] != 0:
+            return False
+        try:
+            conn.execute("UPDATE api_keys SET last_used = CURRENT_TIMESTAMP WHERE key_hash = ?", (key_hash,))
+            conn.commit()
+        except Exception:
+            pass
+        return True
+    finally:
+        conn.close()
+
+
+def any_api_keys_exist() -> bool:
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT 1 FROM api_keys WHERE revoked = 0 LIMIT 1").fetchone()
+        return row is not None
+    finally:
+        conn.close()
 
 
 def store_refresh_token(username: str, token: str):
