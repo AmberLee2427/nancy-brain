@@ -25,6 +25,23 @@ COPY run_mcp_server.py ./
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
 
+# Pre-download local summarization model so it is ready at runtime
+RUN python - <<'PY'
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+model_name = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+AutoTokenizer.from_pretrained(model_name)
+AutoModelForCausalLM.from_pretrained(model_name)
+PY
+
+# Pre-download text embedding model so it is ready at runtime
+RUN python - <<'PY'
+from sentence_transformers import SentenceTransformer
+
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
+SentenceTransformer(model_name)
+PY
+
 # Create directories for config and data
 RUN mkdir -p /app/config /app/knowledge_base/embeddings /app/cache
 
