@@ -18,7 +18,7 @@ We're using **GitHub Actions with Trusted Publishing** - no API tokens needed!
    - Triggers on git tags (`v*`)
    - Builds package with Python `build`
    - Publishes to PyPI using trusted publishing
-   - Runs on `ubuntu-latest` with Python 3.11
+   - Runs on `ubuntu-latest` with Python 3.12
 
 ### Release Process
 
@@ -97,7 +97,7 @@ python -m mkdocs serve --config-file mkdocs.yml --dev-addr localhost:8001
 1. **Connect Read the Docs**:
    - Link GitHub repository
    - Configure webhook for auto-builds
-   - Set Python version to 3.11+
+   - Set Python version to 3.12+
 
 2. **GitHub Actions for Docs** (alternative):
    ```yaml
@@ -114,7 +114,7 @@ python -m mkdocs serve --config-file mkdocs.yml --dev-addr localhost:8001
          - name: Setup Python
            uses: actions/setup-python@v4
            with:
-             python-version: '3.11'
+             python-version: '3.12'
          - name: Install dependencies
            run: pip install ".[docs]"
          - name: Deploy docs
@@ -127,7 +127,7 @@ python -m mkdocs serve --config-file mkdocs.yml --dev-addr localhost:8001
 
 **GitHub Actions**: `.github/workflows/test.yml`
 - Runs on push and PR
-- Tests Python 3.10, 3.11, 3.12
+- Tests Python 3.12
 - Runs `pytest` with coverage
 - Checks code formatting with `black`
 - Linting with `flake8`

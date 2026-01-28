@@ -145,6 +145,7 @@ knowledge_base/embeddings/
 knowledge_base/embeddings_*/
 # Model caches and temporary files
 knowledge_base/embeddings/models/
+knowledge_base
 *.sqlite-journal
 cache
 tmp_emb

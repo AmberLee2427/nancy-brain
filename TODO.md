@@ -10,7 +10,7 @@
   - ✅ Configured flake8 to use .flake8 config file for consistency
   - ✅ Applied formatting fixes to resolve VS Code file watching conflicts
   - ✅ Aligned CI workflow with local pre-commit configuration
-  - ✅ Verified compatibility across Python 3.10, 3.11, 3.12
+  - ✅ Verified compatibility with Python 3.12
 - [x] **Increase test coverage** to 60%+
   - ✅ Achieved 67% test coverage (exceeding target!)
   - ✅ Added comprehensive CLI tests 
@@ -248,13 +248,15 @@
 - [ ] Add code of conduct
 
 ## 🐞 Bug Squashing (User Feedback)
+- [ ] **Nancy-Brain UI does update summaries**
+   - **Description:** exact circumstsances for failure are unknown, but the bug was noted after migrating to docker builds and local model summaries. We suspect a permision issue with the subprocess. 
 - [ ] **`explore_document_tree` returns only "unknown" entries.**
     - **Description:** The `explore_document_tree` tool is not working correctly. It should display the file and directory structure of the knowledge base, but instead it only shows "unknown" for all entries. This makes it impossible to browse the knowledge base.
 - [ ] **`retrieve_document_passage` fails to find documents from search results.**
     - **Description:** The `retrieve_document_passage` tool consistently fails with a "Document not found" error when using a `doc_id` provided by the `search_knowledge_base` tool. This is a critical bug that breaks the core search and retrieval functionality. The `retrieve` function should be able to fetch the document content from the `txtai` index, as the server is not supposed to rely on the `raw` files.
-- [ ] **Search relevance needs improvement.**
+- ✅ **Search relevance needs improvement.**
     - **Description:** The `search_knowledge_base` tool returns results with mixed relevance and low scores. While some results are good, others seem unrelated to the query. The search algorithm and/or the underlying embeddings should be investigated to improve the quality of the search results.
-- [x] **`get_system_status` shows incorrect version information.**
+- ✅ **`get_system_status` shows incorrect version information.**
     - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
 - [x] **`get_system_status` shows "unknown" for build info.**
     - ✅ **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.

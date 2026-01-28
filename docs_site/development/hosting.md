@@ -45,7 +45,7 @@ git push
 ### 2. Configure Build
 
 The `.readthedocs.yaml` file is already configured! RTD will:
-- Use Python 3.11
+- Use Python 3.12
 - Install Nancy Brain with docs dependencies
 - Build with MkDocs
 - Deploy automatically on push
@@ -85,7 +85,7 @@ https://nancy-brain.readthedocs.io/
 Netlify will automatically detect the `netlify.toml` configuration:
 - Build command: `pip install -e '.[docs]' && mkdocs build`
 - Publish directory: `site/`
-- Python version: 3.11
+- Python version: 3.12
 
 ### 3. Features You Get
 

@@ -134,7 +134,7 @@ class SummaryGenerator:
                     {
                         "summary": summary,
                         "weight": weight,
-                        "model": self.model_name,
+                        "model": payload.get("model", self.model_name),
                         "timestamp": int(time.time()),
                         "doc_id": doc_id,
                         "repo_readme_path": repo_readme_path,
@@ -305,7 +305,7 @@ class SummaryGenerator:
                 tokenizer = AutoTokenizer.from_pretrained(model_name)
                 model = AutoModelForCausalLM.from_pretrained(
                     model_name,
-                    dtype="auto",
+                    torch_dtype="auto",
                     device_map="auto" if torch.cuda.is_available() or torch.backends.mps.is_available() else "cpu",
                 )
                 _summarizer_pipeline = (model, tokenizer)
