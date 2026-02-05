@@ -4,6 +4,7 @@ Search for relevant documents using embeddings.
 
 # imports
 import logging
+import os
 from pathlib import Path
 from typing import List, Dict, Set
 import re
@@ -43,6 +44,10 @@ class Search:
         """Load txtai embeddings for general and code indexes."""
         try:
             from txtai.embeddings import Embeddings
+
+            if not os.environ.get("ALLOW_PICKLE"):
+                os.environ["ALLOW_PICKLE"] = "True"
+                logger.info("ALLOW_PICKLE not set; enabling for local embeddings load")
 
             # Load general embeddings (index is in 'index' subdirectory)
             general_index = self.embeddings_path / "index"
