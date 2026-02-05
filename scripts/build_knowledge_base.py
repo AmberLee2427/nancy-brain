@@ -1032,12 +1032,28 @@ def build_txtai_index(
         general_embeddings.index(documents)
         logger.info(f"General index built in {time.time() - start:.2f}s")
         general_embeddings.save(str(embeddings_dir / "index"))
+        try:
+            index_dir = embeddings_dir / "index"
+            cfg_json = index_dir / "config.json"
+            cfg = index_dir / "config"
+            if cfg_json.exists() and not cfg.exists():
+                cfg.write_text(cfg_json.read_text(encoding="utf-8"), encoding="utf-8")
+        except Exception as exc:
+            logger.warning(f"Failed to write txtai config shim for index: {exc}")
         if use_dual_embedding and code_embeddings:
             logger.info("Building code embeddings index...")
             cstart = time.time()
             code_embeddings.index(documents)
             logger.info(f"Code index built in {time.time() - cstart:.2f}s")
             code_embeddings.save(str(embeddings_dir / "code_index"))
+            try:
+                code_index_dir = embeddings_dir / "code_index"
+                cfg_json = code_index_dir / "config.json"
+                cfg = code_index_dir / "config"
+                if cfg_json.exists() and not cfg.exists():
+                    cfg.write_text(cfg_json.read_text(encoding="utf-8"), encoding="utf-8")
+            except Exception as exc:
+                logger.warning(f"Failed to write txtai config shim for code_index: {exc}")
         results = general_embeddings.search("function", 3)
         logger.info("Test search results (general model):")
         for result in results:

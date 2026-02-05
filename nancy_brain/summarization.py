@@ -314,6 +314,8 @@ class SummaryGenerator:
                     model_name,
                     torch_dtype=torch_dtype,
                     device_map=device_map,
+                    low_cpu_mem_usage=False,
+                    use_safetensors=True,
                 )
                 model.eval()
                 _summarizer_pipeline = (model, tokenizer)
