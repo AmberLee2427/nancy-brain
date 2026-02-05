@@ -3,7 +3,7 @@ name = "nancy-brain"
 version = "0.2.0"
 description = "Turn any GitHub repository into a searchable knowledge base for AI agents"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dynamic = ["authors"]   # <-- this makes Hatch load your metadata hook
 license = {text = "MIT"}
 keywords = ["AI", "RAG", "knowledge-base", "search", "embeddings", "research", "github"]
@@ -20,6 +20,7 @@ dependencies = [
     "torch>=1.12.1",
     "faiss-cpu>=1.7.1.post2",
     "transformers>=4.45.0",
+    "sentence-transformers>=2.2.0",
     "regex>=2022.8.17",
     "nb4llm>=0.1.3",
     "pydantic>=2.0.0",   
@@ -44,8 +45,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Information Analysis",

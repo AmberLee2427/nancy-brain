@@ -82,8 +82,8 @@ class Search:
             List of dictionaries with 'id', 'text', and 'score' keys
         """
         if not self.general_embeddings:
-            logger.warning("Embeddings not loaded, cannot perform search")
-            return []
+            logger.error("Embeddings not loaded; search cannot proceed")
+            raise RuntimeError("Embeddings not loaded; search cannot proceed")
 
         try:
             # Get results from both models if dual embedding is active

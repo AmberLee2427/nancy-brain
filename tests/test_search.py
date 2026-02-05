@@ -331,10 +331,10 @@ def test_search_exception_handling(mock_logger, tmp_path):
     search = Search(embeddings_path=embeddings_path)
     # Don't set up embeddings properly to trigger exception
 
-    results = search.search("test query", limit=5)
+    with pytest.raises(RuntimeError):
+        search.search("test query", limit=5)
 
-    # Should return empty list and log error
-    assert results == []
+    # Should log error
     mock_logger.error.assert_called()
 
 
@@ -346,8 +346,8 @@ def test_search_no_embeddings_loaded(tmp_path):
     search = Search(embeddings_path=embeddings_path)
     # Embeddings will be None due to missing index
 
-    results = search.search("test query", limit=5)
-    assert results == []
+    with pytest.raises(RuntimeError):
+        search.search("test query", limit=5)
 
 
 def _build_minimal_index(base_path: Path):

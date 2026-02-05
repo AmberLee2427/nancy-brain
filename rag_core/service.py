@@ -318,8 +318,8 @@ class RAGService:
         """Search for documents with optional filtering."""
         # Ensure search is loaded before proceeding
         self._ensure_search_loaded()
-        if not self.search:
-            return []
+        if not self.search or not getattr(self.search, "general_embeddings", None):
+            raise RuntimeError(f"Embeddings not loaded; search cannot proceed (embeddings_path={self.embeddings_path})")
 
         # Before searching, push runtime weights into search.model_weights (backwards compatibility)
         # Reload file-based weights so each search uses the latest on-disk configuration

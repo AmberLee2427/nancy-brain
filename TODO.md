@@ -3,15 +3,15 @@
 ## 🚨 High Priority (Before PyPI Release)
 
 ### Code Quality & CI
-- [x] **Fix black formatting issues** in CI
+- ✅ **Fix black formatting issues** in CI
   - ✅ Updated black version to 25.1.0 for consistency
   - ✅ Reformatted all files with consistent version
   - ✅ Pre-commit hooks now pass locally and should pass in CI
   - ✅ Configured flake8 to use .flake8 config file for consistency
   - ✅ Applied formatting fixes to resolve VS Code file watching conflicts
   - ✅ Aligned CI workflow with local pre-commit configuration
-  - ✅ Verified compatibility across Python 3.10, 3.11, 3.12
-- [x] **Increase test coverage** to 60%+
+  - ✅ Verified compatibility with Python 3.12
+- ✅ **Increase test coverage** to 60%+
   - ✅ Achieved 67% test coverage (exceeding target!)
   - ✅ Added comprehensive CLI tests 
   - ✅ Added admin UI utility tests
@@ -19,7 +19,7 @@
   - ✅ All 94 tests passing
 
 ### Package Polish
-- [x] **Validate PyPI metadata** 
+- ✅ **Validate PyPI metadata** 
   - ✅ Built package successfully: `nancy_brain-0.1.0-py3-none-any.whl`
   - ✅ Installed from wheel with all dependencies resolved
   - ✅ CLI entry point `nancy-brain` works correctly
@@ -31,7 +31,7 @@
 ## 📚 Documentation & Examples (Post-Release v0.1.x)
 
 ### Read the Docs Setup
-- [x] **Set up MkDocs Material**
+- ✅ **Set up MkDocs Material**
   - ✅ Create `docs_site/` directory structure
   - ✅ Configure `mkdocs.yml` with material theme
   - ✅ Set up Read the Docs project
@@ -64,10 +64,10 @@
   - ✅ Academic paper + GitHub repo workflow
   - ✅ PDF article management
   - ✅ Search and retrieval examples
-- [ ] **ML Engineer Setup Tutorial**
-  - PyTorch/scikit-learn knowledge base
-  - Code search and documentation
-  - Team knowledge sharing
+~~- [ ] **ML Engineer Setup Tutorial**~~
+  ~~- PyTorch/scikit-learn knowledge base~~
+  ~~- Code search and documentation~~
+  ~~- Team knowledge sharing~~
 - [ ] **Python API Usage Examples**
   - Direct RAGService usage
   - Embedding and search examples
@@ -94,7 +94,7 @@
   - ✅ Colored output for better readability
   - [ ] Interactive configuration wizard
   - [ ] Auto-completion support
-- [ ] **More build options**
+- ✅ **More build options**
   - ✅ `--dry-run` 
   - ✅ `--category` 
   - ✅ `--dirty`
@@ -193,7 +193,7 @@
 
 ## 🚀 Release Milestones
 
-### v0.1.x (Current)
+### v0.1.x 
 - [x] Basic package functionality
 - [x] CLI interface
 - [x] Web admin interface
@@ -207,25 +207,34 @@
 - [x] Improved test coverage
 - [x] Better error handling
 
-### v0.4.x (Containerize)
-- [ ] MCP Server Dockerization (in ref/nancy-brain/)
- * [ ] Create Dockerfile with embeddings build step
- * [ ] Add /rebuild API endpoint for triggering updates
- * [ ] Implement simple API key auth middleware
-- [ ] Slack Bot Docker Setup (root directory)
- * [ ] Dockerfile for the bot service
- * [ ] docker-compose.yml connecting bot → MCP server
- * [ ] Environment variable management
-- [ ] API Key Configuration
- * Add MCP_API_KEY to both services
- * How does someone get an MCP_API_KEY from nancy?
- * Update MCPRAGAdapter to send auth headers
-
 ### v0.3.x (Polish Release)
-- [ ] Enhanced UI/UX
-- [ ] Performance improvements
-- [ ] Advanced search features
-- [ ] Production hardening
+- [x] Enhanced UI/UX
+- [x] Performance improvements
+- [x] Advanced search features
+
+### v0.4.x (Containerize - complete)
+- [x] MCP Server Dockerization (in ref/nancy-brain/)
+ * [x] Create Dockerfile and build workflow for embeddings/model readiness
+ * [x] Add /rebuild API endpoint for triggering updates
+ * [x] Implement simple API key auth middleware
+- [x] Slack Bot Docker Setup (root directory)
+ * [x] Dockerfile for the bot service
+ * [x] docker-compose.yml connecting bot → MCP server
+ * [x] Environment variable management
+- [x] API Key Configuration
+ * [x] Add MCP_API_KEY to both services
+ * [x] Add API-key issuance endpoints/flows
+ * [x] Update MCPRAGAdapter to send auth headers
+
+### v0.5.0 (Beta testing for user readiness - current)
+- [ ] Working NancyGPT
+- [ ] Adoption instruction for NancyBrain (with actual, live MCP server address) and link to the NancyGPT in the NancyBot Slack home page. 
+- [ ] Debug issues Nancy is experiencing with the NancyBrain MCP.
+  - Retrieve
+  - Tree
+  - Search
+- [ ] Debug any issues NancyGPT is having with NancyBrain Actions
+- [ ] Build summaries on Unity and transfer them over to the proxmox container for deployment.
 
 ### v1.0.x (Stable Release)
 - [ ] Full feature completeness
@@ -248,13 +257,16 @@
 - [ ] Add code of conduct
 
 ## 🐞 Bug Squashing (User Feedback)
+- [-] **Nancy-Brain UI does update summaries**
+   - **Description:** exact circumstsances for failure are unknown, but the bug was noted after migrating to docker builds and local model summaries. We suspect a permision issue with the subprocess.
+   - I think this is fine now. We are building local summaries on a faster machine and transfering them for the initial build.
 - [ ] **`explore_document_tree` returns only "unknown" entries.**
     - **Description:** The `explore_document_tree` tool is not working correctly. It should display the file and directory structure of the knowledge base, but instead it only shows "unknown" for all entries. This makes it impossible to browse the knowledge base.
 - [ ] **`retrieve_document_passage` fails to find documents from search results.**
     - **Description:** The `retrieve_document_passage` tool consistently fails with a "Document not found" error when using a `doc_id` provided by the `search_knowledge_base` tool. This is a critical bug that breaks the core search and retrieval functionality. The `retrieve` function should be able to fetch the document content from the `txtai` index, as the server is not supposed to rely on the `raw` files.
-- [ ] **Search relevance needs improvement.**
+- ✅ **Search relevance needs improvement.**
     - **Description:** The `search_knowledge_base` tool returns results with mixed relevance and low scores. While some results are good, others seem unrelated to the query. The search algorithm and/or the underlying embeddings should be investigated to improve the quality of the search results.
-- [x] **`get_system_status` shows incorrect version information.**
+- ✅ **`get_system_status` shows incorrect version information.**
     - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
 - [x] **`get_system_status` shows "unknown" for build info.**
     - ✅ **Description:** The `get_system_status` tool reports "unknown" for `Build SHA` and `Built At`. This information should be populated during the build process to help with debugging and version tracking.

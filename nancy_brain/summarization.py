@@ -134,7 +134,7 @@ class SummaryGenerator:
                     {
                         "summary": summary,
                         "weight": weight,
-                        "model": self.model_name,
+                        "model": payload.get("model", self.model_name),
                         "timestamp": int(time.time()),
                         "doc_id": doc_id,
                         "repo_readme_path": repo_readme_path,
@@ -303,11 +303,19 @@ class SummaryGenerator:
                 logger.info(f"Loading local summarization model ({model_name})...")
 
                 tokenizer = AutoTokenizer.from_pretrained(model_name)
+                if torch.cuda.is_available():
+                    device_map = "auto"
+                    torch_dtype = torch.float16
+                else:
+                    device_map = "cpu"
+                    torch_dtype = torch.float32
+
                 model = AutoModelForCausalLM.from_pretrained(
                     model_name,
-                    dtype="auto",
-                    device_map="auto" if torch.cuda.is_available() or torch.backends.mps.is_available() else "cpu",
+                    torch_dtype=torch_dtype,
+                    device_map=device_map,
                 )
+                model.eval()
                 _summarizer_pipeline = (model, tokenizer)
 
             model, tokenizer = _summarizer_pipeline
@@ -367,9 +375,20 @@ class SummaryGenerator:
             inputs = tokenizer([text], return_tensors="pt").to(model.device)
             inputs_weight = tokenizer([text_weight], return_tensors="pt").to(model.device)
 
-            with torch.no_grad():
-                generated_ids = model.generate(**inputs, max_new_tokens=512, temperature=0.7, top_p=0.9)
-                generated_ids_weight = model.generate(**inputs_weight, max_new_tokens=16, temperature=0.7, top_p=0.9)
+            gen_kwargs = {
+                "max_new_tokens": 512,
+                "do_sample": False,
+                "pad_token_id": tokenizer.eos_token_id,
+            }
+            gen_kwargs_weight = {
+                "max_new_tokens": 16,
+                "do_sample": False,
+                "pad_token_id": tokenizer.eos_token_id,
+            }
+
+            with torch.inference_mode():
+                generated_ids = model.generate(**inputs, **gen_kwargs)
+                generated_ids_weight = model.generate(**inputs_weight, **gen_kwargs_weight)
 
             generated_ids = [
                 output_ids[len(input_ids) :] for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
