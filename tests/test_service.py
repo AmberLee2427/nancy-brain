@@ -121,6 +121,7 @@ def test_search_with_filters(tmp_path):
             },
         ]
     )
+    service.search.general_embeddings = object()
 
     # Override get_meta to return different toolkits
     def mock_get_meta(doc_id):
@@ -179,6 +180,7 @@ def test_search_docs_with_weights(tmp_path):
 
     # Mock search
     service.search.search = Mock(return_value=[{"id": "cat1/repo1/test.py", "text": "Test content", "score": 0.8}])
+    service.search.general_embeddings = object()
 
     # Mock model_weights attribute
     service.search.model_weights = {}
@@ -217,6 +219,7 @@ def test_search_docs_threshold_filter(tmp_path):
             {"id": "cat1/repo1/low.py", "text": "Low relevance", "score": 0.3},
         ]
     )
+    service.search.general_embeddings = object()
 
     import asyncio
 
@@ -280,6 +283,7 @@ def test_search_docs_with_enhanced_results(tmp_path):
             }
         ]
     )
+    service.search.general_embeddings = object()
 
     import asyncio
 
