@@ -46,6 +46,14 @@ class Search:
 
             # Load general embeddings (index is in 'index' subdirectory)
             general_index = self.embeddings_path / "index"
+            # txtai compatibility shim: ensure expected config file exists
+            config_path = general_index / "config"
+            config_json_path = general_index / "config.json"
+            if not config_path.exists() and config_json_path.exists():
+                try:
+                    config_path.write_text(config_json_path.read_text(encoding="utf-8"), encoding="utf-8")
+                except Exception:
+                    pass
             logger.info(f"Loading general embeddings from {general_index}")
             self.general_embeddings = Embeddings()
             self.general_embeddings.load(str(general_index))
