@@ -1212,7 +1212,7 @@ if __name__ == "__main__":
         dest="summaries",
         action="store_true",
         default=DEFAULT_SUMMARIES_ENABLED,
-        help="Generate Anthropic summaries for each document (requires ANTHROPIC_API_KEY)",
+        help="Generate document summaries for each document (local if NB_USE_LOCAL_SUMMARY=true; otherwise Anthropic)",
     )
     parser.add_argument(
         "--no-summaries",
@@ -1296,7 +1296,10 @@ if __name__ == "__main__":
                             logger.info(f"  ❌ Summary failures: {summary_stats.get('failures', 0)}")
                         logger.info(f"  📦 Summary documents added: {summary_stats.get('documents_added', 0)}")
                     elif configured:
-                        logger.info("  ℹ️  Summaries configured but disabled (check ANTHROPIC_API_KEY or permissions).")
+                        logger.info(
+                            "  ℹ️  Summaries configured but disabled "
+                            "(check NB_USE_LOCAL_SUMMARY, ANTHROPIC_API_KEY, or local model dependencies)."
+                        )
             total_failures = (
                 sum(len(v) for k, v in indexing_failures.items() if k.startswith("failed"))
                 + len(indexing_failures.get("fatal_errors", []))

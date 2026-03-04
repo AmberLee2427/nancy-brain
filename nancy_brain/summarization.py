@@ -42,12 +42,9 @@ class SummaryGenerator:
     ) -> None:
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
 
-        # Check for local mode override ("force" keeps local even if API key is set)
+        # NB_USE_LOCAL_SUMMARY explicitly controls local mode and overrides API-key availability.
         local_setting = os.environ.get("NB_USE_LOCAL_SUMMARY", "").lower()
-        force_local = local_setting in ("force", "forced")
-        prefer_local = local_setting in ("true", "1", "yes", "force", "forced")
-        # If API key is available, default to Anthropic unless local is forced
-        self.use_local = prefer_local and (not self.api_key or force_local)
+        self.use_local = local_setting in ("true", "1", "yes", "force", "forced")
 
         # Enabled if we have an API key OR if we are using local mode
         self.enabled = enabled and (bool(self.api_key) or self.use_local)

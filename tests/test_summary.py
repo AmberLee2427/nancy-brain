@@ -11,12 +11,13 @@ load_dotenv("config/.env")
 
 
 @pytest.mark.integration
-def test_summary_on_readme(tmp_path):
+def test_summary_on_readme(tmp_path, monkeypatch):
     """Ensure SummaryGenerator can produce a summary when ANTHROPIC_API_KEY is available."""
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not configured")
+    monkeypatch.setenv("NB_USE_LOCAL_SUMMARY", "false")
 
     readme_path = Path("README.md")
     if not readme_path.exists():
@@ -27,6 +28,7 @@ def test_summary_on_readme(tmp_path):
 
     cache_dir = tmp_path / "summary_cache"
     summary_gen = SummaryGenerator(cache_dir=cache_dir, enabled=True)
+    assert summary_gen.use_local is False
 
     result = summary_gen.summarize(
         doc_id="README.md",
@@ -40,3 +42,35 @@ def test_summary_on_readme(tmp_path):
     assert isinstance(result.summary, str) and result.summary.strip(), "Summary text missing"
     assert isinstance(result.weight, float), "Summary weight missing"
     assert 0.5 <= result.weight <= 2.0, "Summary weight out of expected range"
+
+
+@pytest.mark.parametrize(
+    ("local_setting", "api_key", "expected_use_local", "expected_enabled"),
+    [
+        (None, None, False, False),
+        (None, "test-key", False, True),
+        ("false", None, False, False),
+        ("false", "test-key", False, True),
+        ("true", None, True, True),
+        ("true", "test-key", True, True),
+        ("1", "test-key", True, True),
+        ("yes", "test-key", True, True),
+        ("force", "test-key", True, True),
+        ("forced", "test-key", True, True),
+    ],
+)
+def test_summary_mode_selection(monkeypatch, tmp_path, local_setting, api_key, expected_use_local, expected_enabled):
+    if local_setting is None:
+        monkeypatch.delenv("NB_USE_LOCAL_SUMMARY", raising=False)
+    else:
+        monkeypatch.setenv("NB_USE_LOCAL_SUMMARY", local_setting)
+
+    if api_key is None:
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", api_key)
+
+    summary_gen = SummaryGenerator(cache_dir=Path(tmp_path) / "summaries", enabled=True)
+
+    assert summary_gen.use_local is expected_use_local
+    assert summary_gen.enabled is expected_enabled
