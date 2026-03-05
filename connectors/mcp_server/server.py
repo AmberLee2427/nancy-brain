@@ -1,70 +1,35 @@
 #!/usr/bin/env python3
 """
-Nancy Brain MCP Server
-
-A Model Context Protocol server that exposes Nancy's RAG (Retrieval-Augmented Generation)
-fun                types.Tool(
-                    name="set_retrieval_weights",
-                    description="Set retrieval weights for specific documents to adjust their search ranking priority",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "doc_id": {
-                                "type": "string",
-                                "description": "Specific document ID to set weight for (e.g., 'microlensing_tools/MulensModel/README.md')"
-                            },
-                            "weight": {
-                                "type": "number",
-                                "description": "Weight multiplier value (will be clamped between 0.5-2.0)",
-                                "minimum": 0.1,
-                                "maximum": 5.0
-                            },
-                            "namespace": {
-                                "type": "string",
-                                "description": "Namespace for the weight setting",
-                                "default": "global"
-                            },
-                            "ttl_days": {
-                                "type": "integer",
-                                "description": "Time-to-live in days for the weight setting",
-                                "minimum": 1
-                            }
-                        },
-                        "required": ["doc_id", "weight"]
-                    }
-                ),with MCP-compatible clients like Claude Desktop, VS Code, and other AI tools.
-
-This server provides tools for:
-- Searching through Nancy's knowledge base
-- Retrieving specific document passages
-- Exploring the document tree structure
-- Managing retrieval weights and priorities
-
-Usage:
-    python -m connectors.mcp_server.server [config_path] [embeddings_path] [weights_path]
+Nancy Brain MCP server for search, retrieval, tree listing, and weight updates.
 """
 
+import argparse
+import asyncio
+import json
+import logging
 import os
+import re
+import secrets
+import sqlite3
+import sys
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# Avoid tqdm/progress output errors when running non-interactive inside containers.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TQDM_DISABLE", "1")
 
-import sys
-import asyncio
-import argparse
-import json
-import re
-import sqlite3
-import secrets
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from mcp.server import Server, InitializationOptions, NotificationOptions
-from mcp import types
 from mcp import stdio_server
+from mcp import types
+from mcp.server import InitializationOptions, NotificationOptions, Server
 
-from rag_core.service import RAGService
 from nancy_brain.chunking import strip_chunk_suffix
+from rag_core.service import RAGService
+
+logger = logging.getLogger(__name__)
 
 
 class NancyMCPServer:
@@ -136,7 +101,9 @@ class NancyMCPServer:
                             },
                             "window": {
                                 "type": "integer",
-                                "description": "Number of surrounding chunks to include when doc_id is a chunk (default: 1)",
+                                "description": (
+                                    "Number of surrounding chunks to include when " "doc_id is a chunk (default: 1)"
+                                ),
                                 "default": 1,
                             },
                         },
@@ -347,6 +314,80 @@ class NancyMCPServer:
             combined.append(f"[Chunk] {label}\n{ch.get('text', '')}")
         return {"text": "\n\n".join(combined), "chunks": chunks}
 
+    def _resolve_retrievable_doc_id(self, doc_id: str) -> str:
+        """
+        Resolve user-facing doc_id aliases to an actual stored section id/path.
+        This bridges schema/client drift where search returns one identifier form
+        but retrieve expects another.
+        """
+        if not doc_id:
+            return doc_id
+
+        db_path = self._get_embeddings_db_path()
+        if not db_path or not db_path.exists():
+            return doc_id
+
+        direct_candidates = [doc_id]
+        if not self._parse_chunk_id(doc_id):
+            direct_candidates.extend(
+                [
+                    f"{doc_id}::chunk-0",
+                    f"{doc_id}#chunk-0",
+                    f"{doc_id}|chunk:0",
+                ]
+            )
+        if not doc_id.startswith("knowledge_base/raw/"):
+            prefixed = f"knowledge_base/raw/{doc_id}"
+            direct_candidates.extend(
+                [
+                    prefixed,
+                    f"{prefixed}::chunk-0",
+                    f"{prefixed}#chunk-0",
+                    f"{prefixed}|chunk:0",
+                ]
+            )
+
+        try:
+            conn = sqlite3.connect(str(db_path))
+        except Exception:
+            return doc_id
+        try:
+            for candidate in direct_candidates:
+                row = self._fetch_section_row(conn, candidate)
+                if row:
+                    return candidate
+
+            # Try lookup by source_document metadata when ids are chunked differently.
+            columns = [row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()]
+            meta_col = "data" if "data" in columns else ("metadata" if "metadata" in columns else None)
+            if not meta_col:
+                return doc_id
+
+            source_candidates = [doc_id]
+            if not doc_id.startswith("knowledge_base/raw/"):
+                source_candidates.append(f"knowledge_base/raw/{doc_id}")
+
+            for source_id in source_candidates:
+                query = f"""
+                    SELECT id
+                    FROM sections
+                    WHERE json_extract({meta_col}, '$.source_document') = ?
+                    ORDER BY
+                        COALESCE(json_extract({meta_col}, '$.chunk_index'), 0) ASC,
+                        id ASC
+                    LIMIT 1
+                """
+                match = conn.execute(query, (source_id,)).fetchone()
+                if match and match[0]:
+                    return str(match[0])
+
+            return doc_id
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     async def _handle_search(self, args: Dict[str, Any]) -> list[types.TextContent]:
         """Handle search_knowledge_base tool."""
         if not self.rag_service:
@@ -396,19 +437,42 @@ class NancyMCPServer:
 
         result = None
         total_lines = None
-        base_doc_id = strip_chunk_suffix(doc_id)
+        resolved_doc_id = self._resolve_retrievable_doc_id(doc_id)
+        base_doc_id = strip_chunk_suffix(resolved_doc_id)
 
         # If line range specified, retrieve from the base document (1-based inclusive)
         if start is not None or end is not None:
             start0 = max(int(start) - 1, 0) if start is not None else None
             end0 = int(end) if end is not None else None
-            result = await self.rag_service.retrieve(base_doc_id, start0, end0)
+            try:
+                result = await self.rag_service.retrieve(base_doc_id, start0, end0)
+            except FileNotFoundError:
+                result = None
+            if not result:
+                # Some indexed entries are chunk-only; fall back to a chunk window.
+                chunk_window = self._retrieve_chunk_window(resolved_doc_id, window=window)
+                if chunk_window:
+                    logger.error(
+                        "Range retrieval fallback to chunk window "
+                        "(requested=%s, resolved=%s, start=%s, end=%s, window=%s)",
+                        doc_id,
+                        resolved_doc_id,
+                        start,
+                        end,
+                        window,
+                    )
+                    result = {
+                        "doc_id": resolved_doc_id,
+                        "text": chunk_window.get("text", ""),
+                        "chunks": chunk_window.get("chunks", []),
+                        "mode": "chunk_window",
+                    }
         else:
             # Default: if chunk id, return surrounding chunks
-            chunk_window = self._retrieve_chunk_window(doc_id, window=window)
+            chunk_window = self._retrieve_chunk_window(resolved_doc_id, window=window)
             if chunk_window:
                 result = {
-                    "doc_id": doc_id,
+                    "doc_id": resolved_doc_id,
                     "text": chunk_window.get("text", ""),
                     "chunks": chunk_window.get("chunks", []),
                     "mode": "chunk_window",
@@ -635,7 +699,10 @@ class NancyMCPServer:
         response_text += f"\n🏷️ **Version:** {status_info.get('index_version', 'unknown')}\n"
         response_text += f"🔨 **Build SHA:** {status_info.get('build_sha', 'unknown')}\n"
         response_text += f"📅 **Built At:** {status_info.get('built_at', 'unknown')}\n"
-        response_text += f"🐍 **Python:** {status_info.get('python_version', 'unknown')} ({status_info.get('python_implementation', 'unknown')})\n"
+        response_text += (
+            f"🐍 **Python:** {status_info.get('python_version', 'unknown')} "
+            f"({status_info.get('python_implementation', 'unknown')})\n"
+        )
         response_text += f"🌎 **Environment:** {status_info.get('environment', 'unknown')}\n"
         dependencies = status_info.get("dependencies", {})
         if dependencies:
@@ -697,7 +764,9 @@ async def main():
         default="config/index_weights.yaml",
     )
     parser.add_argument(
-        "--http", help="Run Nancy Brain MCP server in HTTP mode (for Custom GPT connections)", action="store_true"
+        "--http",
+        help="Run Nancy Brain MCP server in HTTP mode (for Custom GPT connections)",
+        action="store_true",
     )
     parser.add_argument(
         "--http-and-stdio",
@@ -740,7 +809,9 @@ async def main():
             forbidden_keys = {"model_weights", "doc_weights", "documents"}
             if any(k in data for k in forbidden_keys):
                 print(
-                    f"❌ ERROR: The weights file '{weights_path}' appears to be a model weights file (contains {forbidden_keys}). Please provide an index_weights.yaml file for extension/path weights only."
+                    f"❌ ERROR: The weights file '{weights_path}' appears to be a model "
+                    f"weights file (contains {forbidden_keys}). Please provide an "
+                    "index_weights.yaml file for extension/path weights only."
                 )
                 sys.exit(1)
     except Exception as e:
@@ -859,6 +930,18 @@ async def main():
 
             @app.get("/search")
             async def search(query: str = "", limit: int = 5, api_key: str = Depends(verify_api_key)):
+                def _to_json_safe(value):
+                    if isinstance(value, dict):
+                        return {k: _to_json_safe(v) for k, v in value.items()}
+                    if isinstance(value, list):
+                        return [_to_json_safe(v) for v in value]
+                    if hasattr(value, "item") and callable(getattr(value, "item", None)):
+                        try:
+                            return value.item()
+                        except Exception:
+                            return value
+                    return value
+
                 results = await server.rag_service.search_docs(query=query, limit=limit)
                 # Promote common chunk metadata fields to top-level for convenience
                 for r in results:
@@ -867,30 +950,71 @@ async def main():
                         for key in ("line_start", "line_end", "chunk_index", "chunk_count", "source_document"):
                             if key in data and key not in r:
                                 r[key] = data[key]
-                return {"hits": results}
+                return {"hits": _to_json_safe(results)}
+
+            @app.get("/tree")
+            async def tree(
+                prefix: str = "",
+                depth: int = 2,
+                max_entries: int = 500,
+                api_key: str = Depends(verify_api_key),
+            ):
+                # Compatibility endpoint for older GPT action schemas.
+                entries = await server.rag_service.list_tree(prefix=prefix, depth=depth, max_entries=max_entries)
+                normalized = []
+                for entry in entries:
+                    entry_type = entry.get("type", "file")
+                    if entry_type == "directory":
+                        entry_type = "dir"
+                    normalized.append({"path": entry.get("path", ""), "type": entry_type})
+                return {"entries": normalized}
 
             @app.post("/retrieve")
             async def retrieve(request: Request, api_key: str = Depends(verify_api_key)):
                 data = await request.json()
-                doc_id = data.get("doc_id")
+                doc_id = data.get("doc_id") or data.get("file_path") or data.get("path")
                 start = data.get("start")
                 end = data.get("end")
                 window = data.get("window", 1)
+                if not doc_id:
+                    raise HTTPException(status_code=400, detail="doc_id, file_path, or path is required")
                 try:
-                    base_doc_id = strip_chunk_suffix(doc_id)
+                    resolved_doc_id = server._resolve_retrievable_doc_id(str(doc_id))
+                    base_doc_id = strip_chunk_suffix(resolved_doc_id)
                     result = None
                     if start is not None or end is not None:
                         start0 = max(int(start) - 1, 0) if start is not None else None
                         end0 = int(end) if end is not None else None
-                        result = await server.rag_service.retrieve(base_doc_id, start0, end0)
+                        try:
+                            result = await server.rag_service.retrieve(base_doc_id, start0, end0)
+                        except FileNotFoundError:
+                            result = None
+                        if not result:
+                            chunk_window = server._retrieve_chunk_window(resolved_doc_id, window=window)
+                            if chunk_window:
+                                logger.error(
+                                    "HTTP range retrieval fallback to chunk window "
+                                    "(requested=%s, resolved=%s, start=%s, end=%s, window=%s)",
+                                    doc_id,
+                                    resolved_doc_id,
+                                    start,
+                                    end,
+                                    window,
+                                )
+                                result = {
+                                    "doc_id": resolved_doc_id,
+                                    "text": chunk_window.get("text", ""),
+                                    "chunks": chunk_window.get("chunks", []),
+                                    "mode": "chunk_window",
+                                }
                         if result is not None:
                             result["start"] = start
                             result["end"] = end
                     else:
-                        chunk_window = server._retrieve_chunk_window(doc_id, window=window)
+                        chunk_window = server._retrieve_chunk_window(resolved_doc_id, window=window)
                         if chunk_window:
                             result = {
-                                "doc_id": doc_id,
+                                "doc_id": resolved_doc_id,
                                 "text": chunk_window.get("text", ""),
                                 "chunks": chunk_window.get("chunks", []),
                                 "mode": "chunk_window",
@@ -924,6 +1048,24 @@ async def main():
                     from fastapi.responses import JSONResponse
 
                     return JSONResponse({"error": str(exc)}, status_code=500)
+
+            @app.post("/weight")
+            async def weight(request: Request, api_key: str = Depends(verify_api_key)):
+                # Compatibility endpoint for older GPT action schemas.
+                data = await request.json()
+                doc_id = data.get("doc_id") or data.get("path")
+                if not doc_id:
+                    raise HTTPException(status_code=400, detail="doc_id or path is required")
+                multiplier = float(data.get("multiplier", 1.0))
+                namespace = data.get("namespace", "global")
+                ttl_days = data.get("ttl_days")
+                await server.rag_service.set_weight(
+                    doc_id=str(doc_id),
+                    multiplier=multiplier,
+                    namespace=str(namespace),
+                    ttl_days=ttl_days,
+                )
+                return {"status": "success", "doc_id": str(doc_id), "multiplier": multiplier}
 
             @app.post("/embeddings/sql")
             async def embeddings_sql(request: Request, api_key: str = Depends(verify_api_key)):

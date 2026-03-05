@@ -64,7 +64,9 @@ async def main():
             forbidden_keys = {"model_weights", "doc_weights", "documents"}
             if any(k in data for k in forbidden_keys):
                 print(
-                    f"❌ ERROR: The weights file '{weights_path}' appears to be a model weights file (contains {forbidden_keys}). Please provide an index_weights.yaml file for extension/path weights only."
+                    f"❌ ERROR: The weights file '{weights_path}' appears to be a model "
+                    f"weights file (contains {forbidden_keys}). Please provide an "
+                    "index_weights.yaml file for extension/path weights only."
                 )
                 sys.exit(1)
     except Exception as e:
@@ -93,6 +95,8 @@ async def main():
 
     # Always use connectors/mcp_server/server.py as the real entrypoint for HTTP/stdio
     server_script = str(Path(__file__).parent / "connectors/mcp_server/server.py")
+    transport = os.environ.get("MCP_TRANSPORT", "http-and-stdio").strip().lower()
+
     args = [
         sys.executable,
         server_script,
@@ -102,8 +106,13 @@ async def main():
         str(weights_path),
         "--port",
         str(port),
-        "--http-and-stdio",
     ]
+    if transport == "http":
+        args.append("--http")
+    elif transport == "stdio":
+        args.append("--stdio")
+    else:
+        args.append("--http-and-stdio")
     try:
         proc = subprocess.Popen(args)
         proc.wait()
