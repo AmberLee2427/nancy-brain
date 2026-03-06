@@ -12,6 +12,7 @@ import re
 import secrets
 import sqlite3
 import sys
+from contextlib import asynccontextmanager
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -827,6 +828,9 @@ async def main():
         def build_http_app():
             from fastapi import FastAPI, Request, HTTPException, Header, Depends
             from fastapi.security import OAuth2PasswordRequestForm
+            from mcp.server.fastmcp.server import StreamableHTTPASGIApp
+            from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+            from starlette.responses import JSONResponse
             from typing import Optional
             from connectors.http_api import auth
 
@@ -835,7 +839,44 @@ async def main():
             auth.create_refresh_table()
             auth.create_api_key_table()
 
-            app = FastAPI()
+            streamable_http_manager = StreamableHTTPSessionManager(app=server.server, stateless=False)
+            streamable_http_app = StreamableHTTPASGIApp(streamable_http_manager)
+
+            def _is_valid_api_key(value: Optional[str]) -> bool:
+                expected_key = os.environ.get("MCP_API_KEY")
+                if value:
+                    if expected_key and secrets.compare_digest(value, expected_key):
+                        return True
+                    if auth.is_api_key_valid(value):
+                        return True
+                return False
+
+            class MCPAuthApp:
+                async def __call__(self, scope, receive, send):
+                    headers = {
+                        key.decode("latin1").lower(): value.decode("latin1")
+                        for key, value in scope.get("headers", [])
+                    }
+                    x_api_key = headers.get("x-api-key")
+                    auth_header = headers.get("authorization", "")
+                    bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else None
+
+                    provided = x_api_key or bearer
+                    if not _is_valid_api_key(provided):
+                        expected_key = os.environ.get("MCP_API_KEY")
+                        if expected_key or auth.any_api_keys_exist():
+                            response = JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
+                            await response(scope, receive, send)
+                            return
+                    await streamable_http_app(scope, receive, send)
+
+            @asynccontextmanager
+            async def lifespan(_app):
+                async with streamable_http_manager.run():
+                    yield
+
+            app = FastAPI(lifespan=lifespan)
+            app.mount("/mcp", MCPAuthApp())
 
             # --- Authentication Endpoints ---
             @app.post("/login")
@@ -1103,11 +1144,6 @@ async def main():
                     return {"status": "rebuild_triggered", "message": "Embedding rebuild started in background"}
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=f"Failed to trigger rebuild: {str(e)}")
-
-            @app.post("/mcp")
-            async def mcp_endpoint(request: Request):
-                payload = await request.json()
-                return {"received": payload}
 
             return app
 
