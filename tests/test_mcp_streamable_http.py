@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -14,7 +15,13 @@ SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"
 CONFIG_PATH = ROOT / "config" / "repositories.yml"
 EMBEDDINGS_PATH = ROOT / "knowledge_base" / "embeddings"
 WEIGHTS_PATH = ROOT / "config" / "index_weights.yaml"
-MCP_PORT = 8125
+
+
+def _free_port() -> int:
+    """Return a free TCP port on localhost by binding to port 0."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
@@ -30,13 +37,11 @@ def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
     return False
 
 
-@pytest.fixture(scope="module")
-def mcp_http_server():
+def _start_server(port: int) -> subprocess.Popen:
     env = os.environ.copy()
-    env["MCP_PORT"] = str(MCP_PORT)
+    env["MCP_PORT"] = str(port)
     env["MCP_API_KEY"] = "test-key"
-
-    proc = subprocess.Popen(
+    return subprocess.Popen(
         [
             sys.executable,
             "-u",
@@ -47,7 +52,7 @@ def mcp_http_server():
             str(WEIGHTS_PATH),
             "--http",
             "--port",
-            str(MCP_PORT),
+            str(port),
         ],
         cwd=str(ROOT),
         stdout=subprocess.PIPE,
@@ -56,15 +61,26 @@ def mcp_http_server():
         env=env,
     )
 
-    base_url = f"http://127.0.0.1:{MCP_PORT}"
-    if not _wait_for_health(base_url):
-        out = ""
+
+@pytest.fixture(scope="module")
+def mcp_http_server():
+    proc = None
+    last_out = ""
+    for _ in range(3):
+        port = _free_port()
+        proc = _start_server(port)
+        base_url = f"http://127.0.0.1:{port}"
+        if _wait_for_health(base_url):
+            break
+        last_out = ""
         try:
-            out, _ = proc.communicate(timeout=5)
+            last_out, _ = proc.communicate(timeout=5)
         except Exception:
             pass
         proc.kill()
-        pytest.fail(f"MCP HTTP server failed health check at {base_url}/health\n{out}")
+        proc = None
+    else:
+        pytest.fail(f"MCP HTTP server failed to start after retries\n{last_out}")
 
     try:
         yield base_url
