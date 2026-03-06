@@ -45,9 +45,15 @@ class Search:
         try:
             from txtai.embeddings import Embeddings
 
-            if not os.environ.get("ALLOW_PICKLE"):
-                os.environ["ALLOW_PICKLE"] = "True"
-                logger.info("ALLOW_PICKLE not set; enabling for local embeddings load")
+            # Require an explicit opt-in for enabling pickle deserialization.
+            allow_pickle = os.environ.get("ALLOW_PICKLE", "").lower()
+            if allow_pickle not in {"1", "true", "yes"}:
+                msg = (
+                    "txtai embeddings loading requires pickle deserialization, which is disabled by default. "
+                    "To proceed, explicitly acknowledge this risk by setting ALLOW_PICKLE=1 in the environment."
+                )
+                logger.error(msg)
+                raise RuntimeError(msg)
 
             # Load general embeddings (index is in 'index' subdirectory)
             general_index = self.embeddings_path / "index"
