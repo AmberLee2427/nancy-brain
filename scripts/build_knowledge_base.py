@@ -612,9 +612,9 @@ def build_txtai_index(
     documents = []
     pipeline = ChunkPipeline()
     chunk_config = ChunkerConfig(
-        max_chars=int(os.environ.get("CHUNKY_MAX_CHARS", "2000")),
-        lines_per_chunk=int(os.environ.get("CHUNKY_LINES_PER_CHUNK", "80")),
-        line_overlap=int(os.environ.get("CHUNKY_LINE_OVERLAP", "10")),
+        max_chars=int(os.environ.get("CHUNKY_MAX_CHARS", "1000")),
+        lines_per_chunk=int(os.environ.get("CHUNKY_LINES_PER_CHUNK", "40")),
+        line_overlap=int(os.environ.get("CHUNKY_LINE_OVERLAP", "5")),
     )
     pdf_status = {}  # doc_id -> {status, size, chars, method}
     failures = {
