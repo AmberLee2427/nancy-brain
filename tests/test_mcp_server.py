@@ -178,6 +178,27 @@ async def test_mcp_server_tree_tool(mock_rag_service):
 
 
 @pytest.mark.asyncio
+async def test_mcp_server_tree_tool_flat_entries(mock_rag_service):
+    """Tree rendering should handle flat path/type entries from rag_service.list_tree."""
+    server = NancyMCPServer()
+    server.rag_service = mock_rag_service
+
+    async def flat_tree(path="", max_depth=3):
+        return [
+            {"path": "microlensing_tools", "type": "directory"},
+            {"path": "microlensing_tools/RTModel", "type": "directory"},
+            {"path": "microlensing_tools/RTModel/README.md", "type": "file"},
+        ]
+
+    server.rag_service.list_tree = flat_tree
+    result = await server._handle_tree({"max_depth": 2})
+
+    assert len(result) == 1
+    assert "unknown/" not in result[0].text
+    assert "microlensing_tools/RTModel/README.md" in result[0].text
+
+
+@pytest.mark.asyncio
 async def test_mcp_server_weights_tool(mock_rag_service):
     """Test the set_retrieval_weights tool."""
     server = NancyMCPServer()
@@ -196,6 +217,21 @@ async def test_mcp_server_weights_tool(mock_rag_service):
     assert "Weight Updated" in result[0].text
     assert "microlensing_tools/MulensModel/README.md" in result[0].text
     assert "1.5" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_weights_tool_namespace_only(mock_rag_service):
+    """Namespace-only set_retrieval_weights calls should not fail with missing doc_id."""
+    server = NancyMCPServer()
+    server.rag_service = mock_rag_service
+    server.rag_service.set_weight = AsyncMock(return_value=True)
+
+    result = await server._handle_set_weights({"namespace": "microlensing_tools", "weight": 2.0})
+
+    assert len(result) == 1
+    assert "Namespace Prefix" in result[0].text
+    assert "microlensing_tools/" in result[0].text
+    server.rag_service.set_weight.assert_awaited_once_with("microlensing_tools/", 2.0, "microlensing_tools", None)
 
 
 @pytest.mark.asyncio

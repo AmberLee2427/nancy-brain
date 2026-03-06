@@ -159,6 +159,13 @@ class NancyMCPServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
+                            "doc_id": {
+                                "type": "string",
+                                "description": (
+                                    "Optional exact document ID to weight (e.g., "
+                                    "'microlensing_tools/MulensModel/README.md')"
+                                ),
+                            },
                             "namespace": {
                                 "type": "string",
                                 "description": "Namespace to set weight for (e.g., 'microlensing_tools')",
@@ -169,7 +176,7 @@ class NancyMCPServer:
                                 "minimum": 0.0,
                             },
                         },
-                        "required": ["namespace", "weight"],
+                        "required": ["weight"],
                     },
                 ),
                 types.Tool(
@@ -594,8 +601,26 @@ class NancyMCPServer:
             for item in items[:50]:  # Limit for readability
                 prefix = "  " * indent
                 if isinstance(item, dict):
-                    name = item.get("name", "unknown")
-                    if item.get("type") == "file":
+                    # Newer list_tree responses are flat path/type entries.
+                    if "path" in item and "name" not in item:
+                        item_path = str(item.get("path", "")).strip()
+                        item_type = item.get("type", "file")
+                        is_dir = item_type in ("dir", "directory")
+                        if item_path:
+                            rel_path = item_path
+                            if path and item_path.startswith(path.rstrip("/") + "/"):
+                                rel_path = item_path[len(path.rstrip("/") + "/") :]
+                            rel_depth = rel_path.count("/")
+                            prefix = "  " * rel_depth
+                        label = item_path or "unknown"
+                        if is_dir:
+                            formatted += f"{prefix}📁 {label}/\n"
+                        else:
+                            formatted += f"{prefix}📄 {label}\n"
+                        continue
+
+                    name = item.get("name", item.get("path", "unknown"))
+                    if item.get("type") in ("file",):
                         formatted += f"{prefix}📄 {name}\n"
                     else:
                         formatted += f"{prefix}📁 {name}/\n"
@@ -619,24 +644,37 @@ class NancyMCPServer:
                 )
             ]
 
-        doc_id = args["doc_id"]
+        doc_id = args.get("doc_id") or args.get("path")
+        namespace = args.get("namespace")
         weight = args["weight"]
-        namespace = args.get("namespace", "global")
         ttl_days = args.get("ttl_days")
 
-        await self.rag_service.set_weight(doc_id, weight, namespace, ttl_days)
+        # Namespace-only requests map to a prefix key (e.g. "microlensing_tools/").
+        if not doc_id and namespace:
+            doc_id = namespace.rstrip("/") + "/"
+
+        if not doc_id:
+            return [
+                types.TextContent(
+                    type="text",
+                    text="❌ set_retrieval_weights requires either doc_id or namespace.",
+                )
+            ]
+
+        await self.rag_service.set_weight(doc_id, weight, namespace or "global", ttl_days)
 
         # Show the actual clamped weight
         clamped_weight = max(0.5, min(weight, 2.0))
 
         response_text = "⚖️ **Weight Updated:**\n"
-        response_text += f"Document: `{doc_id}`\n"
+        target_label = "Namespace Prefix" if namespace and not args.get("doc_id") else "Document"
+        response_text += f"{target_label}: `{doc_id}`\n"
         response_text += f"Requested Weight: `{weight}`\n"
         if clamped_weight != weight:
             response_text += f"Actual Weight: `{clamped_weight}` (clamped to safe range 0.5-2.0)\n"
         else:
             response_text += f"Applied Weight: `{weight}`\n"
-        response_text += f"Namespace: `{namespace}`\n"
+        response_text += f"Namespace: `{namespace or 'global'}`\n"
         if ttl_days:
             response_text += f"TTL: `{ttl_days}` days\n"
         response_text += "\nThis will adjust the document's ranking in future searches."

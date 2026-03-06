@@ -198,6 +198,29 @@ def test_process_results_prefers_source_document(tmp_path):
     assert processed[0]["data"]["chunk_index"] == 3
 
 
+def test_process_results_applies_namespace_model_weight(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    embeddings_path.mkdir()
+
+    search = Search(
+        embeddings_path=embeddings_path,
+        model_weights={"microlensing_tools/": 1.7},
+    )
+
+    results = [
+        {
+            "id": "microlensing_tools/RTModel/README.md#chunk-0001",
+            "score": 0.5,
+            "text": "RTModel README",
+            "data": {"source_document": "microlensing_tools/RTModel/README.md"},
+        }
+    ]
+
+    processed = search._process_and_rank_results(results, limit=5)
+    assert processed[0]["model_score"] == pytest.approx(1.7)
+    assert processed[0]["adjusted_score"] == pytest.approx(0.85)
+
+
 def test_search_file_type_weighting(tmp_path):
     """Test file type weighting in search results."""
     embeddings_path = tmp_path / "embeddings"
