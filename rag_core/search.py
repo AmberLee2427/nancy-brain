@@ -4,6 +4,7 @@ Search for relevant documents using embeddings.
 
 # imports
 import logging
+import os
 from pathlib import Path
 from typing import List, Dict, Set
 import re
@@ -43,6 +44,16 @@ class Search:
         """Load txtai embeddings for general and code indexes."""
         try:
             from txtai.embeddings import Embeddings
+
+            # Require an explicit opt-in for enabling pickle deserialization.
+            allow_pickle = os.environ.get("ALLOW_PICKLE", "").lower()
+            if allow_pickle not in {"1", "true", "yes"}:
+                msg = (
+                    "txtai embeddings loading requires pickle deserialization, which is disabled by default. "
+                    "To proceed, explicitly acknowledge this risk by setting ALLOW_PICKLE=1 in the environment."
+                )
+                logger.error(msg)
+                raise RuntimeError(msg)
 
             # Load general embeddings (index is in 'index' subdirectory)
             general_index = self.embeddings_path / "index"
@@ -309,7 +320,26 @@ class Search:
                     weight *= mult
 
             # Apply model weight
-            model_score = self.model_weights.get(base_doc_id, self.model_weights.get(doc_id, 1.0))
+            model_score = self.model_weights.get(base_doc_id, self.model_weights.get(doc_id))
+            if model_score is None:
+                # Support namespace/prefix weights (e.g. "microlensing_tools/").
+                best_prefix_len = -1
+                for key, value in (self.model_weights or {}).items():
+                    if not isinstance(key, str):
+                        continue
+                    candidate = key.strip()
+                    if not candidate:
+                        continue
+                    if candidate.endswith("*"):
+                        candidate = candidate[:-1]
+                    if not candidate.endswith("/"):
+                        candidate = f"{candidate}/"
+                    if base_doc_id.startswith(candidate) and len(candidate) > best_prefix_len:
+                        model_score = value
+                        best_prefix_len = len(candidate)
+
+            if model_score is None:
+                model_score = 1.0
             try:
                 model_score = float(model_score)
             except Exception:

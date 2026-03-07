@@ -11,9 +11,10 @@ services:
       - MCP_PORT=8000
       - MCP_API_KEY=${MCP_API_KEY}    # Generate a random strong key
       - NB_SECRET_KEY=${NB_SECRET_KEY} # Generate a random strong key for UI JWT tokens
-      - NB_USE_LOCAL_SUMMARY=true      # Set to 'false' if using Anthropic for summaries
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} # Required if NB_USE_LOCAL_SUMMARY=false
+      - NB_USE_LOCAL_SUMMARY=true      # True forces local summaries, even if ANTHROPIC_API_KEY is set
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} # Used only when NB_USE_LOCAL_SUMMARY=false
       - PYTHONUNBUFFERED=1
+      - ALLOW_PICKLE=1
     volumes:
       - ./config:/app/config:ro
       - ./knowledge_base:/app/knowledge_base

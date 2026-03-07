@@ -67,7 +67,7 @@ paths:
   /retrieve:
     post:
       operationId: retrieveFile
-      summary: RETRIEVE <file_path>
+      summary: RETRIEVE <doc_id>
       requestBody:
         required: true
         content:
@@ -77,6 +77,13 @@ paths:
               properties:
                 doc_id:
                   type: string
+                  description: Canonical document identifier used by Nancy Brain.
+                file_path:
+                  type: string
+                  description: Alias for doc_id for compatibility with legacy clients.
+                path:
+                  type: string
+                  description: Alias for doc_id for compatibility with legacy clients.
                 start:
                   type: integer
                   description: 1-based line start (inclusive)

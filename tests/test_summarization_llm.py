@@ -6,17 +6,20 @@ from nancy_brain.summarization import SummaryGenerator
 
 
 @pytest.mark.integration
-def test_llm_summary_json_and_weight():
+def test_llm_summary_json_and_weight(monkeypatch):
     """
     Integration test: Assert that SummaryGenerator returns valid JSON and float weight from real LLM call.
     """
     # Load environment variables
     load_dotenv("config/.env")
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    assert api_key, "ANTHROPIC_API_KEY must be set in environment or .env file"
+    if not api_key:
+        pytest.skip("ANTHROPIC_API_KEY not configured")
+    monkeypatch.setenv("NB_USE_LOCAL_SUMMARY", "false")
 
     cache_dir = Path("./test_llm_cache")
     summary_gen = SummaryGenerator(cache_dir=cache_dir, enabled=True)
+    assert summary_gen.use_local is False
 
     # Use a small, representative file for speed
     test_file = Path("nancy_brain/summarization.py")
@@ -29,6 +32,8 @@ def test_llm_summary_json_and_weight():
         repo_name="nancy-brain",
         metadata={"file_type": ".py"},
     )
+    if result is None and summary_gen.last_error_type == "connection":
+        pytest.skip("Anthropic connection unavailable")
     assert result is not None, "LLM did not return a result"
 
     # Assert JSON structure
