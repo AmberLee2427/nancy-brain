@@ -895,8 +895,7 @@ async def main():
             class MCPAuthApp:
                 async def __call__(self, scope, receive, send):
                     headers = {
-                        key.decode("latin1").lower(): value.decode("latin1")
-                        for key, value in scope.get("headers", [])
+                        key.decode("latin1").lower(): value.decode("latin1") for key, value in scope.get("headers", [])
                     }
                     x_api_key = headers.get("x-api-key")
                     auth_header = headers.get("authorization", "")

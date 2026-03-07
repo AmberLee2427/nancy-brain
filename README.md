@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="hhttps://amberlee2427.github.io/nancy-brain/"><img src="https://github.com/AmberLee2427/chunky/blob/54b54bed983d92e4e7aad4d6fc171cb871cb55c2/docs/_assests/chunky2.png" alt="logo" width=40%></a>
+</p>
+
 # Nancy Brain
 
 [Pages](https://amberlee2427.github.io/nancy-brain/) [Read the Docs](https://nancy-brain.readthedocs.io/en/latest/)
