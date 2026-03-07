@@ -380,7 +380,7 @@ def test_summarize_cache_hit(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     result = gen.summarize(doc_id="repo/doc.py", content=content)
-    assert result is not None
+    assert isinstance(result, SummaryResult)
     assert result.summary == "cached summary"
     assert result.weight == pytest.approx(1.2)
     assert result.cached is True
@@ -391,7 +391,7 @@ def test_summarize_invokes_model_and_caches(tmp_path, monkeypatch):
     gen = _make_gen(tmp_path, monkeypatch)
     gen._invoke_model = MagicMock(return_value={"summary": "fresh summary", "weight": 1.5, "model": "test-model"})
     result = gen.summarize(doc_id="repo/doc.py", content="def bar(): pass")
-    assert result is not None
+    assert isinstance(result, SummaryResult)
     assert result.summary == "fresh summary"
     assert result.weight == pytest.approx(1.5)
     assert result.cached is False
