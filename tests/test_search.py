@@ -58,8 +58,9 @@ def test_search_load_embeddings_error_handling(tmp_path):
 
 
 @patch("rag_core.search.logger")
-def test_search_logging(mock_logger, tmp_path):
+def test_search_logging(mock_logger, tmp_path, monkeypatch):
     """Test that search logs appropriate messages."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 
@@ -101,8 +102,9 @@ def test_search_defaults(tmp_path):
     assert search.model_weights == {}
 
 
-def test_dual_embedding_with_code_index(tmp_path):
+def test_dual_embedding_with_code_index(tmp_path, monkeypatch):
     """Test dual embedding when code index exists."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 
@@ -198,6 +200,29 @@ def test_process_results_prefers_source_document(tmp_path):
     assert processed[0]["data"]["chunk_index"] == 3
 
 
+def test_process_results_applies_namespace_model_weight(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    embeddings_path.mkdir()
+
+    search = Search(
+        embeddings_path=embeddings_path,
+        model_weights={"microlensing_tools/": 1.7},
+    )
+
+    results = [
+        {
+            "id": "microlensing_tools/RTModel/README.md#chunk-0001",
+            "score": 0.5,
+            "text": "RTModel README",
+            "data": {"source_document": "microlensing_tools/RTModel/README.md"},
+        }
+    ]
+
+    processed = search._process_and_rank_results(results, limit=5)
+    assert processed[0]["model_score"] == pytest.approx(1.7)
+    assert processed[0]["adjusted_score"] == pytest.approx(0.85)
+
+
 def test_search_file_type_weighting(tmp_path):
     """Test file type weighting in search results."""
     embeddings_path = tmp_path / "embeddings"
@@ -255,8 +280,9 @@ def test_search_with_custom_models_and_weights(tmp_path):
 
 
 @patch("txtai.embeddings.Embeddings")
-def test_search_successful_loading(mock_embeddings_class, tmp_path):
+def test_search_successful_loading(mock_embeddings_class, tmp_path, monkeypatch):
     """Test successful embeddings loading."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 

@@ -42,8 +42,9 @@ class SummaryGenerator:
     ) -> None:
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
 
-        # Check for local mode override
-        self.use_local = os.environ.get("NB_USE_LOCAL_SUMMARY", "").lower() in ("true", "1", "yes")
+        # NB_USE_LOCAL_SUMMARY explicitly controls local mode and overrides API-key availability.
+        local_setting = os.environ.get("NB_USE_LOCAL_SUMMARY", "").lower()
+        self.use_local = local_setting in ("true", "1", "yes", "force", "forced")
 
         # Enabled if we have an API key OR if we are using local mode
         self.enabled = enabled and (bool(self.api_key) or self.use_local)
@@ -53,6 +54,8 @@ class SummaryGenerator:
         self.readme_bonus_chars = readme_bonus_chars
         self.max_output_tokens = max_output_tokens
         self.cache_dir = Path(cache_dir)
+        self.last_error: Optional[Exception] = None
+        self.last_error_type: Optional[str] = None
         if self.enabled:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -79,6 +82,8 @@ class SummaryGenerator:
             return None
         if not content or not content.strip():
             return None
+        self.last_error = None
+        self.last_error_type = None
         trimmed = self._trim_content(content, allow_extra=bool(repo_readme))
         readme = self._trim_readme(repo_readme)
         cache_key = self._cache_key(doc_id, trimmed, readme, repo_readme_path)
@@ -276,6 +281,10 @@ class SummaryGenerator:
             json_text = self._strip_markdown_json(raw_text)
             return json.loads(json_text)
         except Exception as exc:
+            self.last_error = exc
+            msg = str(exc).lower()
+            if "connection" in msg or "connect" in msg or "timeout" in msg:
+                self.last_error_type = "connection"
             logger.warning("Anthropic summarization failed: %s", exc)
             return None
 
@@ -420,6 +429,8 @@ class SummaryGenerator:
             return {"summary": summary_text.strip(), "weight": weight, "model": "local-Qwen2.5-Coder-0.5B"}
 
         except Exception as e:
+            self.last_error = e
+            self.last_error_type = "local"
             logger.error(f"Local summarization failed: {e}")
             return None
 
