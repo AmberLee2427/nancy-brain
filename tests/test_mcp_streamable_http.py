@@ -37,7 +37,30 @@ def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
     return False
 
 
-def _start_server(port: int) -> subprocess.Popen:
+def _start_server(
+    port: int,
+    config_path: Path,
+    embeddings_path: Path,
+    weights_path: Path,
+) -> subprocess.Popen:
+    """Start the MCP HTTP server subprocess and return the process handle."""
+    env = os.environ.copy()
+    env.update(
+        {
+            "MCP_CONFIG_PATH": str(config_path),
+            "MCP_EMBEDDINGS_PATH": str(embeddings_path),
+            "MCP_WEIGHTS_PATH": str(weights_path),
+        }
+    )
+
+    cmd = [
+        sys.executable,
+        str(SERVER_PATH),
+        "--port",
+        str(port),
+    ]
+
+    return subprocess.Popen(cmd, env=env)
 @pytest.fixture(scope="module")
 def mcp_embeddings_fixture(tmp_path_factory):
     """Create a minimal fixture directory tree so the MCP server can start in CI."""
