@@ -42,7 +42,7 @@ def mcp_embeddings_fixture(tmp_path_factory):
 
     # Minimal index_weights.yaml (must not contain model_weights / doc_weights / documents)
     weights_path = base / "index_weights.yaml"
-    weights_path.write_text("extensions: {}\npaths: {}\n")
+    weights_path.write_text("extensions: {}\npath_includes: {}\n")
 
     return config_path, embeddings_path, weights_path
 
