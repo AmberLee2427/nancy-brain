@@ -12,9 +12,6 @@ import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"
-CONFIG_PATH = ROOT / "config" / "repositories.yml"
-EMBEDDINGS_PATH = ROOT / "knowledge_base" / "embeddings"
-WEIGHTS_PATH = ROOT / "config" / "index_weights.yaml"
 
 
 def _free_port() -> int:
