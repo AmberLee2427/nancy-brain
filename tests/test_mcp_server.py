@@ -1184,9 +1184,9 @@ async def test_handle_retrieve_with_total_lines(tmp_path):
     """_handle_retrieve counts total lines when file exists in the store."""
     server = NancyMCPServer()
 
-    # Create a small file in the store's expected location
-    store_base = tmp_path / "knowledge_base" / "raw"
-    doc_dir = store_base / "repo"
+    # Store is initialized as Store(embeddings_path.parent) = Store(tmp_path),
+    # so files are resolved relative to tmp_path / doc_id.
+    doc_dir = tmp_path / "repo"
     doc_dir.mkdir(parents=True)
     doc_file = doc_dir / "file.md"
     doc_file.write_text("line 1\nline 2\nline 3\n")
@@ -1203,7 +1203,7 @@ async def test_handle_retrieve_with_total_lines(tmp_path):
     server.rag_service = mock_svc
 
     result = await server._handle_retrieve({"doc_id": "repo/file.md", "start": 1, "end": 2})
-    assert "Lines:" in result[0].text
+    assert "/ 3 total" in result[0].text
 
 
 @pytest.mark.asyncio
@@ -1211,12 +1211,12 @@ async def test_handle_retrieve_batch_with_file(tmp_path):
     """_handle_retrieve_batch counts total lines when file exists in the store."""
     server = NancyMCPServer()
 
-    # Create file in store location
-    store_base = tmp_path / "knowledge_base" / "raw"
-    doc_dir = store_base / "cat1" / "repo1"
+    # Store is initialized as Store(embeddings_path.parent) = Store(tmp_path),
+    # so files are resolved relative to tmp_path / doc_id.
+    doc_dir = tmp_path / "cat1" / "repo1"
     doc_dir.mkdir(parents=True)
     doc_file = doc_dir / "file.py"
-    doc_file.write_text("line 1\nline 2\nline 3\nline 4\n")
+    doc_file.write_text("line 1\nline 2\nline 3\nline 4\nline 5\nline 6\n")
 
     mock_svc = Mock()
     mock_svc.embeddings_path = tmp_path / "embeddings"
@@ -1230,7 +1230,7 @@ async def test_handle_retrieve_batch_with_file(tmp_path):
     result = await server._handle_retrieve_batch({
         "items": [{"doc_id": "cat1/repo1/file.py", "start": 0, "end": 2}]
     })
-    assert "Retrieved 1 passages" in result[0].text
+    assert "/ 6 total" in result[0].text
 
 
 # ---- Exception path and additional coverage tests -----------------------
@@ -1362,7 +1362,7 @@ async def test_handle_retrieve_chunk_without_line_numbers(mock_rag_service):
 
 
 @pytest.mark.asyncio
-async def test_handle_retrieve_with_existing_file_total_lines(tmp_path, mock_rag_service):
+async def test_handle_retrieve_with_existing_file_total_lines(tmp_path):
     """_handle_retrieve counts total_lines when document file exists."""
     server = NancyMCPServer()
 
