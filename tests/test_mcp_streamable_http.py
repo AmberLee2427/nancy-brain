@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import requests
 
+pytestmark = pytest.mark.integration
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"
