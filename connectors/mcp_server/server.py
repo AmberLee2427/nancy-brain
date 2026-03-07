@@ -653,8 +653,12 @@ class NancyMCPServer:
         ttl_days = args.get("ttl_days")
 
         # Namespace-only requests map to a prefix key (e.g. "microlensing_tools/").
+        # Track whether doc_id was synthesized from namespace so the response label
+        # is accurate regardless of which field name (doc_id or path) the client used.
+        namespace_only = False
         if not doc_id and namespace:
             doc_id = namespace.rstrip("/") + "/"
+            namespace_only = True
 
         if not doc_id:
             return [
@@ -670,7 +674,7 @@ class NancyMCPServer:
         clamped_weight = max(0.5, min(weight, 2.0))
 
         response_text = "⚖️ **Weight Updated:**\n"
-        target_label = "Namespace Prefix" if namespace and not args.get("doc_id") else "Document"
+        target_label = "Namespace Prefix" if namespace_only else "Document"
         response_text += f"{target_label}: `{doc_id}`\n"
         response_text += f"Requested Weight: `{weight}`\n"
         if clamped_weight != weight:

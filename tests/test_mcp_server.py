@@ -237,6 +237,23 @@ async def test_mcp_server_weights_tool_namespace_only(mock_rag_service):
 
 
 @pytest.mark.asyncio
+async def test_mcp_server_weights_tool_path_alias_with_namespace(mock_rag_service):
+    """Using the 'path' alias with namespace should label the response as 'Document', not 'Namespace Prefix'."""
+    server = NancyMCPServer()
+    server.rag_service = mock_rag_service
+    server.rag_service.set_weight = AsyncMock(return_value=True)
+
+    result = await server._handle_set_weights(
+        {"path": "microlensing_tools/MulensModel/README.md", "namespace": "microlensing_tools", "weight": 1.5}
+    )
+
+    assert len(result) == 1
+    assert "Document" in result[0].text
+    assert "Namespace Prefix" not in result[0].text
+    assert "microlensing_tools/MulensModel/README.md" in result[0].text
+
+
+@pytest.mark.asyncio
 async def test_mcp_server_status_tool(mock_rag_service):
     """Test the get_system_status tool."""
     server = NancyMCPServer()
