@@ -327,10 +327,26 @@ def _make_sections_db(tmp_path: Path) -> Path:
         """
     )
     rows = [
-        ("doc/file.py::chunk-0001", "chunk one content", '{"source_document": "doc/file.py", "chunk_index": 1, "chunk_count": 3, "line_start": 10, "line_end": 20}'),
-        ("doc/file.py::chunk-0002", "chunk two content", '{"source_document": "doc/file.py", "chunk_index": 2, "chunk_count": 3, "line_start": 21, "line_end": 30}'),
-        ("doc/file.py::chunk-0003", "chunk three content", '{"source_document": "doc/file.py", "chunk_index": 3, "chunk_count": 3, "line_start": 31, "line_end": 40}'),
-        ("knowledge_base/raw/some/README.md::chunk-0000", "readme text", '{"source_document": "knowledge_base/raw/some/README.md"}'),
+        (
+            "doc/file.py::chunk-0001",
+            "chunk one content",
+            '{"source_document": "doc/file.py", "chunk_index": 1, "chunk_count": 3, "line_start": 10, "line_end": 20}',
+        ),
+        (
+            "doc/file.py::chunk-0002",
+            "chunk two content",
+            '{"source_document": "doc/file.py", "chunk_index": 2, "chunk_count": 3, "line_start": 21, "line_end": 30}',
+        ),
+        (
+            "doc/file.py::chunk-0003",
+            "chunk three content",
+            '{"source_document": "doc/file.py", "chunk_index": 3, "chunk_count": 3, "line_start": 31, "line_end": 40}',
+        ),
+        (
+            "knowledge_base/raw/some/README.md::chunk-0000",
+            "readme text",
+            '{"source_document": "knowledge_base/raw/some/README.md"}',
+        ),
     ]
     conn.executemany("INSERT INTO sections (id, text, data) VALUES (?, ?, ?)", rows)
     conn.commit()
@@ -580,11 +596,13 @@ async def test_handle_set_weights_with_ttl(mock_rag_service):
     server.rag_service = mock_rag_service
     server.rag_service.set_weight = AsyncMock(return_value=True)
 
-    result = await server._handle_set_weights({
-        "doc_id": "some/doc.py",
-        "weight": 1.2,
-        "ttl_days": 30,
-    })
+    result = await server._handle_set_weights(
+        {
+            "doc_id": "some/doc.py",
+            "weight": 1.2,
+            "ttl_days": 30,
+        }
+    )
     assert "30" in result[0].text
     assert "TTL" in result[0].text
 
@@ -724,12 +742,14 @@ async def test_handle_retrieve_batch_partial_passage(mock_rag_service):
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
 
-    result = await server._handle_retrieve_batch({
-        "items": [
-            {"doc_id": "doc1.md", "start": 0, "end": 5},
-            {"doc_id": "doc2.md", "start": 10, "end": 15},
-        ]
-    })
+    result = await server._handle_retrieve_batch(
+        {
+            "items": [
+                {"doc_id": "doc1.md", "start": 0, "end": 5},
+                {"doc_id": "doc2.md", "start": 10, "end": 15},
+            ]
+        }
+    )
     assert len(result) == 1
     assert "Retrieved 2 passages" in result[0].text
 
@@ -975,9 +995,7 @@ async def test_call_tool_handler_exception(mock_rag_service):
     handler = server.server.request_handlers[mcp_types.CallToolRequest]
     req = mcp_types.CallToolRequest(
         method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="search_knowledge_base", arguments={"query": "test"}
-        ),
+        params=mcp_types.CallToolRequestParams(name="search_knowledge_base", arguments={"query": "test"}),
     )
     result = await handler(req)
     assert "Error executing" in result.root.content[0].text
@@ -1227,9 +1245,7 @@ async def test_handle_retrieve_batch_with_file(tmp_path):
     mock_svc.retrieve_batch = mock_batch
     server.rag_service = mock_svc
 
-    result = await server._handle_retrieve_batch({
-        "items": [{"doc_id": "cat1/repo1/file.py", "start": 0, "end": 2}]
-    })
+    result = await server._handle_retrieve_batch({"items": [{"doc_id": "cat1/repo1/file.py", "start": 0, "end": 2}]})
     assert "/ 6 total" in result[0].text
 
 
@@ -1386,11 +1402,13 @@ async def test_handle_retrieve_with_existing_file_total_lines(tmp_path):
     mock_svc.registry.get_github_url = Mock(return_value="")
     server.rag_service = mock_svc
 
-    result = await server._handle_retrieve({
-        "doc_id": "cat1/repo1/main.py",
-        "start": 1,
-        "end": 2,
-    })
+    result = await server._handle_retrieve(
+        {
+            "doc_id": "cat1/repo1/main.py",
+            "start": 1,
+            "end": 2,
+        }
+    )
     # Should have counted total_lines from file and included it in output
     assert "/ 5 total" in result[0].text
 
@@ -1417,9 +1435,7 @@ async def test_handle_retrieve_batch_with_existing_file(tmp_path):
     mock_svc.retrieve_batch = mock_batch
     server.rag_service = mock_svc
 
-    result = await server._handle_retrieve_batch({
-        "items": [{"doc_id": "ns/repo/doc.py", "start": 0, "end": 2}]
-    })
+    result = await server._handle_retrieve_batch({"items": [{"doc_id": "ns/repo/doc.py", "start": 0, "end": 2}]})
     assert "/ 6 total" in result[0].text
 
 
