@@ -417,7 +417,7 @@ def test_fetch_section_row_not_found(tmp_path):
 
 
 def test_fetch_section_row_empty_table(tmp_path):
-    """_fetch_section_row returns None when the table has no matching columns."""
+    """_fetch_section_row returns a row when table has only id/text columns (no data/metadata columns)."""
     db_path = tmp_path / "empty.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute("CREATE TABLE sections (id TEXT, text TEXT)")
