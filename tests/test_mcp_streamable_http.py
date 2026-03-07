@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -11,7 +12,13 @@ import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"
-MCP_PORT = 8125
+
+
+def _free_port() -> int:
+    """Return a free TCP port on localhost by binding to port 0."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
@@ -25,6 +32,37 @@ def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
             pass
         time.sleep(1)
     return False
+
+
+def _start_server(
+    port: int,
+    config_path: Path,
+    embeddings_path: Path,
+    weights_path: Path,
+) -> subprocess.Popen:
+    """Start the MCP HTTP server subprocess and return the process handle."""
+    env = os.environ.copy()
+    env["MCP_API_KEY"] = "test-key"
+    env["MCP_PORT"] = str(port)
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-u",
+            str(SERVER_PATH),
+            str(config_path),
+            str(embeddings_path),
+            "--weights",
+            str(weights_path),
+            "--http",
+            "--port",
+            str(port),
+        ],
+        cwd=str(ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -50,40 +88,24 @@ def mcp_embeddings_fixture(tmp_path_factory):
 @pytest.fixture(scope="module")
 def mcp_http_server(mcp_embeddings_fixture):
     config_path, embeddings_path, weights_path = mcp_embeddings_fixture
-
-    env = os.environ.copy()
-    env["MCP_PORT"] = str(MCP_PORT)
-    env["MCP_API_KEY"] = "test-key"
-
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-u",
-            str(SERVER_PATH),
-            str(config_path),
-            str(embeddings_path),
-            "--weights",
-            str(weights_path),
-            "--http",
-            "--port",
-            str(MCP_PORT),
-        ],
-        cwd=str(ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
-
-    base_url = f"http://127.0.0.1:{MCP_PORT}"
-    if not _wait_for_health(base_url):
-        out = ""
+    proc = None
+    last_out = ""
+    base_url = ""
+    for _ in range(3):
+        port = _free_port()
+        proc = _start_server(port, config_path, embeddings_path, weights_path)
+        base_url = f"http://127.0.0.1:{port}"
+        if _wait_for_health(base_url):
+            break
+        last_out = ""
         try:
-            out, _ = proc.communicate(timeout=5)
+            last_out, _ = proc.communicate(timeout=5)
         except Exception:
             pass
         proc.kill()
-        pytest.fail(f"MCP HTTP server failed health check at {base_url}/health\n{out}")
+        proc = None
+    else:
+        pytest.fail(f"MCP HTTP server failed to start after retries\n{last_out}")
 
     try:
         yield base_url
