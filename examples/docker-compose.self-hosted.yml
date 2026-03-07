@@ -14,6 +14,7 @@ services:
       - NB_USE_LOCAL_SUMMARY=true      # True forces local summaries, even if ANTHROPIC_API_KEY is set
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} # Used only when NB_USE_LOCAL_SUMMARY=false
       - PYTHONUNBUFFERED=1
+      - ALLOW_PICKLE=1
     volumes:
       - ./config:/app/config:ro
       - ./knowledge_base:/app/knowledge_base
