@@ -176,7 +176,10 @@ class NancyMCPServer:
                                 "minimum": 0.0,
                             },
                         },
-                        "required": ["weight"],
+                        "anyOf": [
+                            {"required": ["weight", "doc_id"]},
+                            {"required": ["weight", "namespace"]},
+                        ],
                     },
                 ),
                 types.Tool(

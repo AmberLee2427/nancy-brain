@@ -38,6 +38,30 @@ def _wait_for_health(base_url: str, timeout: int = 45) -> bool:
 
 
 def _start_server(port: int) -> subprocess.Popen:
+@pytest.fixture(scope="module")
+def mcp_embeddings_fixture(tmp_path_factory):
+    """Create a minimal fixture directory tree so the MCP server can start in CI."""
+    base = tmp_path_factory.mktemp("mcp_kb")
+
+    # Minimal repositories config (empty registry is fine for protocol/tool-listing tests)
+    config_path = base / "repositories.yml"
+    config_path.write_text("{}\n")
+
+    # Minimal embeddings directory (no index required just to start the server)
+    embeddings_path = base / "embeddings"
+    embeddings_path.mkdir()
+
+    # Minimal index_weights.yaml (must not contain model_weights / doc_weights / documents)
+    weights_path = base / "index_weights.yaml"
+    weights_path.write_text("extensions: {}\npath_includes: {}\n")
+
+    return config_path, embeddings_path, weights_path
+
+
+@pytest.fixture(scope="module")
+def mcp_http_server(mcp_embeddings_fixture):
+    config_path, embeddings_path, weights_path = mcp_embeddings_fixture
+
     env = os.environ.copy()
     env["MCP_PORT"] = str(port)
     env["MCP_API_KEY"] = "test-key"
@@ -46,10 +70,10 @@ def _start_server(port: int) -> subprocess.Popen:
             sys.executable,
             "-u",
             str(SERVER_PATH),
-            str(CONFIG_PATH),
-            str(EMBEDDINGS_PATH),
+            str(config_path),
+            str(embeddings_path),
             "--weights",
-            str(WEIGHTS_PATH),
+            str(weights_path),
             "--http",
             "--port",
             str(port),

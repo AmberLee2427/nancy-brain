@@ -107,12 +107,13 @@ async def main():
         "--port",
         str(port),
     ]
+    # stdio is the default mode for server.py, so we only need to pass flags
+    # for non-default transports.
     if transport == "http":
         args.append("--http")
-    elif transport == "stdio":
-        args.append("--stdio")
-    else:
+    elif transport == "http-and-stdio":
         args.append("--http-and-stdio")
+    # For "stdio" or any other value, rely on the server's default stdio mode.
     try:
         proc = subprocess.Popen(args)
         proc.wait()
