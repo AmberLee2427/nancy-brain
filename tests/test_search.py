@@ -58,8 +58,9 @@ def test_search_load_embeddings_error_handling(tmp_path):
 
 
 @patch("rag_core.search.logger")
-def test_search_logging(mock_logger, tmp_path):
+def test_search_logging(mock_logger, tmp_path, monkeypatch):
     """Test that search logs appropriate messages."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 
@@ -101,8 +102,9 @@ def test_search_defaults(tmp_path):
     assert search.model_weights == {}
 
 
-def test_dual_embedding_with_code_index(tmp_path):
+def test_dual_embedding_with_code_index(tmp_path, monkeypatch):
     """Test dual embedding when code index exists."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 
@@ -278,8 +280,9 @@ def test_search_with_custom_models_and_weights(tmp_path):
 
 
 @patch("txtai.embeddings.Embeddings")
-def test_search_successful_loading(mock_embeddings_class, tmp_path):
+def test_search_successful_loading(mock_embeddings_class, tmp_path, monkeypatch):
     """Test successful embeddings loading."""
+    monkeypatch.setenv("ALLOW_PICKLE", "1")
     embeddings_path = tmp_path / "embeddings"
     embeddings_path.mkdir()
 
