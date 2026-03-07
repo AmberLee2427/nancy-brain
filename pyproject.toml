@@ -33,7 +33,7 @@ dependencies = [
     "bcrypt<4.0.0",
     "python-jose>=3.3.0",
     "anthropic",
-    "chunky-files[tree]>=2.0.0", 
+    "chunky-files[tree]>=2.1.0", 
     "astropy>=4.2",
     "zstandard",
     "accelerate>=0.26.0",
