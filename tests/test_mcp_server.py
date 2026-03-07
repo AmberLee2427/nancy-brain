@@ -1207,7 +1207,7 @@ async def test_handle_retrieve_with_total_lines(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_handle_retrieve_batch_with_file(tmp_path, mock_rag_service):
+async def test_handle_retrieve_batch_with_file(tmp_path):
     """_handle_retrieve_batch counts total lines when file exists in the store."""
     server = NancyMCPServer()
 
