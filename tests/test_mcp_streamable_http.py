@@ -42,22 +42,29 @@ def _start_server(
 ) -> subprocess.Popen:
     """Start the MCP HTTP server subprocess and return the process handle."""
     env = os.environ.copy()
-    env.update(
-        {
-            "MCP_CONFIG_PATH": str(config_path),
-            "MCP_EMBEDDINGS_PATH": str(embeddings_path),
-            "MCP_WEIGHTS_PATH": str(weights_path),
-        }
+    env["MCP_API_KEY"] = "test-key"
+    env["MCP_PORT"] = str(port)
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-u",
+            str(SERVER_PATH),
+            str(config_path),
+            str(embeddings_path),
+            "--weights",
+            str(weights_path),
+            "--http",
+            "--port",
+            str(port),
+        ],
+        cwd=str(ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
     )
 
-    cmd = [
-        sys.executable,
-        str(SERVER_PATH),
-        "--port",
-        str(port),
-    ]
 
-    return subprocess.Popen(cmd, env=env)
 @pytest.fixture(scope="module")
 def mcp_embeddings_fixture(tmp_path_factory):
     """Create a minimal fixture directory tree so the MCP server can start in CI."""
@@ -81,38 +88,12 @@ def mcp_embeddings_fixture(tmp_path_factory):
 @pytest.fixture(scope="module")
 def mcp_http_server(mcp_embeddings_fixture):
     config_path, embeddings_path, weights_path = mcp_embeddings_fixture
-
-    env = os.environ.copy()
-    env["MCP_PORT"] = str(port)
-    env["MCP_API_KEY"] = "test-key"
-    return subprocess.Popen(
-        [
-            sys.executable,
-            "-u",
-            str(SERVER_PATH),
-            str(config_path),
-            str(embeddings_path),
-            "--weights",
-            str(weights_path),
-            "--http",
-            "--port",
-            str(port),
-        ],
-        cwd=str(ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-    )
-
-
-@pytest.fixture(scope="module")
-def mcp_http_server():
     proc = None
     last_out = ""
+    base_url = ""
     for _ in range(3):
         port = _free_port()
-        proc = _start_server(port)
+        proc = _start_server(port, config_path, embeddings_path, weights_path)
         base_url = f"http://127.0.0.1:{port}"
         if _wait_for_health(base_url):
             break
