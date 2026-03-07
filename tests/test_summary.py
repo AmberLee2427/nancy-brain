@@ -265,9 +265,7 @@ def test_invoke_model_local_mode(tmp_path, monkeypatch):
     """_invoke_model delegates to _invoke_local when use_local is True."""
     gen = _make_gen(tmp_path, monkeypatch, local=True)
     gen._invoke_local = MagicMock(return_value={"summary": "local summary", "weight": 1.0})
-    result = gen._invoke_model(
-        prompt="prompt", content="content", readme=None, readme_path=None
-    )
+    result = gen._invoke_model(prompt="prompt", content="content", readme=None, readme_path=None)
     assert result == {"summary": "local summary", "weight": 1.0}
     gen._invoke_local.assert_called_once()
 
@@ -276,9 +274,7 @@ def test_invoke_model_no_client(tmp_path, monkeypatch):
     """_invoke_model returns None when no API key is set (no client available)."""
     gen = _make_gen(tmp_path, monkeypatch)
     gen._create_client = MagicMock(return_value=None)
-    result = gen._invoke_model(
-        prompt="prompt", content="content", readme=None, readme_path=None
-    )
+    result = gen._invoke_model(prompt="prompt", content="content", readme=None, readme_path=None)
     assert result is None
 
 
@@ -295,9 +291,7 @@ def test_invoke_model_success(tmp_path, monkeypatch):
     mock_client.messages.create.return_value = mock_response
     gen._create_client = MagicMock(return_value=mock_client)
 
-    result = gen._invoke_model(
-        prompt="Summarize this", content="def foo(): pass", readme=None, readme_path=None
-    )
+    result = gen._invoke_model(prompt="Summarize this", content="def foo(): pass", readme=None, readme_path=None)
     assert result is not None
     assert result["summary"] == "Great module"
     assert result["weight"] == pytest.approx(1.3)
@@ -337,9 +331,7 @@ def test_invoke_model_api_error_sets_last_error(tmp_path, monkeypatch):
     mock_client.messages.create.side_effect = Exception("Connection refused")
     gen._create_client = MagicMock(return_value=mock_client)
 
-    result = gen._invoke_model(
-        prompt="prompt", content="content", readme=None, readme_path=None
-    )
+    result = gen._invoke_model(prompt="prompt", content="content", readme=None, readme_path=None)
     assert result is None
     assert gen.last_error is not None
     assert gen.last_error_type == "connection"
@@ -353,9 +345,7 @@ def test_invoke_model_non_connection_error(tmp_path, monkeypatch):
     mock_client.messages.create.side_effect = ValueError("Bad response format")
     gen._create_client = MagicMock(return_value=mock_client)
 
-    result = gen._invoke_model(
-        prompt="prompt", content="content", readme=None, readme_path=None
-    )
+    result = gen._invoke_model(prompt="prompt", content="content", readme=None, readme_path=None)
     assert result is None
     assert gen.last_error is not None
     assert gen.last_error_type is None
@@ -399,9 +389,7 @@ def test_summarize_cache_hit(tmp_path, monkeypatch):
 def test_summarize_invokes_model_and_caches(tmp_path, monkeypatch):
     """summarize calls _invoke_model and writes a cache file on success."""
     gen = _make_gen(tmp_path, monkeypatch)
-    gen._invoke_model = MagicMock(
-        return_value={"summary": "fresh summary", "weight": 1.5, "model": "test-model"}
-    )
+    gen._invoke_model = MagicMock(return_value={"summary": "fresh summary", "weight": 1.5, "model": "test-model"})
     result = gen.summarize(doc_id="repo/doc.py", content="def bar(): pass")
     assert result is not None
     assert result.summary == "fresh summary"
@@ -414,16 +402,12 @@ def test_summarize_invokes_model_and_caches(tmp_path, monkeypatch):
 def test_summarize_weight_clamped(tmp_path, monkeypatch):
     """summarize clamps weights outside [0.5, 2.0]."""
     gen = _make_gen(tmp_path, monkeypatch)
-    gen._invoke_model = MagicMock(
-        return_value={"summary": "test", "weight": 5.0, "model": "test"}
-    )
+    gen._invoke_model = MagicMock(return_value={"summary": "test", "weight": 5.0, "model": "test"})
     result = gen.summarize(doc_id="doc.py", content="content")
     assert result is not None
     assert result.weight == pytest.approx(2.0)
 
-    gen._invoke_model = MagicMock(
-        return_value={"summary": "test", "weight": 0.1, "model": "test"}
-    )
+    gen._invoke_model = MagicMock(return_value={"summary": "test", "weight": 0.1, "model": "test"})
     result2 = gen.summarize(doc_id="doc2.py", content="different content")
     assert result2 is not None
     assert result2.weight == pytest.approx(0.5)
@@ -440,9 +424,7 @@ def test_summarize_none_payload(tmp_path, monkeypatch):
 def test_summarize_with_readme_args(tmp_path, monkeypatch):
     """summarize passes readme parameters through correctly."""
     gen = _make_gen(tmp_path, monkeypatch)
-    gen._invoke_model = MagicMock(
-        return_value={"summary": "with readme", "weight": 1.0, "model": "test"}
-    )
+    gen._invoke_model = MagicMock(return_value={"summary": "with readme", "weight": 1.0, "model": "test"})
     result = gen.summarize(
         doc_id="repo/src/main.py",
         content="module content",
