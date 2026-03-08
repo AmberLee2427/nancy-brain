@@ -115,7 +115,7 @@ def init(project_name):
 @click.option(
     "--repo",
     default=None,
-    help="Limit build to a single repository by name (within the selected category).",
+    help="Limit build to a single repository by name (across all categories unless --category is set).",
 )
 @click.option(
     "--summaries-only",
