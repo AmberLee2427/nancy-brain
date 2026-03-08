@@ -993,17 +993,21 @@ async def main():
                 return {"api_key": api_key, "token_type": "api_key"}
 
             # Simple API key authentication
-            def verify_api_key(x_api_key: Optional[str] = Header(None)):
+            def verify_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
+                bearer = None
+                if authorization and authorization.lower().startswith("bearer "):
+                    bearer = authorization[7:].strip()
+                provided = x_api_key or bearer
                 expected_key = os.environ.get("MCP_API_KEY")
-                if x_api_key:
-                    if expected_key and secrets.compare_digest(x_api_key, expected_key):
-                        return x_api_key
-                    if auth.is_api_key_valid(x_api_key):
-                        return x_api_key
+                if provided:
+                    if expected_key and secrets.compare_digest(provided, expected_key):
+                        return provided
+                    if auth.is_api_key_valid(provided):
+                        return provided
                     raise HTTPException(status_code=401, detail="Invalid API key")
                 if expected_key or auth.any_api_keys_exist():
                     raise HTTPException(status_code=401, detail="Missing API key")
-                return x_api_key
+                return provided
 
             @app.get("/health")
             async def health():
