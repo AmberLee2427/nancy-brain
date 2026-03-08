@@ -40,21 +40,14 @@ Content here.
 
 def test_extract_text_from_rst_fallback_no_docutils():
     """Exercise the heuristic fallback when docutils is not available."""
-    import sys
-    saved_core = sys.modules.get("docutils.core")
-    sys.modules["docutils.core"] = None  # Simulate ImportError for the submodule
-
-    try:
+    from unittest.mock import patch
+    # Simulate docutils.core being absent by removing it from sys.modules
+    with patch.dict("sys.modules", {"docutils.core": None}):
         # Use plain RST without directives to avoid the fallback directive regex
         sample = "Hello *world*. **Bold** and plain text.\n"
         out = text_extract.extract_text_from_rst(sample)
         assert "Hello" in out
         assert "plain text" in out
-    finally:
-        if saved_core is None:
-            sys.modules.pop("docutils.core", None)
-        else:
-            sys.modules["docutils.core"] = saved_core
 
 
 def test_extract_text_from_rst_bytes_output(monkeypatch):
@@ -88,18 +81,10 @@ def test_extract_text_from_rst_bytes_output(monkeypatch):
 
 def test_extract_text_from_tex_fallback_no_pylatexenc():
     """Exercise heuristic fallback when pylatexenc is not available."""
-    import sys
-    saved = sys.modules.get("pylatexenc.latex2text")
-    sys.modules["pylatexenc.latex2text"] = None  # Force ImportError
-
-    try:
+    from unittest.mock import patch
+    with patch.dict("sys.modules", {"pylatexenc.latex2text": None}):
         sample = r"\documentclass{article}\begin{document}Hello \textbf{World}!% comment\end{document}"
         out = text_extract.extract_text_from_tex(sample)
         assert "Hello" in out
         assert "World" in out
         assert "comment" not in out
-    finally:
-        if saved is None:
-            sys.modules.pop("pylatexenc.latex2text", None)
-        else:
-            sys.modules["pylatexenc.latex2text"] = saved

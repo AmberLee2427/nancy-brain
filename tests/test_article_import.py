@@ -666,7 +666,7 @@ from nancy_brain.article_import import (
     import_from_bibtex,
     import_from_ads,
 )
-import click as _click
+
 
 
 def test_first_list_item_list():
@@ -704,14 +704,14 @@ def test_load_articles_yaml_invalid_structure(tmp_path):
     yaml_file = tmp_path / "articles.yml"
     yaml_file.write_text("- item1\n- item2\n", encoding="utf-8")
 
-    with pytest.raises(_click.ClickException):
+    with pytest.raises(click.ClickException):
         _load_articles_yaml(yaml_file)
 
 
 def test_merge_entries_invalid_category():
     """Non-list category raises ClickException."""
     data = {"papers": "not-a-list"}
-    with pytest.raises(_click.ClickException):
+    with pytest.raises(click.ClickException):
         _merge_entries(data, "papers", [])
 
 
@@ -763,7 +763,7 @@ def test_write_articles_yaml(tmp_path):
 
 def test_import_from_bibtex_missing_file(tmp_path):
     """import_from_bibtex raises ClickException for missing file."""
-    with pytest.raises(_click.ClickException):
+    with pytest.raises(click.ClickException):
         import_from_bibtex(
             bib_path=tmp_path / "nonexistent.bib",
             category="papers",
@@ -774,7 +774,7 @@ def test_import_from_bibtex_missing_file(tmp_path):
 def test_import_from_ads_no_key(tmp_path, monkeypatch):
     """import_from_ads raises ClickException when ADS_API_KEY is not set."""
     monkeypatch.delenv("ADS_API_KEY", raising=False)
-    with pytest.raises(_click.ClickException, match="ADS_API_KEY"):
+    with pytest.raises(click.ClickException, match="ADS_API_KEY"):
         import_from_ads(
             library_name="My Library",
             category="papers",
