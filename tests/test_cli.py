@@ -118,11 +118,13 @@ def test_add_article_duplicate():
         config_dir = Path("config")
         config_dir.mkdir()
         config_file = config_dir / "articles.yml"
-        config_file.write_text("""
+        config_file.write_text(
+            """
 test_papers:
   - name: test_article
     url: https://example.com/existing.pdf
-""")
+"""
+        )
 
         # Try to add duplicate
         result = runner.invoke(

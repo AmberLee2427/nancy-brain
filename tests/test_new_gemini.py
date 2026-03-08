@@ -49,12 +49,15 @@ def test_new_gemini_api():
         The script supports batch processing and incremental indexing.
         """
 
-        prompt = """
+        prompt = (
+            """
         Summarize this document and respond with JSON in this format:
         {"summary": "brief summary", "weight": float_between_0.5_and_2.0}
         
         Document:
-        """ + test_content  # Noqa: W293  # Noqa: W293
+        """
+            + test_content
+        )  # Noqa: W293  # Noqa: W293
 
         response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         print(f"Summary Response: {response.text}")
