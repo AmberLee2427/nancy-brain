@@ -263,3 +263,115 @@ dependencies:
     config = _read_yaml(output_file)
     category = list(config.keys())[0]
     assert config[category][0]["url"] == "https://github.com/org/legacy-repo"
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for improved coverage
+# ---------------------------------------------------------------------------
+
+from nancy_brain.env_import import (
+    _is_skippable_pip_spec,
+    _package_name_from_pip_spec,
+    _normalize_github_url,
+    _extract_github_url,
+    _iter_existing_urls,
+)
+
+
+def test_is_skippable_empty():
+    assert _is_skippable_pip_spec("") is True
+    assert _is_skippable_pip_spec("   ") is True
+
+
+def test_is_skippable_dot():
+    assert _is_skippable_pip_spec(".") is True
+
+
+def test_is_skippable_http():
+    assert _is_skippable_pip_spec("https://example.com/pkg.tar.gz") is True
+
+
+def test_is_skippable_git_plus():
+    assert _is_skippable_pip_spec("git+https://github.com/org/repo.git") is True
+
+
+def test_is_skippable_double_dash():
+    assert _is_skippable_pip_spec("--no-deps") is True
+
+
+def test_package_name_from_pip_spec_starts_with_dash():
+    assert _package_name_from_pip_spec("-e .") is None
+
+
+def test_package_name_from_pip_spec_hyphen_name():
+    # A normal package name
+    result = _package_name_from_pip_spec("numpy>=1.0")
+    assert result == "numpy"
+
+
+def test_normalize_github_url_non_github():
+    result = _normalize_github_url("https://gitlab.com/owner/repo")
+    assert result is None
+
+
+def test_normalize_github_url_no_https():
+    result = _normalize_github_url("github.com/owner/repo")
+    assert result == "https://github.com/owner/repo"
+
+
+def test_normalize_github_url_git_plus_prefix():
+    result = _normalize_github_url("git+https://github.com/owner/myrepo.git")
+    assert result == "https://github.com/owner/myrepo"
+
+
+def test_normalize_github_url_empty():
+    assert _normalize_github_url("") is None
+    assert _normalize_github_url(None) is None
+
+
+def test_extract_github_url_not_github_url():
+    payload = {
+        "info": {
+            "project_urls": {"Homepage": "https://gitlab.com/owner/repo"},
+            "home_page": ""
+        }
+    }
+    result = _extract_github_url(payload)
+    assert result is None
+
+
+def test_extract_github_url_non_priority_key():
+    """Non-priority key with github url should be found."""
+    payload = {
+        "info": {
+            "project_urls": {
+                "Source": "https://other.com/page",
+                "BugTracker": "https://github.com/owner/repo/issues",
+            }
+        }
+    }
+    result = _extract_github_url(payload)
+    # Should find github url from BugTracker (non-priority key)
+    assert result is not None
+
+
+def test_iter_existing_urls_non_github_url():
+    config = {
+        "science": [
+            {"name": "repo1", "url": "https://bitbucket.org/org/repo"}
+        ]
+    }
+    urls = _iter_existing_urls(config)
+    assert "https://bitbucket.org/org/repo" in urls
+
+
+def test_iter_existing_urls_non_list_entries():
+    config = {"science": "not-a-list"}
+    urls = _iter_existing_urls(config)
+    assert len(urls) == 0
+
+
+def test_iter_existing_urls_empty_url():
+    config = {"science": [{"name": "repo", "url": ""}]}
+    urls = _iter_existing_urls(config)
+    assert len(urls) == 0
