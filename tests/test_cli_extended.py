@@ -585,7 +585,10 @@ def test_add_new_user_exception():
     try:
         result = runner.invoke(cli, ["add-new-user", "admin", "pass"])
     finally:
-        sys.modules.clear()
+        # Restore original modules (only remove ones we added)
+        for key in list(sys.modules.keys()):
+            if key not in saved:
+                del sys.modules[key]
         sys.modules.update(saved)
 
     assert result.exit_code != 0 or "❌" in result.output
