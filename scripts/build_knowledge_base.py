@@ -21,7 +21,6 @@ import requests
 import json
 import time
 import threading
-import re
 from typing import Optional, Set, Dict
 
 try:
@@ -32,6 +31,7 @@ except Exception:
 from chunky import ChunkPipeline, ChunkerConfig, Document
 from nancy_brain.chunking import strip_chunk_suffix
 from nancy_brain.summarization import SummaryGenerator
+from scripts.script_utils import is_full_commit_sha as _is_full_commit_sha
 
 # Optional imports
 try:
@@ -156,11 +156,6 @@ SUMMARY_SKIP_EXTENSIONS = {
     ".woff",
     ".woff2",
 }
-
-
-def _is_full_commit_sha(ref: Optional[str]) -> bool:
-    return isinstance(ref, str) and bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
-
 
 def is_excluded_pdf(path: str) -> bool:
     p = str(path)

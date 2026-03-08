@@ -11,18 +11,15 @@ import sys
 import subprocess
 import argparse
 import yaml
-import re
 from pathlib import Path
 from typing import Dict, List, Optional
 import logging
 
+from scripts.script_utils import is_full_commit_sha as _is_full_commit_sha
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def _is_full_commit_sha(ref: Optional[str]) -> bool:
-    return isinstance(ref, str) and bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
 
 
 class RepositoryManager:
