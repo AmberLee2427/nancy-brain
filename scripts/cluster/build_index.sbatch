@@ -8,6 +8,7 @@
 #   sbatch --dependency=afterok:<phase1_jobid> scripts/cluster/build_index.sbatch
 
 #SBATCH --job-name=nb-index
+#SBATCH --partition=batch          # index build needs no GPU
 #SBATCH --time=02:00:00
 #SBATCH --mem=64G                 # txtai FAISS index load is memory-hungry
 #SBATCH --cpus-per-task=8
@@ -21,7 +22,7 @@ mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load mamba
-mamba activate nancy-brain
+mamba activate ~/envs/nancy-brain
 
 # Summaries are cached; tell the builder to use them but not regenerate.
 export NB_USE_LOCAL_SUMMARY="true"

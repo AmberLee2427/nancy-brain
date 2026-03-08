@@ -8,11 +8,13 @@
 #   sbatch --array=0-38 scripts/cluster/summarize_array.sbatch
 
 #SBATCH --job-name=nb-summarize
+#SBATCH --partition=batch-gpu          # shared GPU partition; open to all users
 #SBATCH --array=0-38              # submit.sh updates this automatically
 #SBATCH --time=04:00:00           # generous; most repos finish in <30 min
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:1              # one GPU per node for the summary model
+#SBATCH --gres=gpu:1              # one GPU per task for the summary model
+#SBATCH --constraint=v100|h200    # prefer V100/H200 over P100 for 7B model speed
 #SBATCH --output=logs/summarize_%a_%j.out
 #SBATCH --error=logs/summarize_%a_%j.err
 
@@ -23,7 +25,7 @@ mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load mamba
-mamba activate nancy-brain
+mamba activate ~/envs/nancy-brain
 
 # Larger summary model; the 0.5B default is too small for good code summaries.
 export NB_SUMMARY_MODEL="${NB_SUMMARY_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"
@@ -31,6 +33,7 @@ export NB_USE_LOCAL_SUMMARY="true"
 export NB_MIN_SUMMARY_CHARS="${NB_MIN_SUMMARY_CHARS:-100}"
 # Suppress OpenMP duplicate-library warnings common on cluster nodes.
 export KMP_DUPLICATE_LIB_OK="TRUE"
+# CUDA torch (cu128) is installed by setup_env.sh; no need to module load cuda.
 
 # ── Repo selection ────────────────────────────────────────────────────────────
 REPO=$(python3 scripts/cluster/list_repos.py config/repositories.yml \
