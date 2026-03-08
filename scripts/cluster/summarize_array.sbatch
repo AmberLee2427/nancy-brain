@@ -30,6 +30,9 @@ source activate ~/envs/nancy-brain
 export NB_SUMMARY_MODEL="${NB_SUMMARY_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"
 export NB_USE_LOCAL_SUMMARY="true"
 export NB_MIN_SUMMARY_CHARS="${NB_MIN_SUMMARY_CHARS:-100}"
+# 4-bit quantization: 7B → ~4 GB VRAM (fits 16 GB V100 with headroom).
+# Requires bitsandbytes; omit or set to "" to use full fp16.
+export NB_QUANTIZE="${NB_QUANTIZE:-4bit}"
 # Suppress OpenMP duplicate-library warnings common on cluster nodes.
 export KMP_DUPLICATE_LIB_OK="TRUE"
 # CUDA torch (cu128) is installed by setup_env.sh; no need to module load cuda.

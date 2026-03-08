@@ -38,6 +38,7 @@ dependencies = [
     "astropy>=4.2",
     "zstandard",
     "accelerate>=0.26.0",
+    "bitsandbytes>=0.43.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

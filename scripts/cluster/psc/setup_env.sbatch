@@ -12,7 +12,7 @@
 #SBATCH --partition=RM-shared
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --mem=16000M              # RM-shared cap is 2000M/core; 8*2000=16000
 #SBATCH --time=00:45:00
 #SBATCH --output=logs/setup_env_%j.out
 #SBATCH --error=logs/setup_env_%j.err
