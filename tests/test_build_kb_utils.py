@@ -253,17 +253,22 @@ def test_extract_text_fallback_all_fail(tmp_path):
     pdf_path.write_bytes(b"fake")
 
     import types
-    for mod in ["PyPDF2", "pdfplumber", "fitz"]:
+    modules = ["PyPDF2", "pdfplumber", "fitz"]
+    saved = {k: sys.modules.get(k) for k in modules}
+    for mod in modules:
         fake = types.ModuleType(mod)
         sys.modules[mod] = fake
 
-    saved = sys.modules.copy()
     try:
         result = extract_text_fallback(str(pdf_path))
     except Exception:
         result = None
     finally:
-        pass  # modules will be restored by reimport
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
 
     # Result is either None or raises - we just want to cover the code path
     assert result is None
