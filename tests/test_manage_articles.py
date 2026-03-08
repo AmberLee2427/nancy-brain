@@ -6,10 +6,10 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 
-
 # ---------------------------------------------------------------------------
 # ArticleManager.__init__
 # ---------------------------------------------------------------------------
+
 
 def test_init_creates_articles_path(tmp_path):
     mock_rag = MagicMock()
@@ -18,6 +18,7 @@ def test_init_creates_articles_path(tmp_path):
         with patch("scripts.manage_articles.Textractor", mock_textractor_cls):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     articles_path = tmp_path / "raw" / "journal_articles"
     assert articles_path.exists()
@@ -30,6 +31,7 @@ def test_init_default_knowledge_base():
         with patch("scripts.manage_articles.Textractor", mock_textractor_cls):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager()
     assert manager.knowledge_base_path is not None
 
@@ -37,6 +39,7 @@ def test_init_default_knowledge_base():
 # ---------------------------------------------------------------------------
 # add_article
 # ---------------------------------------------------------------------------
+
 
 def test_add_article_file_not_found(tmp_path):
     mock_rag = MagicMock()
@@ -46,6 +49,7 @@ def test_add_article_file_not_found(tmp_path):
         with patch("scripts.manage_articles.Textractor", mock_textractor_cls):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     result = manager.add_article(tmp_path / "nonexistent.pdf")
     assert result is False
@@ -60,6 +64,7 @@ def test_add_article_not_pdf(tmp_path):
         with patch("scripts.manage_articles.Textractor", mock_textractor_cls):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     result = manager.add_article(txt_file)
     assert result is False
@@ -75,6 +80,7 @@ def test_add_article_too_short_text(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=mock_textractor_instance)):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     result = manager.add_article(pdf_file)
     assert result is False
@@ -96,6 +102,7 @@ def test_add_article_success(tmp_path):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     result = manager.add_article(pdf_file)
     assert result is True
@@ -113,6 +120,7 @@ def test_add_article_extraction_exception(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=mock_textractor_instance)):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.add_article(pdf_file)
@@ -133,6 +141,7 @@ def test_add_article_with_custom_id(tmp_path):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     result = manager.add_article(pdf_file, article_id="custom/my_article")
     assert result is True
@@ -151,6 +160,7 @@ def test_add_article_index_failure(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=mock_textractor_instance)):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.add_article(pdf_file)
@@ -161,12 +171,14 @@ def test_add_article_index_failure(tmp_path):
 # add_directory
 # ---------------------------------------------------------------------------
 
+
 def test_add_directory_not_found(tmp_path):
     mock_rag = MagicMock()
     with patch("scripts.manage_articles.RAGService", return_value=mock_rag):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     count = manager.add_directory(tmp_path / "nonexistent")
     assert count == 0
@@ -182,6 +194,7 @@ def test_add_directory_no_pdfs(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
     count = manager.add_directory(docs_dir)
     assert count == 0
@@ -203,6 +216,7 @@ def test_add_directory_with_pdfs(tmp_path):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     count = manager.add_directory(docs_dir)
     assert count == 2
@@ -211,6 +225,7 @@ def test_add_directory_with_pdfs(tmp_path):
 # ---------------------------------------------------------------------------
 # list_articles
 # ---------------------------------------------------------------------------
+
 
 def test_list_articles_success(tmp_path):
     mock_rag = MagicMock()
@@ -223,6 +238,7 @@ def test_list_articles_success(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     articles = manager.list_articles()
@@ -238,6 +254,7 @@ def test_list_articles_exception(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     articles = manager.list_articles()
@@ -248,6 +265,7 @@ def test_list_articles_exception(tmp_path):
 # remove_article
 # ---------------------------------------------------------------------------
 
+
 def test_remove_article_not_found(tmp_path):
     mock_rag = MagicMock()
     mock_rag.embeddings.database.search.return_value = []
@@ -256,6 +274,7 @@ def test_remove_article_not_found(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.remove_article("journal_articles/nonexistent")
@@ -264,15 +283,14 @@ def test_remove_article_not_found(tmp_path):
 
 def test_remove_article_success(tmp_path):
     mock_rag = MagicMock()
-    mock_rag.embeddings.database.search.return_value = [
-        {"id": "journal_articles/test_paper"}
-    ]
+    mock_rag.embeddings.database.search.return_value = [{"id": "journal_articles/test_paper"}]
     mock_rag.embeddings.delete = MagicMock()
 
     with patch("scripts.manage_articles.RAGService", return_value=mock_rag):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.remove_article("journal_articles/test_paper")
@@ -289,6 +307,7 @@ def test_remove_article_with_physical_file(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     # Create the physical file
@@ -308,6 +327,7 @@ def test_remove_article_exception(tmp_path):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.remove_article("journal_articles/bad")
@@ -318,12 +338,14 @@ def test_remove_article_exception(tmp_path):
 # rebuild_index
 # ---------------------------------------------------------------------------
 
+
 def test_rebuild_index_returns_false(tmp_path):
     mock_rag = MagicMock()
     with patch("scripts.manage_articles.RAGService", return_value=mock_rag):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     result = manager.rebuild_index()
@@ -334,12 +356,14 @@ def test_rebuild_index_returns_false(tmp_path):
 # _confirm helper
 # ---------------------------------------------------------------------------
 
+
 def test_confirm_yes(tmp_path, monkeypatch):
     mock_rag = MagicMock()
     with patch("scripts.manage_articles.RAGService", return_value=mock_rag):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     monkeypatch.setattr("builtins.input", lambda _: "y")
@@ -352,6 +376,7 @@ def test_confirm_no(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import ArticleManager
+
                 manager = ArticleManager(knowledge_base_path=tmp_path)
 
     monkeypatch.setattr("builtins.input", lambda _: "n")
@@ -361,6 +386,7 @@ def test_confirm_no(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Additional tests for improved coverage
 # ---------------------------------------------------------------------------
+
 
 def test_add_article_existing_dest_decline(tmp_path, monkeypatch):
     """When article already exists and user declines overwrite, return False."""
@@ -376,6 +402,7 @@ def test_add_article_existing_dest_decline(tmp_path, monkeypatch):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     # Pre-create the destination file
                     dest = manager.articles_path / pdf_file.name
@@ -400,6 +427,7 @@ def test_add_article_existing_dest_accept(tmp_path, monkeypatch):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     # Pre-create the destination file
                     dest = manager.articles_path / pdf_file.name
@@ -424,6 +452,7 @@ def test_add_article_index_failure_cleanup(tmp_path):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 with patch("scripts.manage_articles.project_root", tmp_path):
                     from scripts.manage_articles import ArticleManager
+
                     manager = ArticleManager(knowledge_base_path=tmp_path)
                     result = manager.add_article(pdf_file)
     assert result is False
@@ -440,6 +469,7 @@ def test_main_no_command(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import main
+
                 # Should not raise
                 main()
 
@@ -454,6 +484,7 @@ def test_main_list_command(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import main, ArticleManager
+
                 main()
 
 
@@ -465,6 +496,7 @@ def test_main_rebuild_command(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import main
+
                 with pytest.raises(SystemExit):
                     main()
 
@@ -478,6 +510,7 @@ def test_main_remove_command(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import main
+
                 with pytest.raises(SystemExit):
                     main()
 
@@ -490,5 +523,6 @@ def test_main_add_command(tmp_path, monkeypatch):
         with patch("scripts.manage_articles.Textractor", MagicMock(return_value=MagicMock())):
             with patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
                 from scripts.manage_articles import main
+
                 with pytest.raises(SystemExit):
                     main()

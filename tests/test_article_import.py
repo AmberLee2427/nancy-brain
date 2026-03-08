@@ -38,8 +38,7 @@ def _atom_feed(entries: list[dict[str, str]]) -> str:
         author = entry.get("author", "Test Author")
         year = entry.get("year", "2020")
         pdf_url = entry.get("pdf_url", f"http://arxiv.org/pdf/{arxiv_id}v1")
-        entry_xml.append(
-            f"""
+        entry_xml.append(f"""
   <entry>
     <id>http://arxiv.org/abs/{arxiv_id}v1</id>
     <title>{title}</title>
@@ -47,8 +46,7 @@ def _atom_feed(entries: list[dict[str, str]]) -> str:
     <author><name>{author}</name></author>
     <link title=\"pdf\" href=\"{pdf_url}\" />
   </entry>
-"""
-        )
+""")
 
     return (
         "<?xml version='1.0' encoding='UTF-8'?>\n"
@@ -663,10 +661,7 @@ from nancy_brain.article_import import (
     _arxiv_title_search,
     _parse_arxiv_atom,
     _write_articles_yaml,
-    import_from_bibtex,
-    import_from_ads,
 )
-
 
 
 def test_first_list_item_list():
@@ -757,6 +752,7 @@ def test_write_articles_yaml(tmp_path):
     _write_articles_yaml(output_path, data)
     assert output_path.exists()
     import yaml
+
     loaded = yaml.safe_load(output_path.read_text())
     assert "papers" in loaded
 

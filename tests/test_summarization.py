@@ -8,10 +8,10 @@ from unittest.mock import patch, MagicMock
 
 from nancy_brain.summarization import SummaryGenerator, SummaryResult
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def summary_cache_dir(tmp_path):
@@ -43,6 +43,7 @@ def generator_local(summary_cache_dir):
 # __init__
 # ---------------------------------------------------------------------------
 
+
 def test_init_disabled_when_no_key(summary_cache_dir):
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": ""}):
         gen = SummaryGenerator(cache_dir=summary_cache_dir)
@@ -73,6 +74,7 @@ def test_init_disabled_flag(summary_cache_dir):
 # summarize - disabled
 # ---------------------------------------------------------------------------
 
+
 def test_summarize_returns_none_when_disabled(generator_disabled):
     result = generator_disabled.summarize(doc_id="doc/x.py", content="some content")
     assert result is None
@@ -87,6 +89,7 @@ def test_summarize_returns_none_empty_content(generator_with_key):
 # summarize - cache hits
 # ---------------------------------------------------------------------------
 
+
 def test_summarize_returns_cached_result(generator_with_key):
     """If a cache file exists, return the cached result without calling API."""
     # Pre-populate cache
@@ -94,12 +97,17 @@ def test_summarize_returns_cached_result(generator_with_key):
     gen = generator_with_key
     cache_key = gen._cache_key("test/doc.py", trimmed, None, None)
     cache_file = gen.cache_dir / f"{cache_key}.json"
-    cache_file.write_text(json.dumps({
-        "summary": "Cached summary.",
-        "weight": 1.2,
-        "model": "claude-test",
-        "repo_readme_path": None,
-    }), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps(
+            {
+                "summary": "Cached summary.",
+                "weight": 1.2,
+                "model": "claude-test",
+                "repo_readme_path": None,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     result = gen.summarize(doc_id="test/doc.py", content=trimmed)
     assert result is not None
@@ -128,6 +136,7 @@ def test_summarize_ignores_corrupt_cache(generator_with_key):
 # ---------------------------------------------------------------------------
 # summarize - API call path
 # ---------------------------------------------------------------------------
+
 
 def test_summarize_api_call(generator_with_key):
     gen = generator_with_key
@@ -175,6 +184,7 @@ def test_summarize_with_readme(generator_with_key):
 # summarize - local mode
 # ---------------------------------------------------------------------------
 
+
 def test_summarize_local_mode(generator_local):
     gen = generator_local
     mock_payload = {"summary": "Local summary.", "weight": 1.1, "model": "local-Qwen"}
@@ -187,6 +197,7 @@ def test_summarize_local_mode(generator_local):
 # ---------------------------------------------------------------------------
 # _trim_content
 # ---------------------------------------------------------------------------
+
 
 def test_trim_content_short(generator_with_key):
     gen = generator_with_key
@@ -215,6 +226,7 @@ def test_trim_content_long_with_extra(generator_with_key):
 # _trim_readme
 # ---------------------------------------------------------------------------
 
+
 def test_trim_readme_none(generator_with_key):
     gen = generator_with_key
     assert gen._trim_readme(None) is None
@@ -242,6 +254,7 @@ def test_trim_readme_long(generator_with_key):
 # ---------------------------------------------------------------------------
 # _cache_key
 # ---------------------------------------------------------------------------
+
 
 def test_cache_key_deterministic(generator_with_key):
     gen = generator_with_key
@@ -274,6 +287,7 @@ def test_cache_key_with_readme_path(generator_with_key):
 # ---------------------------------------------------------------------------
 # _build_prompt
 # ---------------------------------------------------------------------------
+
 
 def test_build_prompt_basic(generator_with_key):
     gen = generator_with_key
@@ -317,6 +331,7 @@ def test_build_prompt_readme_is_the_doc(generator_with_key):
 # ---------------------------------------------------------------------------
 # _invoke_model
 # ---------------------------------------------------------------------------
+
 
 def test_invoke_model_no_client(generator_with_key):
     gen = generator_with_key
@@ -395,6 +410,7 @@ def test_invoke_model_with_readme(generator_with_key):
 # _create_client
 # ---------------------------------------------------------------------------
 
+
 def test_create_client_no_key(generator_disabled):
     gen = generator_disabled
     gen.api_key = None
@@ -405,6 +421,7 @@ def test_create_client_no_key(generator_disabled):
 def test_create_client_no_anthropic_module(generator_with_key):
     gen = generator_with_key
     import sys
+
     saved = sys.modules.get("anthropic")
     sys.modules["anthropic"] = None
     try:
@@ -432,6 +449,7 @@ def test_create_client_success(generator_with_key):
 # _strip_markdown_json
 # ---------------------------------------------------------------------------
 
+
 def test_strip_markdown_json_plain(generator_with_key):
     gen = generator_with_key
     text = '{"summary": "test", "weight": 1.0}'
@@ -457,9 +475,11 @@ def test_strip_markdown_json_code_block_no_newline(generator_with_key):
 # _invoke_local
 # ---------------------------------------------------------------------------
 
+
 def test_invoke_local_no_torch(generator_local):
     gen = generator_local
     import sys
+
     saved = sys.modules.get("torch")
     sys.modules["torch"] = None
     try:
@@ -510,6 +530,7 @@ def test_invoke_local_success(generator_local, monkeypatch):
     mock_auto_model = MagicMock(return_value=mock_model)
 
     import types
+
     mock_transformers = types.ModuleType("transformers")
     mock_transformers.AutoTokenizer = mock_auto_tokenizer
     mock_transformers.AutoModelForCausalLM = mock_auto_model

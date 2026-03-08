@@ -3,7 +3,6 @@ import re
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "connectors" / "http_api" / "GPT_schema.yml"
 MCP_SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"

@@ -11,7 +11,6 @@ from click.testing import CliRunner
 from nancy_brain.cli import cli, _print_import_summary
 import click
 
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -19,18 +18,14 @@ import click
 
 def _write_repos_config(path: Path, repos: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    config = repos or {
-        "science": [{"name": "repo1", "url": "https://github.com/org/repo1.git"}]
-    }
+    config = repos or {"science": [{"name": "repo1", "url": "https://github.com/org/repo1.git"}]}
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config, f)
 
 
 def _write_articles_config(path: Path, articles: dict | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    config = articles or {
-        "papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]
-    }
+    config = articles or {"papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]}
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config, f)
 
@@ -45,6 +40,7 @@ def test_print_import_summary_no_errors():
     with runner.isolated_filesystem():
         summary = {"added": 3, "skipped_duplicate": 1, "skipped_no_url": 0, "errors": []}
         # Run via a temporary CLI invocation to capture output
+
         @click.command()
         def _cmd():
             _print_import_summary("Test", summary)
@@ -59,7 +55,9 @@ def test_print_import_summary_with_errors():
 
     @click.command()
     def _cmd():
-        _print_import_summary("Test", {"added": 0, "skipped_duplicate": 0, "skipped_no_url": 0, "errors": ["err1", "err2"]})
+        _print_import_summary(
+            "Test", {"added": 0, "skipped_duplicate": 0, "skipped_no_url": 0, "errors": ["err1", "err2"]}
+        )
 
     result = runner.invoke(_cmd)
     assert "Errors: 2" in result.output
@@ -194,6 +192,7 @@ def test_build_dry_run():
 def test_build_subprocess_error():
     runner = CliRunner()
     import subprocess
+
     with runner.isolated_filesystem():
         _write_repos_config(Path("config/repositories.yml"))
         with patch("nancy_brain.cli.subprocess.run") as mock_run:
@@ -215,9 +214,7 @@ def test_build_with_articles_config_invalid():
     with runner.isolated_filesystem():
         _write_repos_config(Path("config/repositories.yml"))
         # Write invalid articles config (missing url)
-        _write_articles_config(Path("config/articles.yml"), {
-            "papers": [{"name": "bad_article"}]
-        })
+        _write_articles_config(Path("config/articles.yml"), {"papers": [{"name": "bad_article"}]})
         result = runner.invoke(cli, ["build", "--articles-config", "config/articles.yml"])
     assert result.exit_code != 0 or "❌" in result.output
 
@@ -226,9 +223,9 @@ def test_build_with_valid_articles_config():
     runner = CliRunner()
     with runner.isolated_filesystem():
         _write_repos_config(Path("config/repositories.yml"))
-        _write_articles_config(Path("config/articles.yml"), {
-            "papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]
-        })
+        _write_articles_config(
+            Path("config/articles.yml"), {"papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]}
+        )
         with patch("nancy_brain.cli.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             result = runner.invoke(cli, ["build", "--articles-config", "config/articles.yml"])
@@ -364,6 +361,7 @@ def test_ui_streamlit_not_installed():
 def test_ui_subprocess_error():
     runner = CliRunner()
     import subprocess
+
     fake_streamlit = MagicMock()
     with patch.dict(sys.modules, {"streamlit": fake_streamlit}):
         with patch("nancy_brain.cli.subprocess.run", side_effect=subprocess.CalledProcessError(1, ["streamlit"])):
@@ -375,6 +373,7 @@ def test_ui_subprocess_error():
 def test_ui_streamlit_not_found():
     runner = CliRunner()
     import subprocess
+
     fake_streamlit = MagicMock()
     with patch.dict(sys.modules, {"streamlit": fake_streamlit}):
         with patch("nancy_brain.cli.subprocess.run", side_effect=FileNotFoundError()):
@@ -428,9 +427,7 @@ def test_add_article_no_description():
 def test_add_article_creates_config_dir():
     runner = CliRunner()
     with runner.isolated_filesystem():
-        result = runner.invoke(
-            cli, ["add-article", "https://arxiv.org/pdf/5678.pdf", "paper2", "--category", "astro"]
-        )
+        result = runner.invoke(cli, ["add-article", "https://arxiv.org/pdf/5678.pdf", "paper2", "--category", "astro"])
         assert result.exit_code == 0
         config_file = Path("config/articles.yml")
         assert config_file.exists()
@@ -521,8 +518,10 @@ def test_import_ads_with_errors():
     with runner.isolated_filesystem():
         with patch("nancy_brain.article_import.import_from_ads") as mock_import:
             mock_import.return_value = {
-                "added": 1, "skipped_duplicate": 0, "skipped_no_url": 0,
-                "errors": ["fetch failed for paper X"]
+                "added": 1,
+                "skipped_duplicate": 0,
+                "skipped_no_url": 0,
+                "errors": ["fetch failed for paper X"],
             }
             result = runner.invoke(cli, ["import-ads", "--library", "Lib"])
     assert result.exit_code == 0
@@ -548,7 +547,6 @@ def test_add_new_user_success():
     fake_auth.create_user_table = MagicMock()
     fake_auth.add_user = MagicMock()
 
-    import types
     fake_http_api = types.ModuleType("connectors.http_api")
     fake_http_api.auth = fake_auth
 
@@ -574,7 +572,6 @@ def test_add_new_user_exception():
     fake_auth = MagicMock()
     fake_auth.create_user_table.side_effect = Exception("db error")
 
-    import types
     fake_http_api = types.ModuleType("connectors.http_api")
     fake_http_api.auth = fake_auth
 

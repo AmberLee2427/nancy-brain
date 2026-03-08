@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 
 from nancy_brain.summarization import SummaryGenerator, SummaryResult
 
-
 load_dotenv("config/.env")
 
 

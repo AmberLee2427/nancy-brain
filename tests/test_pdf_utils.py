@@ -20,6 +20,7 @@ def test_initialize_tika_failure():
     try:
         # Re-import to pick up the mocked module
         import scripts.pdf_utils as pdf_utils
+
         result = pdf_utils.initialize_tika()
         assert result is False
     finally:
@@ -75,7 +76,6 @@ def test_test_pdf_extraction_extract_fails(tmp_path):
     assert result is False
 
 
-
 # ---------------------------------------------------------------------------
 # Additional tests to improve line coverage
 # ---------------------------------------------------------------------------
@@ -93,6 +93,7 @@ def test_initialize_tika_actually_succeeds():
     try:
         import importlib
         import scripts.pdf_utils as pdf_mod
+
         importlib.reload(pdf_mod)
         result = pdf_mod.initialize_tika()
         assert result is True
@@ -112,6 +113,7 @@ def test_initialize_tika_actually_fails():
 
     try:
         import scripts.pdf_utils as pdf_mod
+
         result = pdf_mod.initialize_tika()
         assert result is False
     finally:
@@ -136,6 +138,7 @@ def test_extract_pdf_text_actually_succeeds():
 
     try:
         import scripts.pdf_utils as pdf_mod
+
         result = pdf_mod.extract_pdf_text("/tmp/test.pdf")
         assert result == "Extracted content"
     finally:
@@ -164,6 +167,7 @@ def test_extract_pdf_text_empty_content():
 
     try:
         import scripts.pdf_utils as pdf_mod
+
         result = pdf_mod.extract_pdf_text("/tmp/empty.pdf")
         assert result is None
     finally:
@@ -192,6 +196,7 @@ def test_extract_pdf_text_exception():
 
     try:
         import scripts.pdf_utils as pdf_mod
+
         result = pdf_mod.extract_pdf_text("/tmp/broken.pdf")
         assert result is None
     finally:
