@@ -57,7 +57,7 @@ def test_new_gemini_api():
         Document:
         """
             + test_content
-        )  # Noqa: W293  # Noqa: W293
+        )  # noqa: W293
 
         response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         print(f"Summary Response: {response.text}")
