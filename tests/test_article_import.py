@@ -495,3 +495,288 @@ def test_bibtex_arxiv_error_feed_skipped(tmp_path):
 
     assert summary["added"] == 0
     assert summary["skipped_no_url"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for helper functions to improve coverage
+# ---------------------------------------------------------------------------
+
+from nancy_brain.article_import import (
+    _sanitize,
+    _make_name,
+    _chunks,
+    _dedupe_preserve_order,
+    _normalize_arxiv_id,
+    _looks_like_arxiv_id,
+    _first_author_surname,
+    _extract_year,
+    _clean_text,
+    _normalize_title_for_compare,
+    _build_description,
+)
+
+
+def test_sanitize_empty():
+    assert _sanitize("") == ""
+
+
+def test_sanitize_basic():
+    assert _sanitize("Hello World!") == "Hello_World"
+
+
+def test_make_name_no_arxiv_no_doi():
+    name = _make_name("Smith", "2023")
+    assert "Smith" in name
+    assert "2023" in name
+
+
+def test_make_name_long_name():
+    # Name longer than 80 chars should be truncated
+    name = _make_name("A" * 50, "2023")
+    assert len(name) <= 80
+
+
+def test_make_name_with_doi():
+    name = _make_name("Jones", "2021", doi="10.1000/xyz123")
+    assert "Jones" in name
+    assert "2021" in name
+
+
+def test_chunks_basic():
+    result = _chunks([1, 2, 3, 4, 5], 2)
+    assert result == [[1, 2], [3, 4], [5]]
+
+
+def test_dedupe_preserve_order_with_dupes():
+    result = _dedupe_preserve_order(["a", "b", "a", "c"])
+    assert result == ["a", "b", "c"]
+
+
+def test_normalize_arxiv_id_none():
+    assert _normalize_arxiv_id(None) is None
+    assert _normalize_arxiv_id("") is None
+
+
+def test_normalize_arxiv_id_url():
+    result = _normalize_arxiv_id("https://arxiv.org/abs/2301.00001v2")
+    assert result == "2301.00001"
+
+
+def test_looks_like_arxiv_id_none():
+    assert _looks_like_arxiv_id(None) is False
+    assert _looks_like_arxiv_id("") is False
+
+
+def test_looks_like_arxiv_id_arxiv_prefix():
+    assert _looks_like_arxiv_id("arxiv:2301.00001") is True
+
+
+def test_looks_like_arxiv_id_url():
+    assert _looks_like_arxiv_id("https://arxiv.org/abs/2301.00001") is True
+
+
+def test_looks_like_arxiv_id_numeric():
+    assert _looks_like_arxiv_id("2301.00001") is True
+
+
+def test_looks_like_arxiv_id_old_style():
+    assert _looks_like_arxiv_id("astro-ph/9912345") is True
+
+
+def test_first_author_surname_none():
+    assert _first_author_surname(None) == "Unknown"
+
+
+def test_first_author_surname_comma_format():
+    assert _first_author_surname("Smith, John") == "Smith"
+
+
+def test_first_author_surname_space_format():
+    assert _first_author_surname("John Smith") == "Smith"
+
+
+def test_first_author_surname_multiple_authors():
+    assert _first_author_surname("Smith, John and Jones, Jane") == "Smith"
+
+
+def test_extract_year_none():
+    assert _extract_year(None) == "Unknown"
+
+
+def test_extract_year_no_year():
+    assert _extract_year("no year here") == "Unknown"
+
+
+def test_extract_year_valid():
+    assert _extract_year("Published in 2021") == "2021"
+
+
+def test_clean_text_none():
+    assert _clean_text(None) == ""
+
+
+def test_clean_text_basic():
+    result = _clean_text("{Hello} {World}")
+    assert "Hello" in result
+    assert "World" in result
+    assert "{" not in result
+
+
+def test_normalize_title_for_compare_none():
+    assert _normalize_title_for_compare(None) == ""
+
+
+def test_normalize_title_for_compare_basic():
+    result = _normalize_title_for_compare("Hello, World! 2023")
+    assert result == "helloworld2023"
+
+
+def test_build_description_full():
+    result = _build_description("Great Paper", "Smith", "2023")
+    assert "Smith" in result
+    assert "2023" in result
+    assert "Great Paper" in result
+
+
+def test_build_description_no_year():
+    result = _build_description("Great Paper", "Smith", "no year")
+    assert "Great Paper" in result
+    assert "Smith" in result
+
+
+def test_build_description_no_title():
+    result = _build_description("", "Smith", "2023")
+    assert "Smith" in result
+    assert "2023" in result
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for better coverage on helper functions
+# ---------------------------------------------------------------------------
+
+from nancy_brain.article_import import (
+    _first_list_item,
+    _entry_arxiv_id,
+    _load_articles_yaml,
+    _merge_entries,
+    arxiv_lookup,
+    _arxiv_title_search,
+    _parse_arxiv_atom,
+    _write_articles_yaml,
+    import_from_bibtex,
+    import_from_ads,
+)
+import click as _click
+
+
+def test_first_list_item_list():
+    assert _first_list_item(["first", "second"]) == "first"
+
+
+def test_first_list_item_string():
+    assert _first_list_item("hello") == "hello"
+
+
+def test_first_list_item_other():
+    assert _first_list_item(42) == ""
+    assert _first_list_item([]) == ""
+
+
+def test_entry_arxiv_id_url():
+    entry = {"url": "https://arxiv.org/abs/2301.00001"}
+    result = _entry_arxiv_id(entry)
+    assert result == "2301.00001"
+
+
+def test_entry_arxiv_id_eprint_arxiv():
+    entry = {"eprint": "2301.00001", "archiveprefix": "arXiv"}
+    result = _entry_arxiv_id(entry)
+    assert result == "2301.00001"
+
+
+def test_entry_arxiv_id_none():
+    entry = {"title": "No ID here"}
+    assert _entry_arxiv_id(entry) is None
+
+
+def test_load_articles_yaml_invalid_structure(tmp_path):
+    """Invalid YAML structure (list instead of dict) raises ClickException."""
+    yaml_file = tmp_path / "articles.yml"
+    yaml_file.write_text("- item1\n- item2\n", encoding="utf-8")
+
+    with pytest.raises(_click.ClickException):
+        _load_articles_yaml(yaml_file)
+
+
+def test_merge_entries_invalid_category():
+    """Non-list category raises ClickException."""
+    data = {"papers": "not-a-list"}
+    with pytest.raises(_click.ClickException):
+        _merge_entries(data, "papers", [])
+
+
+def test_merge_entries_entry_without_name():
+    """Entry without name is counted as duplicate and skipped."""
+    data = {}
+    entries = [{"url": "https://arxiv.org/pdf/2301.00001.pdf"}]  # no 'name' key
+    added, skipped = _merge_entries(data, "papers", entries)
+    assert added == 0
+    assert skipped == 1
+
+
+def test_arxiv_lookup_empty():
+    """Empty input returns empty list without making API calls."""
+    result = arxiv_lookup([])
+    assert result == []
+
+
+def test_arxiv_title_search_empty():
+    """Empty title returns None without making API calls."""
+    result = _arxiv_title_search("")
+    assert result is None
+
+
+def test_parse_arxiv_atom_error_entry():
+    """Error-feed entries (title='Error') are skipped."""
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2301.00001v1</id>
+    <title>Error</title>
+    <published>2023-01-01T00:00:00Z</published>
+  </entry>
+</feed>"""
+    results = _parse_arxiv_atom(xml)
+    assert results == []
+
+
+def test_write_articles_yaml(tmp_path):
+    """_write_articles_yaml creates directory and writes YAML file."""
+    output_path = tmp_path / "subdir" / "articles.yml"
+    data = {"papers": [{"name": "test", "url": "https://example.com"}]}
+    _write_articles_yaml(output_path, data)
+    assert output_path.exists()
+    import yaml
+    loaded = yaml.safe_load(output_path.read_text())
+    assert "papers" in loaded
+
+
+def test_import_from_bibtex_missing_file(tmp_path):
+    """import_from_bibtex raises ClickException for missing file."""
+    with pytest.raises(_click.ClickException):
+        import_from_bibtex(
+            bib_path=tmp_path / "nonexistent.bib",
+            category="papers",
+            output_path=tmp_path / "articles.yml",
+        )
+
+
+def test_import_from_ads_no_key(tmp_path, monkeypatch):
+    """import_from_ads raises ClickException when ADS_API_KEY is not set."""
+    monkeypatch.delenv("ADS_API_KEY", raising=False)
+    with pytest.raises(_click.ClickException, match="ADS_API_KEY"):
+        import_from_ads(
+            library_name="My Library",
+            category="papers",
+            output_path=tmp_path / "articles.yml",
+        )

@@ -36,3 +36,70 @@ Content here.
     assert "World" in out
     assert "Content here" in out
     assert "% comment" not in out
+
+
+def test_extract_text_from_rst_fallback_no_docutils():
+    """Exercise the heuristic fallback when docutils is not available."""
+    import sys
+    saved_core = sys.modules.get("docutils.core")
+    sys.modules["docutils.core"] = None  # Simulate ImportError for the submodule
+
+    try:
+        # Use plain RST without directives to avoid the fallback directive regex
+        sample = "Hello *world*. **Bold** and plain text.\n"
+        out = text_extract.extract_text_from_rst(sample)
+        assert "Hello" in out
+        assert "plain text" in out
+    finally:
+        if saved_core is None:
+            sys.modules.pop("docutils.core", None)
+        else:
+            sys.modules["docutils.core"] = saved_core
+
+
+def test_extract_text_from_rst_bytes_output(monkeypatch):
+    """Exercise the bytes-decoding branch when docutils returns bytes."""
+    import sys
+    import types
+
+    fake_core = types.ModuleType("docutils.core")
+    fake_core.publish_string = lambda rst, writer_name: b"plain text output"
+    fake_docutils = types.ModuleType("docutils")
+    fake_docutils.core = fake_core
+
+    saved_docutils = sys.modules.get("docutils")
+    saved_core = sys.modules.get("docutils.core")
+    sys.modules["docutils"] = fake_docutils
+    sys.modules["docutils.core"] = fake_core
+
+    try:
+        out = text_extract.extract_text_from_rst("some rst content")
+        assert "plain text output" in out
+    finally:
+        if saved_docutils is None:
+            sys.modules.pop("docutils", None)
+        else:
+            sys.modules["docutils"] = saved_docutils
+        if saved_core is None:
+            sys.modules.pop("docutils.core", None)
+        else:
+            sys.modules["docutils.core"] = saved_core
+
+
+def test_extract_text_from_tex_fallback_no_pylatexenc():
+    """Exercise heuristic fallback when pylatexenc is not available."""
+    import sys
+    saved = sys.modules.get("pylatexenc.latex2text")
+    sys.modules["pylatexenc.latex2text"] = None  # Force ImportError
+
+    try:
+        sample = r"\documentclass{article}\begin{document}Hello \textbf{World}!% comment\end{document}"
+        out = text_extract.extract_text_from_tex(sample)
+        assert "Hello" in out
+        assert "World" in out
+        assert "comment" not in out
+    finally:
+        if saved is None:
+            sys.modules.pop("pylatexenc.latex2text", None)
+        else:
+            sys.modules["pylatexenc.latex2text"] = saved

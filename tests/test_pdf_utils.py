@@ -4,20 +4,6 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
-def test_initialize_tika_success():
-    """initialize_tika returns True when tika is available."""
-    import types
-
-    fake_tika = types.SimpleNamespace(initVM=MagicMock())
-    with patch.dict("sys.modules", {"tika": fake_tika}):
-        from scripts import pdf_utils
-
-        with patch("scripts.pdf_utils.initialize_tika", wraps=None) as mock_fn:
-            mock_fn.return_value = True
-            result = mock_fn()
-    assert result is True
-
-
 def test_initialize_tika_failure():
     """initialize_tika returns False when tika import/init fails."""
     import importlib
@@ -41,32 +27,6 @@ def test_initialize_tika_failure():
             sys.modules.pop("tika", None)
         else:
             sys.modules["tika"] = saved
-
-
-def test_extract_pdf_text_success(tmp_path):
-    """extract_pdf_text returns text when tika parser succeeds."""
-    from scripts.pdf_utils import extract_pdf_text
-
-    dummy_content = "Extracted PDF text content."
-    mock_parsed = {"content": dummy_content}
-
-    import types
-    fake_parser = types.SimpleNamespace(from_file=MagicMock(return_value=mock_parsed))
-    fake_tika_module = types.SimpleNamespace(parser=fake_parser)
-
-    with patch.dict("sys.modules", {"tika": fake_tika_module, "tika.parser": fake_parser}):
-        with patch("scripts.pdf_utils.extract_pdf_text", return_value=dummy_content) as mock_extract:
-            result = mock_extract(str(tmp_path / "test.pdf"))
-    assert result == dummy_content
-
-
-def test_extract_pdf_text_no_content(tmp_path):
-    """extract_pdf_text returns None when parsed content is empty."""
-    from scripts.pdf_utils import extract_pdf_text
-
-    with patch("scripts.pdf_utils.extract_pdf_text", return_value=None) as mock_extract:
-        result = mock_extract(str(tmp_path / "empty.pdf"))
-    assert result is None
 
 
 def test_test_pdf_extraction_missing_file(tmp_path):
@@ -113,6 +73,7 @@ def test_test_pdf_extraction_extract_fails(tmp_path):
         with patch("scripts.pdf_utils.extract_pdf_text", return_value=None):
             result = pdf_utils.test_pdf_extraction(str(pdf_path))
     assert result is False
+
 
 
 # ---------------------------------------------------------------------------
