@@ -163,3 +163,4 @@ web_resources:
 #   - name: my-microlensing-tool
 #     url: https://github.com/your-username/your-repo
 #     description: "Your custom microlensing analysis tool"
+#     ref: "v1.2.3"  # optional: branch, tag, or commit SHA to pin build input

@@ -53,11 +53,11 @@ def test_new_gemini_api():
             """
         Summarize this document and respond with JSON in this format:
         {"summary": "brief summary", "weight": float_between_0.5_and_2.0}
-        
+
         Document:
-        """  # Noqa: W293
+        """
             + test_content
-        )  # Noqa: W293
+        )  # noqa: W293
 
         response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         print(f"Summary Response: {response.text}")

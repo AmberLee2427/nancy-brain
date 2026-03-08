@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 import requests
 
-
 ROOT = Path(__file__).resolve().parent.parent
 SERVER_PATH = ROOT / "connectors" / "mcp_server" / "server.py"
 

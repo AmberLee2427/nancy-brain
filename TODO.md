@@ -98,6 +98,15 @@
   - ✅ `--dry-run` 
   - ✅ `--category` 
   - ✅ `--dirty`
+  - ✅ `--repo` filter — build a single named repo; enables per-repo parallelism across cluster nodes
+
+### Summary Generation
+- ✅ **Small-file skip**: skip summarization for files below a stripped-char threshold (≈200 chars); use content size only — do NOT use filename heuristics (`__init__.py` can contain critical code)
+- ✅ **Data-file skip**: skip binary/data files by extension (`.fits`, `.npy`, `.pkl`, `.dat`, `.csv`, `.parquet`, images, compiled objects, etc.)
+- ✅ **Configurable local summary model**: honour `NB_SUMMARY_MODEL` env var (default `Qwen/Qwen2.5-Coder-0.5B-Instruct`); GPU users can point this at a larger model (e.g. `Qwen2.5-Coder-7B`) for better quality — the code already auto-detects GPU via `device_map="auto"`
+- [ ] **Repo-level summary mode**: one LLM call per repo (README + dir listing + top N files) as a fast-build alternative to per-file calls
+- ✅ `nancy-brain import-env -f environment.yml` — generate `repositories.yml` entries from a conda env file; category = env name
+- ✅ **Version/ref pinning** in `repositories.yml` — optional `ref:` field per repo for reproducible KB builds
 
 ### Auth
 - [ ] create an admin login account
@@ -115,18 +124,18 @@
   - ✅ Support for different embedding models
   - [ ] Model comparison and benchmarking
   - ✅ Automatic model selection
-- [ ] **Advanced PDF Processing**
-  - ~~[x] Better table extraction~~
-  - ~~[x] Image and figure processing~~
-  - [ ] Citation link extraction
-  - [ ] ADS API integration for article downloads
-      - [ ]
-  - [ ] ADS library config
-      - [ ] https://github.com/adsabs/adsabs-dev-api/blob/master/API_documentation_Python/Libraries_API_Python.ipynb
-  - [ ] bibtex library config
-      - [ ] https://nlesc.github.io/litstudy/api/types.html#litstudy.types.DocumentSet
-  - [ ] Implement DeepSeek OCR pipeline
-- [ ] **ADS Library Integration**
+- [ ] **PDF Processing: Replace Tika with OCR pipeline**
+  - [ ] Remove Tika-based pipeline (`pdf_utils.py`, `manage_pdf_articles.py`) — it's unreliable and being replaced
+  - [ ] **DeepSeek OCR** as primary backend (GPU, ~7B VLM): PDF pages → images → structured Markdown
+  - [ ] **Nougat** (`nougat-ocr`) as CPU fallback (~250M): same image→Markdown pipeline, no GPU required
+  - [ ] Install extras: `pip install nancy-brain[ocr]` (nougat + pymupdf) and `[ocr-gpu]` (pymupdf; needs CUDA torch)
+  - [ ] Auto-detect backend at build time: CUDA + DeepSeek available → use it; else nougat; else skip with warning
+  - [ ] OCR output is Markdown → feeds into `MarkdownHeadingChunker` → same embedding space as everything else
+  - [ ] Cache OCR Markdown output per-PDF (content-hash) so rebuilds don't re-process unchanged articles
+  - [ ] Citation link extraction (post-OCR, future)
+- ✅ **Article source import**
+  - ✅ `nancy-brain import-bibtex -f references.bib` → populates `articles.yml`
+  - ✅ `nancy-brain import-ads --library "My Library"` → populates `articles.yml` via ADS API
 - [ ] **MCP Re-hosted Tools**
   - memory mcp
   - wikipedia mcp
@@ -173,11 +182,11 @@
 - [ ] Custom GPT
 
 ### Chunking
-- [ ] Delegate to a subpackage (`chunky`)
-- [ ] Upgrade chunking strategy
-  - Notebooks
-  - Deepseek OCR
-  - Visual inspection checks
+- [x] Delegate to a subpackage (`chunky`) — v2.1.0 with forward-merge and tree-sitter `max_chars` fix
+- [ ] **Tree-sitter gap-filling** (Option A): emit non-function spans so 100% of C/C++/Bash/HTML files are indexed (see `chunky/docs/design/TREESITTER_COVERAGE_BUG.md`)
+- [ ] Broader per-language tree-sitter queries (Option B, tracked in `chunky/TODO.md`)
+- [ ] Notebook chunking review
+- [ ] Visual inspection checks once OCR pipeline produces Markdown output
 
 ## 📸 Content Creation (lowest priority)
 
@@ -234,7 +243,10 @@
   - Tree
   - Search
 - [ ] Debug any issues NancyGPT is having with NancyBrain Actions
-- [ ] Build summaries on Unity and transfer them over to the proxmox container for deployment.
+- [ ] Finish summary generation for remaining files (~30K files on Unity; use existing cache)
+- [ ] `--repo` CLI option for parallel per-repo builds across cluster nodes
+- [ ] Small-file and data-file summary skipping to reduce compute waste
+- [ ] Pre-process ~30 articles with DeepSeek OCR on GPU node for conference demo
 
 ### v1.0.x (Stable Release)
 - [ ] Full feature completeness

@@ -115,8 +115,8 @@ def test_build_txtai_index_with_summaries(tmp_path, monkeypatch):
     base = tmp_path / "knowledge_base" / "raw"
     repo_dir = base / "docs" / "repo"
     repo_dir.mkdir(parents=True)
-    (repo_dir / "README.md").write_text("Repo overview", encoding="utf-8")
-    (repo_dir / "file.md").write_text("# Header\n\nSome detailed content.", encoding="utf-8")
+    (repo_dir / "README.md").write_text("Repo overview\n" + ("README context " * 30), encoding="utf-8")
+    (repo_dir / "file.md").write_text("# Header\n\n" + ("Some detailed content. " * 20), encoding="utf-8")
 
     repos_config = {"docs": [{"name": "repo", "url": "https://example.com/repo"}]}
     config_path = tmp_path / "repos.yml"

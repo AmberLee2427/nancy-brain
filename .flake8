@@ -9,7 +9,7 @@ exclude =
     .pytest_cache
 per-file-ignores =
     __init__.py:F401,E402
-    */tests/*:F401,F841
+    tests/*.py:F401,F841
     nancy_brain/cli.py:F401,F841
     run_mcp_server.py:E402
     rag_core/types.py:E402

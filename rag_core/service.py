@@ -460,6 +460,10 @@ class RAGService:
 
     async def list_tree(self, prefix: str = "", depth: int = 2, max_entries: int = 500) -> List[Dict]:
         """List document IDs under a prefix as a tree structure."""
+        # Build excluded-prefix set from env var (comma-separated), e.g. "summaries/,knowledge_base/raw/"
+        _excluded_raw = os.environ.get("TREE_EXCLUDED_PREFIXES", "summaries/")
+        excluded_prefixes = tuple(p.strip() for p in _excluded_raw.split(",") if p.strip())
+
         # Lazily initialize search and prefer registry fallback if embeddings unavailable
         self._ensure_search_loaded()
         if not self.search or not getattr(self.search, "general_embeddings", None):
@@ -503,6 +507,9 @@ class RAGService:
                 doc_ids = self.registry.list_ids(prefix)
 
         # Convert flat list to tree structure
+        if excluded_prefixes:
+            doc_ids = [d for d in doc_ids if not d.startswith(excluded_prefixes)]
+
         tree_entries = []
         seen_paths = set()
 

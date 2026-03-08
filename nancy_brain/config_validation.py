@@ -41,6 +41,13 @@ def validate_repositories_config(config: Dict[str, Any]) -> Tuple[bool, List[str
             else:
                 if not isinstance(entry["url"], str) or not entry["url"].strip():
                     errors.append(f"{cat}[{idx}]: 'url' must be a non-empty string")
+            ref = entry.get("ref")
+            if ref is not None:
+                if not isinstance(ref, str) or not ref.strip():
+                    errors.append(
+                        f"Repository '{entry.get('name', '?')}' in category '{cat}': "
+                        f"'ref' must be a non-empty string if present."
+                    )
     return (len(errors) == 0), errors
 
 

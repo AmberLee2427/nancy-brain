@@ -308,7 +308,11 @@ class SummaryGenerator:
             if _summarizer_pipeline is None:
                 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-                model_name = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+                model_name = os.environ.get(
+                    "NB_SUMMARY_MODEL",
+                    "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+                )
+                logger.info("Local summary model: %s", model_name)
                 logger.info(f"Loading local summarization model ({model_name})...")
 
                 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -319,13 +323,40 @@ class SummaryGenerator:
                     device_map = "cpu"
                     torch_dtype = torch.float32
 
-                model = AutoModelForCausalLM.from_pretrained(
-                    model_name,
-                    torch_dtype=torch_dtype,
-                    device_map=device_map,
-                    low_cpu_mem_usage=False,
-                    use_safetensors=True,
-                )
+                quantize = os.environ.get("NB_QUANTIZE", "").lower()
+                if quantize in ("4bit", "4") and torch.cuda.is_available():
+                    from transformers import BitsAndBytesConfig
+
+                    logger.info("Loading model in 4-bit quantization (NB_QUANTIZE=4bit)")
+                    bnb_cfg = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.float16,
+                    )
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_name,
+                        quantization_config=bnb_cfg,
+                        device_map=device_map,
+                        use_safetensors=True,
+                    )
+                elif quantize in ("8bit", "8") and torch.cuda.is_available():
+                    from transformers import BitsAndBytesConfig
+
+                    logger.info("Loading model in 8-bit quantization (NB_QUANTIZE=8bit)")
+                    bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_name,
+                        quantization_config=bnb_cfg,
+                        device_map=device_map,
+                        use_safetensors=True,
+                    )
+                else:
+                    model = AutoModelForCausalLM.from_pretrained(
+                        model_name,
+                        torch_dtype=torch_dtype,
+                        device_map=device_map,
+                        low_cpu_mem_usage=False,
+                        use_safetensors=True,
+                    )
                 model.eval()
                 _summarizer_pipeline = (model, tokenizer)
 
@@ -387,7 +418,7 @@ class SummaryGenerator:
             inputs_weight = tokenizer([text_weight], return_tensors="pt").to(model.device)
 
             gen_kwargs = {
-                "max_new_tokens": 512,
+                "max_new_tokens": 256,
                 "do_sample": False,
                 "pad_token_id": tokenizer.eos_token_id,
             }
@@ -397,16 +428,26 @@ class SummaryGenerator:
                 "pad_token_id": tokenizer.eos_token_id,
             }
 
+            # Run summary and weight inference separately so the KV cache from
+            # the first call is freed before the second starts (important on
+            # 16 GB GPUs where a 7B model leaves little headroom).
             with torch.inference_mode():
                 generated_ids = model.generate(**inputs, **gen_kwargs)
+            summary_input_ids = inputs.input_ids
+            del inputs
+            torch.cuda.empty_cache()
+
+            with torch.inference_mode():
                 generated_ids_weight = model.generate(**inputs_weight, **gen_kwargs_weight)
+            weight_input_ids = inputs_weight.input_ids
+            del inputs_weight
+            torch.cuda.empty_cache()
 
             generated_ids = [
-                output_ids[len(input_ids) :] for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
+                output_ids[len(input_ids) :] for input_ids, output_ids in zip(summary_input_ids, generated_ids)
             ]
             generated_ids_weight = [
-                output_ids[len(input_ids) :]
-                for input_ids, output_ids in zip(inputs_weight.input_ids, generated_ids_weight)
+                output_ids[len(input_ids) :] for input_ids, output_ids in zip(weight_input_ids, generated_ids_weight)
             ]
             summary_text = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
             weight_text = tokenizer.batch_decode(generated_ids_weight, skip_special_tokens=True)[0]
