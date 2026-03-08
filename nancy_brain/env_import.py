@@ -131,35 +131,98 @@ def _iter_existing_urls(config: dict[str, Any]) -> set[str]:
     return urls
 
 
-def import_from_env(
-    env_file: str | Path,
-    category: str | None,
-    output_path: str | Path,
-    dry_run: bool = False,
+def _version_from_pip_spec(spec: str) -> Optional[str]:
+    """Return the exact version from a ``==`` pinned pip spec, or None."""
+    m = re.search(r"==([^\s,;]+)", spec)
+    return m.group(1).strip() if m else None
+
+
+def _parse_requirements_lines(lines: list[str]) -> list[str]:
+    """Return pip requirement specs parsed from raw requirements.txt lines."""
+    specs: list[str] = []
+    for line in lines:
+        line = re.sub(r"\s*#.*$", "", line).strip()
+        if not line:
+            continue
+        # Skip -r/-c file includes and bare flags like --extra-index-url
+        if line.startswith("-r ") or line.startswith("-c ") or line.startswith("--"):
+            continue
+        specs.append(line)
+    return specs
+
+
+def _load_toml(path: Path) -> dict:
+    """Load a TOML file using tomllib (3.11+) or the tomli back-compat package."""
+    try:
+        import tomllib  # type: ignore[import]
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            raise ImportError(
+                "tomllib (Python 3.11+) or tomli is required to parse pyproject.toml. "
+                "Install with: pip install tomli"
+            )
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _parse_pyproject_deps(path: Path) -> tuple[list[str], Optional[str]]:
+    """
+    Extract dependency specifiers from a pyproject.toml.
+
+    Returns ``(specs, project_name)`` where *project_name* may be None.
+    Handles PEP 621 ``[project].dependencies`` and Poetry
+    ``[tool.poetry.dependencies]``.
+    """
+    data = _load_toml(path)
+    specs: list[str] = []
+
+    # PEP 621
+    project_deps = data.get("project", {}).get("dependencies", [])
+    if isinstance(project_deps, list):
+        specs.extend([d for d in project_deps if isinstance(d, str)])
+
+    # Poetry
+    poetry_deps = data.get("tool", {}).get("poetry", {}).get("dependencies", {})
+    if isinstance(poetry_deps, dict):
+        for pkg, constraint in poetry_deps.items():
+            if pkg.lower() == "python":
+                continue
+            if isinstance(constraint, str):
+                if constraint.startswith("=="):
+                    specs.append(f"{pkg}{constraint}")
+                elif re.match(r"^\d", constraint):
+                    specs.append(f"{pkg}=={constraint}")
+                else:
+                    specs.append(pkg)
+            elif isinstance(constraint, dict):
+                version = constraint.get("version", "")
+                if version.startswith("=="):
+                    specs.append(f"{pkg}{version}")
+                elif re.match(r"^\d", version):
+                    specs.append(f"{pkg}=={version}")
+                else:
+                    specs.append(pkg)
+
+    project_name: Optional[str] = data.get("project", {}).get("name") or data.get("tool", {}).get("poetry", {}).get(
+        "name"
+    )
+    return specs, project_name
+
+
+def _import_package_list(
+    pip_packages: list[str],
+    effective_category: str,
+    output_file_path: Path,
+    dry_run: bool,
+    pin_versions: bool,
 ) -> dict:
     """
-    Parse a conda environment.yml and add GitHub-backed packages to repositories.yml.
+    Core PyPI lookup loop shared by all ``import_from_*`` functions.
 
-    Returns dict: {added: int, skipped_no_github: int, skipped_duplicate: int, errors: list[str]}
+    Returns dict: {added, skipped_no_github, skipped_duplicate, errors}
     """
-    env_file_path = Path(env_file)
-    output_file_path = Path(output_path)
-
-    with open(env_file_path, "r", encoding="utf-8") as f:
-        env = yaml.safe_load(f) or {}
-    if not isinstance(env, dict):
-        raise ValueError("environment.yml must contain a top-level mapping")
-
-    env_name = env.get("name", "imported")
-    effective_category = category or env_name
-
-    pip_packages: list[str] = []
-    for dep in env.get("dependencies", []):
-        if isinstance(dep, dict) and "pip" in dep:
-            pip_entries = dep.get("pip") or []
-            if isinstance(pip_entries, list):
-                pip_packages.extend([entry for entry in pip_entries if isinstance(entry, str)])
-
     if output_file_path.exists():
         with open(output_file_path, "r", encoding="utf-8") as f:
             repositories = yaml.safe_load(f) or {}
@@ -203,13 +266,17 @@ def import_from_env(
             time.sleep(0.1)
             continue
 
-        category_entries.append(
-            {
-                "name": _repo_name_from_github_url(github_url),
-                "url": github_url,
-                "description": f"{package_name} - source from PyPI project_urls",
-            }
-        )
+        entry: dict[str, Any] = {
+            "name": _repo_name_from_github_url(github_url),
+            "url": github_url,
+            "description": f"{package_name} - source from PyPI project_urls",
+        }
+        if pin_versions:
+            version = _version_from_pip_spec(raw_spec)
+            if version:
+                entry["ref"] = version
+
+        category_entries.append(entry)
         existing_urls.add(github_url)
         added += 1
         time.sleep(0.1)
@@ -225,3 +292,110 @@ def import_from_env(
         "skipped_duplicate": skipped_duplicate,
         "errors": errors,
     }
+
+
+def import_from_env(
+    env_file: str | Path,
+    category: str | None,
+    output_path: str | Path,
+    dry_run: bool = False,
+    pin_versions: bool = False,
+) -> dict:
+    """
+    Parse a conda ``environment.yml`` and add GitHub-backed packages to
+    ``repositories.yml``.
+
+    Returns dict: {added, skipped_no_github, skipped_duplicate, errors}
+    """
+    env_file_path = Path(env_file)
+
+    with open(env_file_path, "r", encoding="utf-8") as f:
+        env = yaml.safe_load(f) or {}
+    if not isinstance(env, dict):
+        raise ValueError("environment.yml must contain a top-level mapping")
+
+    effective_category = category or env.get("name", "imported")
+
+    pip_packages: list[str] = []
+    for dep in env.get("dependencies", []):
+        if isinstance(dep, dict) and "pip" in dep:
+            pip_entries = dep.get("pip") or []
+            if isinstance(pip_entries, list):
+                pip_packages.extend([e for e in pip_entries if isinstance(e, str)])
+
+    return _import_package_list(pip_packages, effective_category, Path(output_path), dry_run, pin_versions)
+
+
+def import_from_requirements(
+    req_file: str | Path,
+    category: str | None,
+    output_path: str | Path,
+    dry_run: bool = False,
+    pin_versions: bool = False,
+) -> dict:
+    """
+    Parse a ``requirements.txt`` (or ``.in``) file and add GitHub-backed
+    packages to ``repositories.yml``.
+
+    Returns dict: {added, skipped_no_github, skipped_duplicate, errors}
+    """
+    req_path = Path(req_file)
+    lines = req_path.read_text(encoding="utf-8").splitlines()
+    pip_packages = _parse_requirements_lines(lines)
+    effective_category = category or req_path.stem
+
+    return _import_package_list(pip_packages, effective_category, Path(output_path), dry_run, pin_versions)
+
+
+def import_from_pyproject(
+    toml_file: str | Path,
+    category: str | None,
+    output_path: str | Path,
+    dry_run: bool = False,
+    pin_versions: bool = False,
+) -> dict:
+    """
+    Parse a ``pyproject.toml`` (PEP 621 or Poetry) and add GitHub-backed
+    packages to ``repositories.yml``.
+
+    Returns dict: {added, skipped_no_github, skipped_duplicate, errors}
+    """
+    toml_path = Path(toml_file)
+    pip_packages, project_name = _parse_pyproject_deps(toml_path)
+    effective_category = category or project_name or toml_path.stem
+
+    return _import_package_list(pip_packages, effective_category, Path(output_path), dry_run, pin_versions)
+
+
+def import_from_file(
+    file_path: str | Path,
+    category: str | None = None,
+    output_path: str | Path = "config/repositories.yml",
+    dry_run: bool = False,
+    pin_versions: bool = False,
+) -> dict:
+    """
+    Auto-detect the dependency file format and import GitHub-backed packages
+    into ``repositories.yml``.
+
+    Supported formats:
+    - conda ``environment.yml`` / ``*.yaml``
+    - ``requirements.txt`` / ``requirements.in`` / ``*.txt``
+    - ``pyproject.toml``
+
+    Returns dict: {added, skipped_no_github, skipped_duplicate, errors}
+    """
+    path = Path(file_path)
+    name = path.name.lower()
+    suffix = path.suffix.lower()
+
+    if name == "pyproject.toml" or suffix == ".toml":
+        return import_from_pyproject(path, category, output_path, dry_run, pin_versions)
+    elif suffix in (".txt", ".in") or "requirements" in name:
+        return import_from_requirements(path, category, output_path, dry_run, pin_versions)
+    elif suffix in (".yml", ".yaml"):
+        return import_from_env(path, category, output_path, dry_run, pin_versions)
+    else:
+        raise ValueError(
+            f"Unrecognised file format: {path.name}. " "Supported: environment.yml, requirements.txt, pyproject.toml"
+        )

@@ -41,8 +41,55 @@ jupyter_examples:
 - `url`: Git repository URL (HTTPS or SSH)
 - `description`: Human-readable description
 - `is_notebook`: Set to `true` for notebook-heavy repositories
+- `ref` *(optional)*: Pin to a specific branch, tag, or commit SHA (e.g. `"v2.1.0"`, `"main"`, `"a3f9d12"`). If omitted, the default branch tip is used.
 
 **Categories** become path prefixes in search results (e.g., `ml_frameworks/scikit-learn/...`).
+
+### Importing from a Conda Environment
+
+If you already have a `environment.yml`, you can auto-populate `repositories.yml` with the GitHub source repos for your pip dependencies:
+
+```bash
+nancy-brain import-env -f environment.yml
+```
+
+Nancy Brain queries PyPI for each pip package, finds its GitHub `Source` URL, and appends new entries to `config/repositories.yml`.  Packages with no GitHub link, editable installs (`-e .`), and duplicates are skipped automatically.
+
+The command auto-detects the file format from the filename:
+
+| File | Format detected |
+|------|-----------------|
+| `environment.yml` / `*.yaml` | conda environment |
+| `requirements.txt` / `*.txt` / `*.in` | pip requirements |
+| `pyproject.toml` | PEP 621 or Poetry |
+
+```bash
+# requirements.txt
+nancy-brain import-env -f requirements.txt
+
+# pyproject.toml (PEP 621 [project].dependencies or Poetry)
+nancy-brain import-env -f pyproject.toml
+
+# Pin each entry to the exact installed version (sets ref: in repositories.yml)
+nancy-brain import-env -f environment.yml --pin-versions
+nancy-brain import-env -f requirements.txt --pin-versions
+
+# Preview what would be added without writing
+nancy-brain import-env -f environment.yml --dry-run
+
+# Use a custom category name instead of the derived default
+nancy-brain import-env -f environment.yml --category my_project
+
+# Write to a different file
+nancy-brain import-env -f environment.yml --output path/to/repositories.yml
+```
+
+`--pin-versions` only sets `ref` when the spec has an exact `==` pin.  Packages
+specified with `>=`, `~=`, or no version are added without a `ref`.
+
+!!! tip
+    After importing, review the generated entries and remove any repos that are
+    too large or irrelevant before running `nancy-brain build`.
 
 ### Search Weights (`config/weights.yaml`)
 
