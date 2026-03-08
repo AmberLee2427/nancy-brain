@@ -12,7 +12,7 @@ import yaml
 
 config_path = sys.argv[1] if len(sys.argv) > 1 else "config/repositories.yml"
 
-with open(config_path) as f:
+with open(config_path, encoding="utf-8") as f:
     config = yaml.safe_load(f)
 
 for entries in config.values():
