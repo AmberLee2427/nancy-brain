@@ -266,8 +266,7 @@ def test_extract_text_fallback_all_fail(tmp_path):
         pass  # modules will be restored by reimport
 
     # Result is either None or raises - we just want to cover the code path
-
-
+    assert result is None
 # ---------------------------------------------------------------------------
 # process_pdf_with_fallback
 # ---------------------------------------------------------------------------
