@@ -22,7 +22,7 @@ mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load mamba
-mamba activate ~/envs/nancy-brain
+source activate ~/envs/nancy-brain
 
 # Summaries are cached; tell the builder to use them but not regenerate.
 export NB_USE_LOCAL_SUMMARY="true"

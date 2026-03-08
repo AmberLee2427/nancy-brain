@@ -37,7 +37,7 @@ echo "Requesting compute node for package install (CUDA_TAG=$CUDA_TAG)..."
 srun --partition=batch-gpu --ntasks=1 --cpus-per-task=4 --mem=16G --time=00:30:00 --gres=gpu:1 bash -c "
     set -euo pipefail
     module load mamba
-    mamba activate ${ENV_PREFIX}
+    source activate ${ENV_PREFIX}
     cd ${NANCY_DIR}
     pip install -e .
     echo 'Replacing CPU torch with CUDA build (${CUDA_TAG})...'
