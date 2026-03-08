@@ -46,20 +46,23 @@ def get_db():
 
 def create_user_table():
     conn = get_db()
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         hashed_password TEXT NOT NULL
     )
-    """)
+    """
+    )
     conn.commit()
     conn.close()
 
 
 def create_refresh_table():
     conn = get_db()
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS refresh_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
@@ -67,14 +70,16 @@ def create_refresh_table():
         revoked INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-    """)
+    """
+    )
     conn.commit()
     conn.close()
 
 
 def create_api_key_table():
     conn = get_db()
-    conn.execute("""
+    conn.execute(
+        """
     CREATE TABLE IF NOT EXISTS api_keys (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key_hash TEXT UNIQUE NOT NULL,
@@ -85,7 +90,8 @@ def create_api_key_table():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_used TIMESTAMP
     )
-    """)
+    """
+    )
     conn.commit()
     conn.close()
 

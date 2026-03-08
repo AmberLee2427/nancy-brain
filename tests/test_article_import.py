@@ -38,7 +38,8 @@ def _atom_feed(entries: list[dict[str, str]]) -> str:
         author = entry.get("author", "Test Author")
         year = entry.get("year", "2020")
         pdf_url = entry.get("pdf_url", f"http://arxiv.org/pdf/{arxiv_id}v1")
-        entry_xml.append(f"""
+        entry_xml.append(
+            f"""
   <entry>
     <id>http://arxiv.org/abs/{arxiv_id}v1</id>
     <title>{title}</title>
@@ -46,7 +47,8 @@ def _atom_feed(entries: list[dict[str, str]]) -> str:
     <author><name>{author}</name></author>
     <link title=\"pdf\" href=\"{pdf_url}\" />
   </entry>
-""")
+"""
+        )
 
     return (
         "<?xml version='1.0' encoding='UTF-8'?>\n"

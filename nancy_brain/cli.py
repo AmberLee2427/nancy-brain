@@ -67,11 +67,13 @@ def init(project_name):
 
     # Basic repositories.yml
     repos_config = config_dir / "repositories.yml"
-    repos_config.write_text("""# Add your repositories here
+    repos_config.write_text(
+        """# Add your repositories here
 # example_tools:
 #   - name: example-repo
 #     url: https://github.com/org/example-repo.git
-""")
+"""
+    )
 
     click.echo(f"✅ Initialized Nancy Brain project in {project_name}/")
     click.echo(f"📝 Edit {repos_config} to add repositories")

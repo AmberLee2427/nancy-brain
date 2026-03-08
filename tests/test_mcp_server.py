@@ -332,7 +332,8 @@ def _make_sections_db(tmp_path: Path) -> Path:
     index_dir.mkdir(parents=True, exist_ok=True)
     db_path = index_dir / "documents"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("""
+    conn.execute(
+        """
         CREATE TABLE sections (
             indexid INTEGER PRIMARY KEY AUTOINCREMENT,
             id TEXT,
@@ -340,7 +341,8 @@ def _make_sections_db(tmp_path: Path) -> Path:
             data TEXT,
             entry DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-        """)
+        """
+    )
     rows = [
         (
             "doc/file.py::chunk-0001",

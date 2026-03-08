@@ -386,7 +386,8 @@ def _build_minimal_index(base_path: Path):
 
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS sections (
                 indexid INTEGER PRIMARY KEY AUTOINCREMENT,
                 id TEXT,
@@ -394,7 +395,8 @@ def _build_minimal_index(base_path: Path):
                 tags TEXT,
                 entry DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-            """)
+            """
+        )
         conn.execute("DELETE FROM sections")
         rows = [
             (
