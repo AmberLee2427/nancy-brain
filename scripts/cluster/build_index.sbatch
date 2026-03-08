@@ -20,8 +20,8 @@ cd "$SLURM_SUBMIT_DIR"
 mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
-eval "$(conda shell.bash hook)"
-conda activate roman-slack-bot
+module load mamba
+mamba activate nancy-brain
 
 # Summaries are cached; tell the builder to use them but not regenerate.
 export NB_USE_LOCAL_SUMMARY="true"
@@ -38,24 +38,6 @@ nancy-brain build --summaries
 
 echo "=== Index build complete ==="
 date
-
-# ── Transfer results back to the NUC ─────────────────────────────────────────
-# Only the embeddings directory needs to go back — the raw KB clones stay on
-# the cluster for future incremental runs.
-#
-# Adjust NUC_HOST and NUC_PATH to match your deployment.
-NUC_HOST="${NUC_HOST:-nuc.local}"
-NUC_PATH="${NUC_PATH:-/path/to/nancy-brain/knowledge_base/embeddings/}"
-
-echo "=== Syncing embeddings to $NUC_HOST:$NUC_PATH ==="
-rsync -avz --progress \
-    knowledge_base/embeddings/ \
-    "${NUC_HOST}:${NUC_PATH}"
-
-echo "=== Transfer complete ==="
-date
-
-# Reminder: after transfer, restart Nancy on the NUC to reload the index.
 echo ""
-echo "Next step: restart Nancy on the NUC to load the new index."
-echo "  ssh $NUC_HOST 'docker restart nancy'"
+echo "Embeddings are in: knowledge_base/embeddings/"
+echo "Copy them back to the NUC however you prefer (rsync, scp, shared fs, etc.)"

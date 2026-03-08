@@ -22,9 +22,8 @@ cd "$SLURM_SUBMIT_DIR"
 mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
-# Activate the conda env (adjust PATH if conda is not on the default PATH).
-eval "$(conda shell.bash hook)"
-conda activate roman-slack-bot
+module load mamba
+mamba activate nancy-brain
 
 # Larger summary model; the 0.5B default is too small for good code summaries.
 export NB_SUMMARY_MODEL="${NB_SUMMARY_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"
