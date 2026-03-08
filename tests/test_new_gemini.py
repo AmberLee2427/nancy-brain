@@ -53,7 +53,7 @@ def test_new_gemini_api():
             """
         Summarize this document and respond with JSON in this format:
         {"summary": "brief summary", "weight": float_between_0.5_and_2.0}
-        
+
         Document:
         """
             + test_content
