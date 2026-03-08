@@ -68,7 +68,7 @@ Get Nancy Brain system status and health information.
 ### Install MCP Dependencies
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
+cd path/to/nancy-brain
 conda run -n roman-slack-bot pip install -e .
 ```
 
@@ -77,7 +77,7 @@ This will install all dependencies including MCP from the `pyproject.toml` file.
 ### Build Knowledge Base (if not already done)
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
+cd path/to/nancy-brain
 conda run -n roman-slack-bot python scripts/build_knowledge_base.py
 ```
 
@@ -86,14 +86,14 @@ conda run -n roman-slack-bot python scripts/build_knowledge_base.py
 ### Option 1: Using the Launcher Script
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
+cd path/to/nancy-brain
 conda run -n roman-slack-bot python run_mcp_server.py
 ```
 
 ### Option 2: Direct Command Line
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
+cd path/to/nancy-brain
 conda run -n roman-slack-bot python -m connectors.mcp_server.server \
     config/repositories.yml \
     knowledge_base/embeddings \
@@ -113,7 +113,7 @@ Add the following to your Claude Desktop MCP configuration file:
       "command": "conda",
       "args": [
         "run", "-n", "roman-slack-bot",
-        "python", "/Users/malpas.1/Code/slack-bot/src/nancy-brain/run_mcp_server.py"
+        "python", "/path/to/nancy-brain/run_mcp_server.py"
       ]
     }
   }
@@ -125,7 +125,7 @@ Add the following to your Claude Desktop MCP configuration file:
 Configure the MCP extension to connect to:
 - **Server Type**: stdio
 - **Command**: `conda run -n roman-slack-bot python run_mcp_server.py`
-- **Working Directory**: `/Users/malpas.1/Code/slack-bot/src/nancy-brain`
+- **Working Directory**: `/path/to/nancy-brain`
 
 ## Example Usage
 
@@ -175,7 +175,7 @@ Once connected to an MCP client, you can use natural language to interact with N
 Run the comprehensive test suite:
 
 ```bash
-cd /Users/malpas.1/Code/slack-bot/src/nancy-brain
+cd path/to/nancy-brain
 conda run -n roman-slack-bot python -m pytest tests/test_mcp_server.py -v
 ```
 

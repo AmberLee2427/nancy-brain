@@ -21,6 +21,7 @@ import requests
 import json
 import time
 import threading
+import re
 from typing import Optional, Set, Dict
 
 try:
@@ -106,6 +107,59 @@ SKIP_DIR_NAMES = {
     "env",
     "venv",
 }
+
+# Minimum content length (stripped) to bother generating a summary.
+# Override with NB_MIN_SUMMARY_CHARS environment variable.
+MIN_SUMMARY_CHARS = int(os.environ.get("NB_MIN_SUMMARY_CHARS", "200"))
+
+# File extensions for which summary generation is never useful.
+# These files are still indexed via their path/doc_id.
+SUMMARY_SKIP_EXTENSIONS = {
+    # Astronomy data
+    ".fits",
+    ".fit",
+    # Numpy/scipy
+    ".npy",
+    ".npz",
+    # Pickle
+    ".pkl",
+    ".pickle",
+    # Tabular
+    ".dat",
+    ".csv",
+    ".parquet",
+    # HDF5
+    ".hdf5",
+    ".h5",
+    # MATLAB / NIfTI
+    ".mat",
+    ".nii",
+    # Archives
+    ".gz",
+    ".bz2",
+    ".xz",
+    ".zip",
+    ".tar",
+    # Compiled objects
+    ".so",
+    ".o",
+    ".a",
+    ".dylib",
+    ".dll",
+    # Images
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".woff",
+    ".woff2",
+}
+
+
+def _is_full_commit_sha(ref: Optional[str]) -> bool:
+    return isinstance(ref, str) and bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
 
 
 def is_excluded_pdf(path: str) -> bool:
@@ -361,6 +415,7 @@ def clone_repositories(
     dry_run: bool = False,
     category: str = None,
     force_update: bool = False,
+    repo_filter: Optional[str] = None,
 ) -> dict:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
@@ -380,7 +435,10 @@ def clone_repositories(
             continue
         for repo in repos:
             repo_name = repo["name"]
+            if repo_filter and repo_name != repo_filter:
+                continue
             repo_url = repo["url"]
+            ref = repo.get("ref")
             dest_dir = Path(base_path) / cat / repo_name
             if dest_dir.exists():
                 if force_update:
@@ -389,27 +447,47 @@ def clone_repositories(
                         logger.info(f"[DRY RUN] Would update {cat}/{repo_name}")
                         continue
                     try:
-                        subprocess.run(
-                            ["git", "fetch", "--all"],
-                            cwd=str(dest_dir),
-                            check=True,
-                            capture_output=True,
-                            text=True,
-                        )
-                        result = subprocess.run(
-                            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                            cwd=str(dest_dir),
-                            capture_output=True,
-                            text=True,
-                        )
-                        current_branch = result.stdout.strip()
-                        subprocess.run(
-                            ["git", "pull", "origin", current_branch],
-                            cwd=str(dest_dir),
-                            check=True,
-                            capture_output=True,
-                            text=True,
-                        )
+                        if ref:
+                            if _is_full_commit_sha(ref):
+                                fetch_cmd = ["git", "fetch", "origin", ref]
+                            else:
+                                fetch_cmd = ["git", "fetch", "--depth", "1", "origin", ref]
+                            subprocess.run(
+                                fetch_cmd,
+                                cwd=str(dest_dir),
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
+                            subprocess.run(
+                                ["git", "checkout", ref],
+                                cwd=str(dest_dir),
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
+                        else:
+                            subprocess.run(
+                                ["git", "fetch", "--all"],
+                                cwd=str(dest_dir),
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
+                            result = subprocess.run(
+                                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                                cwd=str(dest_dir),
+                                capture_output=True,
+                                text=True,
+                            )
+                            current_branch = result.stdout.strip()
+                            subprocess.run(
+                                ["git", "pull", "origin", current_branch],
+                                cwd=str(dest_dir),
+                                check=True,
+                                capture_output=True,
+                                text=True,
+                            )
                         failures["successful_updates"].append(f"{cat}/{repo_name}")
                     except subprocess.CalledProcessError as e:
                         failures["failed_updates"].append(f"{cat}/{repo_name}: {e.stderr}")
@@ -423,12 +501,22 @@ def clone_repositories(
                     continue
                 dest_dir.parent.mkdir(parents=True, exist_ok=True)
                 try:
-                    subprocess.run(
-                        ["git", "clone", repo_url, str(dest_dir)],
-                        check=True,
-                        capture_output=True,
-                        text=True,
-                    )
+                    if ref:
+                        if _is_full_commit_sha(ref):
+                            clone_cmd = ["git", "clone", repo_url, str(dest_dir)]
+                        else:
+                            clone_cmd = ["git", "clone", "--branch", ref, "--depth", "1", repo_url, str(dest_dir)]
+                    else:
+                        clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(dest_dir)]
+                    subprocess.run(clone_cmd, check=True, capture_output=True, text=True)
+                    if ref and _is_full_commit_sha(ref):
+                        subprocess.run(
+                            ["git", "checkout", ref],
+                            cwd=str(dest_dir),
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
                     failures["successful_clones"].append(f"{cat}/{repo_name}")
                 except subprocess.CalledProcessError as e:
                     failures["failed_clones"].append(f"{cat}/{repo_name}: {e.stderr}")
@@ -446,6 +534,7 @@ def build_txtai_index(
     dry_run: bool = False,
     category: str = None,
     summary_generator: Optional[SummaryGenerator] = None,
+    repo_filter: Optional[str] = None,
 ) -> dict:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
@@ -605,7 +694,10 @@ def build_txtai_index(
     for cat in categories:
         repos_list = config.get(cat)
         if isinstance(repos_list, list):
-            total_repos += len(repos_list)
+            if repo_filter:
+                total_repos += sum(1 for repo in repos_list if repo.get("name") == repo_filter)
+            else:
+                total_repos += len(repos_list)
 
     repos_processed = 0
 
@@ -647,12 +739,34 @@ def build_txtai_index(
     auto_model_weights: Dict[str, float] = {}
     summarized_docs: Set[str] = set()
     repo_readme_cache: Dict[Path, Optional[dict]] = {}
+
+    def should_skip_summary(doc_id: str, content: str, file_path: Optional[Path]) -> bool:
+        stripped = content.strip()
+        if len(stripped) < MIN_SUMMARY_CHARS:
+            logger.debug(
+                "Skipping summary for %s: content too short (%d chars < %d)",
+                doc_id,
+                len(stripped),
+                MIN_SUMMARY_CHARS,
+            )
+            return True
+        if file_path is not None and file_path.suffix.lower() in SUMMARY_SKIP_EXTENSIONS:
+            logger.debug(
+                "Skipping summary for %s: extension %s in SUMMARY_SKIP_EXTENSIONS",
+                doc_id,
+                file_path.suffix.lower(),
+            )
+            return True
+        return False
+
     for cat in categories:
         repos = config.get(cat)
         if not isinstance(repos, list):
             continue
         for repo in repos:
             repo_name = repo["name"]
+            if repo_filter and repo_name != repo_filter:
+                continue
 
             # Emit repo progress (50-85% range)
             repos_processed += 1
@@ -746,94 +860,19 @@ def build_txtai_index(
                     doc_id = f"{cat}/{repo_name}/{relative_path}"
                     logger.info(f"Chunking file {doc_id}")
                     if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
-                        summary_stats["requests"] += 1
-                        summary_payload = None
-                        failed_due_to_exception = False
-                        try:
-                            summary_payload = summary_generator.summarize(
-                                doc_id=doc_id,
-                                content=content,
-                                repo_name=repo_name,
-                                repo_readme=repo_readme_content,
-                                repo_readme_path=repo_readme_path,
-                                repo_description=repo.get("description"),
-                                metadata={"category": cat, "source": "repository_file"},
-                            )
-                        except Exception as exc:
-                            failed_due_to_exception = True
-                            summary_stats["failures"] += 1
-                            logger.warning("Summary generation failed for %s: %s", doc_id, exc)
-                        if summary_payload is not None:
-                            summary_stats["responses"] += 1
-                            if summary_payload.cached:
-                                summary_stats["cached_hits"] += 1
-                            summary_meta = {
-                                "source_document": doc_id,
-                                "category": cat,
-                                "repository": repo_name,
-                                "doc_type": "summary",
-                                "model": summary_payload.model,
-                                "cached": summary_payload.cached,
-                            }
-                            if summary_payload.repo_readme_path:
-                                summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
-                            summary_documents.append(
-                                (
-                                    f"summaries/{doc_id}",
-                                    summary_payload.summary,
-                                    json.dumps(summary_meta, ensure_ascii=False),
-                                )
-                            )
-                            auto_model_weights[doc_id] = summary_payload.weight
-                            summarized_docs.add(doc_id)
-                        elif not failed_due_to_exception:
-                            summary_stats["failures"] += 1
-                    document = Document(path=file_path, content=content, metadata={"doc_id": doc_id})
-                    chunks = pipeline.chunk_documents([document], config=chunk_config)
-                    if not chunks:
-                        logger.debug(f"Skipping low-value document: {doc_id}")
-                        failures["skipped_low_value"].append(doc_id)
-                        continue
-                    for chunk in chunks:
-                        meta = dict(chunk.metadata)
-                        meta.setdefault("extension", suffix)
-                        meta.setdefault("relative_path", str(relative_path))
-                        meta.setdefault("repository", repo_name)
-                        documents.append(
-                            (
-                                chunk.chunk_id,
-                                chunk.text,
-                                json.dumps(meta, ensure_ascii=False),
-                            )
-                        )
-                    failures["successful_text_files"] += 1
-                except Exception as e:
-                    failures["failed_text_files"].append(f"{file_path}: {str(e)}")
-            for pdf_path in pdf_files:
-                try:
-                    pdf_candidate_count += 1
-                    content, success = process_pdf_with_fallback(pdf_path, repo_info=repo)
-                    size = pdf_path.stat().st_size if pdf_path.exists() else 0
-                    if success and content:
-                        relative_path = pdf_path.relative_to(repo_dir)
-                        doc_id = f"{cat}/{repo_name}/{relative_path}"
-                        metadata = (
-                            f"Source: Repository PDF from {repo['url']}\n"
-                            f"Path: {relative_path}\nType: Repository Document\n\n"
-                        )
-                        full_content = metadata + content
-                        if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                        if not should_skip_summary(doc_id, content, file_path):
                             summary_stats["requests"] += 1
                             summary_payload = None
                             failed_due_to_exception = False
                             try:
                                 summary_payload = summary_generator.summarize(
                                     doc_id=doc_id,
-                                    content=full_content,
+                                    content=content,
                                     repo_name=repo_name,
                                     repo_readme=repo_readme_content,
                                     repo_readme_path=repo_readme_path,
-                                    metadata={"category": cat, "source": "repository_pdf"},
+                                    repo_description=repo.get("description"),
+                                    metadata={"category": cat, "source": "repository_file"},
                                 )
                             except Exception as exc:
                                 failed_due_to_exception = True
@@ -864,6 +903,84 @@ def build_txtai_index(
                                 summarized_docs.add(doc_id)
                             elif not failed_due_to_exception:
                                 summary_stats["failures"] += 1
+                    document = Document(path=file_path, content=content, metadata={"doc_id": doc_id})
+                    chunks = pipeline.chunk_documents([document], config=chunk_config)
+                    if not chunks:
+                        logger.debug(f"Skipping low-value document: {doc_id}")
+                        failures["skipped_low_value"].append(doc_id)
+                        continue
+                    for chunk in chunks:
+                        meta = dict(chunk.metadata)
+                        meta.setdefault("source_document", doc_id)
+                        meta.setdefault("extension", suffix)
+                        meta.setdefault("relative_path", str(relative_path))
+                        meta.setdefault("repository", repo_name)
+                        documents.append(
+                            (
+                                chunk.chunk_id,
+                                chunk.text,
+                                json.dumps(meta, ensure_ascii=False),
+                            )
+                        )
+                    failures["successful_text_files"] += 1
+                except Exception as e:
+                    failures["failed_text_files"].append(f"{file_path}: {str(e)}")
+            for pdf_path in pdf_files:
+                try:
+                    pdf_candidate_count += 1
+                    content, success = process_pdf_with_fallback(pdf_path, repo_info=repo)
+                    size = pdf_path.stat().st_size if pdf_path.exists() else 0
+                    if success and content:
+                        relative_path = pdf_path.relative_to(repo_dir)
+                        doc_id = f"{cat}/{repo_name}/{relative_path}"
+                        metadata = (
+                            f"Source: Repository PDF from {repo['url']}\n"
+                            f"Path: {relative_path}\nType: Repository Document\n\n"
+                        )
+                        full_content = metadata + content
+                        if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                            if not should_skip_summary(doc_id, full_content, pdf_path):
+                                summary_stats["requests"] += 1
+                                summary_payload = None
+                                failed_due_to_exception = False
+                                try:
+                                    summary_payload = summary_generator.summarize(
+                                        doc_id=doc_id,
+                                        content=full_content,
+                                        repo_name=repo_name,
+                                        repo_readme=repo_readme_content,
+                                        repo_readme_path=repo_readme_path,
+                                        metadata={"category": cat, "source": "repository_pdf"},
+                                    )
+                                except Exception as exc:
+                                    failed_due_to_exception = True
+                                    summary_stats["failures"] += 1
+                                    logger.warning("Summary generation failed for %s: %s", doc_id, exc)
+                                if summary_payload is not None:
+                                    summary_stats["responses"] += 1
+                                    if summary_payload.cached:
+                                        summary_stats["cached_hits"] += 1
+                                    summary_meta = {
+                                        "source_document": doc_id,
+                                        "category": cat,
+                                        "repository": repo_name,
+                                        "doc_type": "summary",
+                                        "model": summary_payload.model,
+                                        "cached": summary_payload.cached,
+                                    }
+                                    if summary_payload.repo_readme_path:
+                                        summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
+                                    summary_documents.append(
+                                        (
+                                            f"summaries/{doc_id}",
+                                            summary_payload.summary,
+                                            json.dumps(summary_meta, ensure_ascii=False),
+                                        )
+                                    )
+                                    auto_model_weights[doc_id] = summary_payload.weight
+                                    summarized_docs.add(doc_id)
+                                elif not failed_due_to_exception:
+                                    summary_stats["failures"] += 1
                         document = Document(path=pdf_path, content=full_content, metadata={"doc_id": doc_id})
                         chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
@@ -872,6 +989,7 @@ def build_txtai_index(
                             continue
                         for chunk in chunks:
                             meta = dict(chunk.metadata)
+                            meta.setdefault("source_document", doc_id)
                             meta.setdefault("relative_path", str(relative_path))
                             meta.setdefault("repository", repo_name)
                             meta.setdefault("pdf_size_bytes", size)
@@ -925,46 +1043,47 @@ def build_txtai_index(
                         )
                         full_content = metadata + content
                         if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
-                            summary_stats["requests"] += 1
-                            summary_payload = None
-                            failed_due_to_exception = False
-                            try:
-                                summary_payload = summary_generator.summarize(
-                                    doc_id=doc_id,
-                                    content=full_content,
-                                    repo_name=cat,
-                                    repo_readme=None,
-                                    repo_readme_path=None,
-                                    metadata={"category": cat, "source": "journal_pdf", "article": article_name},
-                                )
-                            except Exception as exc:
-                                failed_due_to_exception = True
-                                summary_stats["failures"] += 1
-                                logger.warning("Summary generation failed for %s: %s", doc_id, exc)
-                            if summary_payload is not None:
-                                summary_stats["responses"] += 1
-                                if summary_payload.cached:
-                                    summary_stats["cached_hits"] += 1
-                                summary_meta = {
-                                    "source_document": doc_id,
-                                    "category": cat,
-                                    "doc_type": "summary",
-                                    "model": summary_payload.model,
-                                    "cached": summary_payload.cached,
-                                }
-                                if summary_payload.repo_readme_path:
-                                    summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
-                                summary_documents.append(
-                                    (
-                                        f"summaries/{doc_id}",
-                                        summary_payload.summary,
-                                        json.dumps(summary_meta, ensure_ascii=False),
+                            if not should_skip_summary(doc_id, full_content, pdf_file):
+                                summary_stats["requests"] += 1
+                                summary_payload = None
+                                failed_due_to_exception = False
+                                try:
+                                    summary_payload = summary_generator.summarize(
+                                        doc_id=doc_id,
+                                        content=full_content,
+                                        repo_name=cat,
+                                        repo_readme=None,
+                                        repo_readme_path=None,
+                                        metadata={"category": cat, "source": "journal_pdf", "article": article_name},
                                     )
-                                )
-                                auto_model_weights[doc_id] = summary_payload.weight
-                                summarized_docs.add(doc_id)
-                            elif not failed_due_to_exception:
-                                summary_stats["failures"] += 1
+                                except Exception as exc:
+                                    failed_due_to_exception = True
+                                    summary_stats["failures"] += 1
+                                    logger.warning("Summary generation failed for %s: %s", doc_id, exc)
+                                if summary_payload is not None:
+                                    summary_stats["responses"] += 1
+                                    if summary_payload.cached:
+                                        summary_stats["cached_hits"] += 1
+                                    summary_meta = {
+                                        "source_document": doc_id,
+                                        "category": cat,
+                                        "doc_type": "summary",
+                                        "model": summary_payload.model,
+                                        "cached": summary_payload.cached,
+                                    }
+                                    if summary_payload.repo_readme_path:
+                                        summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
+                                    summary_documents.append(
+                                        (
+                                            f"summaries/{doc_id}",
+                                            summary_payload.summary,
+                                            json.dumps(summary_meta, ensure_ascii=False),
+                                        )
+                                    )
+                                    auto_model_weights[doc_id] = summary_payload.weight
+                                    summarized_docs.add(doc_id)
+                                elif not failed_due_to_exception:
+                                    summary_stats["failures"] += 1
                         document = Document(path=pdf_file, content=full_content, metadata={"doc_id": doc_id})
                         chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
@@ -974,6 +1093,7 @@ def build_txtai_index(
                         size_bytes = pdf_file.stat().st_size if pdf_file.exists() else 0
                         for chunk in chunks:
                             meta = dict(chunk.metadata)
+                            meta.setdefault("source_document", doc_id)
                             meta.setdefault("article_name", article_name)
                             meta.setdefault("category", meta.get("category", "docs"))
                             meta.setdefault("pdf_size_bytes", size_bytes)
@@ -1203,6 +1323,11 @@ if __name__ == "__main__":
         help="Update repositories and re-download PDFs if they already exist",
     )
     parser.add_argument(
+        "--repo",
+        default=None,
+        help="Limit processing to one repository by name",
+    )
+    parser.add_argument(
         "--dirty",
         action="store_true",
         help="Leave the raw repos and PDFs in place after embeddings are built",
@@ -1320,6 +1445,7 @@ if __name__ == "__main__":
             dry_run: bool = False,
             category: str = None,
             force_update: bool = False,
+            repo_filter: Optional[str] = None,
             dirty: bool = False,
             summaries: bool = False,
         ) -> None:
@@ -1331,7 +1457,9 @@ if __name__ == "__main__":
                 cache_dir = Path(embeddings_path).parent / "cache" / "summaries"
                 summary_generator = SummaryGenerator(cache_dir=cache_dir, enabled=True)
             emit_progress(5, stage="start", detail="Cloning repositories")
-            all_failures["repos"] = clone_repositories(config_path, base_path, dry_run, category, force_update)
+            all_failures["repos"] = clone_repositories(
+                config_path, base_path, dry_run, category, force_update, repo_filter
+            )
 
             emit_progress(25, stage="repos_done", detail="Repositories cloned/updated")
             if articles_config_path and os.path.exists(articles_config_path):
@@ -1348,6 +1476,7 @@ if __name__ == "__main__":
                 dry_run,
                 category,
                 summary_generator,
+                repo_filter,
             )
             emit_progress(85, stage="indexing_done", detail="Indexing completed")
             if not dirty and not dry_run:
@@ -1379,6 +1508,7 @@ if __name__ == "__main__":
         dry_run=args.dry_run,
         category=args.category,
         force_update=args.force_update,
+        repo_filter=args.repo,
         dirty=args.dirty,
         summaries=args.summaries,
     )

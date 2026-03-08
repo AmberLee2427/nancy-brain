@@ -65,9 +65,13 @@ nancy-brain add-repo <url>        # Add GitHub repositories
 nancy-brain add-article <url> <name>  # Add PDF articles
 nancy-brain add-new-user <user> <pass>  # Create login credentials
 nancy-brain build                 # Build knowledge base
+nancy-brain build --repo <name>   # Build a single named repository only
 nancy-brain search "query"        # Search knowledge base
 nancy-brain serve                 # Start HTTP API server
 nancy-brain ui                    # Launch web admin interface
+nancy-brain import-bibtex -f refs.bib    # Import articles from a BibTeX file
+nancy-brain import-ads --library "Name"  # Import articles from an ADS library
+nancy-brain import-env -f environment.yml  # Add GitHub repos from a conda env
 ```
 
 
@@ -198,6 +202,7 @@ Structure (categories map to lists of repos):
     url: https://github.com/org/repoA.git
   - name: repoB
     url: https://github.com/org/repoB.git
+    ref: v2.1.0  # optional: pin to branch, tag, or full commit SHA
 ```
 Categories become path prefixes inside the knowledge base (e.g. `cat1/repoA/...`).
 
@@ -222,6 +227,8 @@ Common knobs you can export (or place in `config/.env`) to tune builds and the a
 | `NB_USE_LOCAL_SUMMARY` | Force local summaries when true (overrides `ANTHROPIC_API_KEY`) | false |
 | `ANTHROPIC_API_KEY` | Anthropic key for summaries when local mode is off | unset |
 | `ENABLE_DOC_SUMMARIES` | Toggle summaries in builds by default | false |
+| `NB_SUMMARY_MODEL` | Local HuggingFace model for summaries | `Qwen/Qwen2.5-Coder-0.5B-Instruct` |
+| `NB_MIN_SUMMARY_CHARS` | Skip summarising files shorter than this (chars) | 200 |
 | `NB_SUMMARY_TIMEOUT_SECONDS` | Per-doc summary timeout | 25 |
 | `NB_PER_FILE_LOG` | Log each file’s chunk count (diagnostics) | false |
 | `NB_SKIP_TEST_SEARCH` | Skip post-build sample queries | false |
@@ -255,6 +262,9 @@ Embeddings must be built before meaningful search.
 ```bash
 # Basic build (repositories only)
 nancy-brain build
+
+# Build a single named repository only (fast iteration)
+nancy-brain build --repo MulensModel
 
 # Build with PDF articles (if configured)
 nancy-brain build --articles-config config/articles.yml

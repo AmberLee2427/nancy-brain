@@ -98,15 +98,15 @@
   - ✅ `--dry-run` 
   - ✅ `--category` 
   - ✅ `--dirty`
-  - [ ] `--repo` filter — build a single named repo; enables per-repo parallelism across cluster nodes
+  - ✅ `--repo` filter — build a single named repo; enables per-repo parallelism across cluster nodes
 
 ### Summary Generation
-- [ ] **Small-file skip**: skip summarization for files below a stripped-char threshold (≈200 chars); use content size only — do NOT use filename heuristics (`__init__.py` can contain critical code)
-- [ ] **Data-file skip**: skip binary/data files by extension (`.fits`, `.npy`, `.pkl`, `.dat`, `.csv`, `.parquet`, images, compiled objects, etc.)
-- [ ] **Configurable local summary model**: honour `NB_SUMMARY_MODEL` env var (default `Qwen/Qwen2.5-Coder-0.5B-Instruct`); GPU users can point this at a larger model (e.g. `Qwen2.5-Coder-7B`) for better quality — the code already auto-detects GPU via `device_map="auto"`
+- ✅ **Small-file skip**: skip summarization for files below a stripped-char threshold (≈200 chars); use content size only — do NOT use filename heuristics (`__init__.py` can contain critical code)
+- ✅ **Data-file skip**: skip binary/data files by extension (`.fits`, `.npy`, `.pkl`, `.dat`, `.csv`, `.parquet`, images, compiled objects, etc.)
+- ✅ **Configurable local summary model**: honour `NB_SUMMARY_MODEL` env var (default `Qwen/Qwen2.5-Coder-0.5B-Instruct`); GPU users can point this at a larger model (e.g. `Qwen2.5-Coder-7B`) for better quality — the code already auto-detects GPU via `device_map="auto"`
 - [ ] **Repo-level summary mode**: one LLM call per repo (README + dir listing + top N files) as a fast-build alternative to per-file calls
-- [ ] `nancy-brain import-env -f environment.yml` — generate `repositories.yml` entries from a conda env file; category = env name
-- [ ] **Version/ref pinning** in `repositories.yml` — optional `ref:` field per repo for reproducible KB builds
+- ✅ `nancy-brain import-env -f environment.yml` — generate `repositories.yml` entries from a conda env file; category = env name
+- ✅ **Version/ref pinning** in `repositories.yml` — optional `ref:` field per repo for reproducible KB builds
 
 ### Auth
 - [ ] create an admin login account
@@ -133,11 +133,9 @@
   - [ ] OCR output is Markdown → feeds into `MarkdownHeadingChunker` → same embedding space as everything else
   - [ ] Cache OCR Markdown output per-PDF (content-hash) so rebuilds don't re-process unchanged articles
   - [ ] Citation link extraction (post-OCR, future)
-- [ ] **Article source import**
-  - [ ] `nancy-brain import-bibtex -f references.bib` → populates `articles.yml`
-  - [ ] `nancy-brain import-ads --library "My Library"` → populates `articles.yml` via ADS API
-  - [ ] https://github.com/adsabs/adsabs-dev-api/blob/master/API_documentation_Python/Libraries_API_Python.ipynb
-  - [ ] https://nlesc.github.io/litstudy/api/types.html#litstudy.types.DocumentSet
+- ✅ **Article source import**
+  - ✅ `nancy-brain import-bibtex -f references.bib` → populates `articles.yml`
+  - ✅ `nancy-brain import-ads --library "My Library"` → populates `articles.yml` via ADS API
 - [ ] **MCP Re-hosted Tools**
   - memory mcp
   - wikipedia mcp

@@ -112,8 +112,23 @@ def init(project_name):
     "--category",
     help="Limit build to a single repository category (as defined in repositories.yml)",
 )
+@click.option(
+    "--repo",
+    default=None,
+    help="Limit build to a single repository by name (within the selected category).",
+)
 def build(
-    config, articles_config, embeddings_path, force_update, dry_run, dirty, summaries, batch_size, max_docs, category
+    config,
+    articles_config,
+    embeddings_path,
+    force_update,
+    dry_run,
+    dirty,
+    summaries,
+    batch_size,
+    max_docs,
+    category,
+    repo,
 ):
     """Build the knowledge base from configured repositories.
 
@@ -186,6 +201,8 @@ def build(
         cmd.extend(["--max-docs", str(max_docs)])
     if category:
         cmd.extend(["--category", category])
+    if repo:
+        cmd.extend(["--repo", repo])
 
     # If dry-run requested, still run the underlying script with --dry-run so that
     # repository cloning/downloading/indexing intentions and validation summaries
@@ -217,6 +234,59 @@ def build(
         else:
             click.echo(click.style(err_msg, fg="red"))
         sys.exit(e.returncode)
+
+
+@cli.command("import-env")
+@click.option(
+    "-f",
+    "--file",
+    "env_file",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the conda environment.yml file",
+)
+@click.option(
+    "--category",
+    default=None,
+    help="Override category key (default: conda env name)",
+)
+@click.option(
+    "--output",
+    default="config/repositories.yml",
+    help="Path to repositories.yml to update (default: config/repositories.yml)",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be added without writing")
+def import_env(env_file, category, output, dry_run):
+    """Scan a conda environment.yml and add GitHub-backed packages to repositories.yml."""
+    from nancy_brain.env_import import import_from_env
+
+    env_path = Path(env_file)
+    output_path = Path(output)
+    if not env_path.is_absolute():
+        env_path = Path.cwd() / env_path
+    if not output_path.is_absolute():
+        output_path = Path.cwd() / output_path
+
+    try:
+        summary = import_from_env(
+            env_file=env_path,
+            category=category,
+            output_path=output_path,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        click.echo(f"❌ import-env failed: {exc}")
+        sys.exit(1)
+
+    click.echo(f"Added: {summary['added']}")
+    click.echo(f"Skipped (no GitHub URL): {summary['skipped_no_github']}")
+    click.echo(f"Skipped (duplicate URL): {summary['skipped_duplicate']}")
+    if summary["errors"]:
+        click.echo(f"Errors: {len(summary['errors'])}")
+        for err in summary["errors"]:
+            click.echo(f"  - {err}")
+    if dry_run:
+        click.echo("Dry run complete: no files were written.")
 
 
 @cli.command()
@@ -581,6 +651,88 @@ def add_article(article_url, article_name, category, description):
 
     except Exception as e:
         click.echo(f"❌ Error writing to {config_file}: {e}")
+
+
+def _print_import_summary(source: str, summary: dict):
+    """Print a consistent summary for import commands."""
+    click.echo(f"✅ {source} import complete")
+    click.echo(f"  Added: {summary.get('added', 0)}")
+    click.echo(f"  Skipped duplicates: {summary.get('skipped_duplicate', 0)}")
+    click.echo(f"  Skipped (no URL): {summary.get('skipped_no_url', 0)}")
+    errors = summary.get("errors") or []
+    if errors:
+        click.echo(f"  Errors: {len(errors)}")
+        for err in errors:
+            click.echo(f"    - {err}")
+
+
+@cli.command("import-bibtex")
+@click.option(
+    "-f",
+    "--file",
+    "bib_file",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the .bib file to import",
+)
+@click.option(
+    "--category",
+    default="journal_articles",
+    help="Category key in articles.yml (default: journal_articles)",
+)
+@click.option(
+    "--output",
+    default="config/articles.yml",
+    help="Path to articles.yml to update (default: config/articles.yml)",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be added without writing")
+def import_bibtex(bib_file, category, output, dry_run):
+    """Import articles from a BibTeX file into articles.yml."""
+    from nancy_brain.article_import import import_from_bibtex
+
+    try:
+        summary = import_from_bibtex(
+            bib_path=bib_file,
+            category=category,
+            output_path=output,
+            dry_run=dry_run,
+        )
+        _print_import_summary("BibTeX", summary)
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(f"BibTeX import failed: {exc}") from exc
+
+
+@cli.command("import-ads")
+@click.option("--library", required=True, help="Name of the ADS private library to import")
+@click.option(
+    "--category",
+    default="journal_articles",
+    help="Category key in articles.yml (default: journal_articles)",
+)
+@click.option(
+    "--output",
+    default="config/articles.yml",
+    help="Path to articles.yml to update (default: config/articles.yml)",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be added without writing")
+def import_ads(library, category, output, dry_run):
+    """Import articles from an ADS private library into articles.yml."""
+    from nancy_brain.article_import import import_from_ads
+
+    try:
+        summary = import_from_ads(
+            library_name=library,
+            category=category,
+            output_path=output,
+            dry_run=dry_run,
+        )
+        _print_import_summary("ADS", summary)
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(f"ADS import failed: {exc}") from exc
 
 
 @cli.command("add-new-user")

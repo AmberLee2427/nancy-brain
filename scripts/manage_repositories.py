@@ -11,6 +11,7 @@ import sys
 import subprocess
 import argparse
 import yaml
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 import logging
@@ -18,6 +19,10 @@ import logging
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _is_full_commit_sha(ref: Optional[str]) -> bool:
+    return isinstance(ref, str) and bool(re.fullmatch(r"[0-9a-fA-F]{40}", ref))
 
 
 class RepositoryManager:
@@ -51,30 +56,59 @@ class RepositoryManager:
         repo_name = repo_info["name"]
         repo_url = repo_info["url"]
         repo_path = self.base_path / category / repo_name
+        ref = repo_info.get("ref")
 
         logger.info(f"Processing {category}/{repo_name}...")
 
         if repo_path.exists():
             logger.info(f"Repository {repo_name} already exists. Updating...")
-            return self.update_repository(repo_path)
+            return self.update_repository(repo_path, repo_config=repo_info)
         else:
             logger.info(f"Cloning {repo_name} from {repo_url}...")
             repo_path.parent.mkdir(parents=True, exist_ok=True)
 
-            if self.run_command(["git", "clone", repo_url, str(repo_path)]):
-                logger.info(f"Successfully cloned {repo_name}")
-                return True
+            if ref:
+                if _is_full_commit_sha(ref):
+                    clone_cmd = ["git", "clone", repo_url, str(repo_path)]
+                    logger.info(f"Using pinned commit SHA for {repo_name}: {ref}")
+                else:
+                    clone_cmd = ["git", "clone", "--branch", ref, "--depth", "1", repo_url, str(repo_path)]
+                    logger.info(f"Using pinned ref for {repo_name}: {ref}")
             else:
+                clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(repo_path)]
+
+            if not self.run_command(clone_cmd):
                 logger.error(f"Failed to clone {repo_name}")
                 return False
 
-    def update_repository(self, repo_path: Path) -> bool:
+            if ref and _is_full_commit_sha(ref):
+                if not self.run_command(["git", "checkout", ref], cwd=str(repo_path)):
+                    logger.error(f"Failed to checkout pinned commit {ref} for {repo_name}")
+                    return False
+
+            logger.info(f"Successfully cloned {repo_name}")
+            return True
+
+    def update_repository(self, repo_path: Path, repo_config: Optional[Dict] = None) -> bool:
         """Update an existing repository."""
         try:
+            ref = repo_config.get("ref") if repo_config else None
+            if ref:
+                if _is_full_commit_sha(ref):
+                    fetch_cmd = ["git", "fetch", "origin", ref]
+                else:
+                    fetch_cmd = ["git", "fetch", "--depth", "1", "origin", ref]
+
+                if not self.run_command(fetch_cmd, cwd=str(repo_path)):
+                    return False
+                if not self.run_command(["git", "checkout", ref], cwd=str(repo_path)):
+                    return False
+                logger.info(f"Successfully updated {repo_path.name} to pinned ref {ref}")
+                return True
+
             # Fetch latest changes
             if not self.run_command(["git", "fetch", "--all"], cwd=str(repo_path)):
                 return False
-
             # Get current branch
             result = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -83,14 +117,12 @@ class RepositoryManager:
                 text=True,
             )
             current_branch = result.stdout.strip()
-
             # Pull latest changes
             if self.run_command(["git", "pull", "origin", current_branch], cwd=str(repo_path)):
                 logger.info(f"Successfully updated {repo_path.name}")
                 return True
-            else:
-                logger.error(f"Failed to update {repo_path.name}")
-                return False
+            logger.error(f"Failed to update {repo_path.name}")
+            return False
 
         except Exception as e:
             logger.error(f"Error updating {repo_path.name}: {e}")

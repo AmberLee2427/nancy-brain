@@ -308,7 +308,11 @@ class SummaryGenerator:
             if _summarizer_pipeline is None:
                 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-                model_name = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+                model_name = os.environ.get(
+                    "NB_SUMMARY_MODEL",
+                    "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+                )
+                logger.info("Local summary model: %s", model_name)
                 logger.info(f"Loading local summarization model ({model_name})...")
 
                 tokenizer = AutoTokenizer.from_pretrained(model_name)

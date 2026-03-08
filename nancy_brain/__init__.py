@@ -1,6 +1,6 @@
 """Nancy Brain - Turn GitHub repos into AI-searchable knowledge bases."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .cli import cli
 
