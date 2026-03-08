@@ -120,8 +120,14 @@ def _iter_existing_urls(config: dict[str, Any]) -> set[str]:
             url = entry.get("url")
             if not isinstance(url, str) or not url.strip():
                 continue
-            normalized = _normalize_github_url(url) if "github.com" in url.lower() else url.strip()
-            urls.add(normalized)
+            if "github.com" in url.lower():
+                normalized = _normalize_github_url(url)
+                if normalized:
+                    urls.add(normalized)
+                else:
+                    urls.add(url.strip())
+            else:
+                urls.add(url.strip())
     return urls
 
 
