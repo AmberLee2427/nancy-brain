@@ -157,6 +157,7 @@ SUMMARY_SKIP_EXTENSIONS = {
     ".woff2",
 }
 
+
 def is_excluded_pdf(path: str) -> bool:
     p = str(path)
     return any(token in p for token in EXCLUDE_PDF_SUBSTRINGS)

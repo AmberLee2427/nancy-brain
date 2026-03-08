@@ -653,7 +653,9 @@ def run_ui():
                 key="export_repositories",
             )
 
-            uploaded = st.file_uploader("⬆️ Import Repositories Config (YAML)", type=["yml", "yaml"], key="upload_repos")
+            uploaded = st.file_uploader(
+                "⬆️ Import Repositories Config (YAML)", type=["yml", "yaml"], key="upload_repos"
+            )
             if uploaded is not None:
                 try:
                     raw = uploaded.read()

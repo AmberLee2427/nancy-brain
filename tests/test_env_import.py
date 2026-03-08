@@ -330,12 +330,7 @@ def test_normalize_github_url_empty():
 
 
 def test_extract_github_url_not_github_url():
-    payload = {
-        "info": {
-            "project_urls": {"Homepage": "https://gitlab.com/owner/repo"},
-            "home_page": ""
-        }
-    }
+    payload = {"info": {"project_urls": {"Homepage": "https://gitlab.com/owner/repo"}, "home_page": ""}}
     result = _extract_github_url(payload)
     assert result is None
 
@@ -356,11 +351,7 @@ def test_extract_github_url_non_priority_key():
 
 
 def test_iter_existing_urls_non_github_url():
-    config = {
-        "science": [
-            {"name": "repo1", "url": "https://bitbucket.org/org/repo"}
-        ]
-    }
+    config = {"science": [{"name": "repo1", "url": "https://bitbucket.org/org/repo"}]}
     urls = _iter_existing_urls(config)
     assert "https://bitbucket.org/org/repo" in urls
 

@@ -157,8 +157,10 @@ def test_process_category_force_update(tmp_path, manager):
     article_path.parent.mkdir(parents=True, exist_ok=True)
     article_path.write_bytes(b"old content")
 
-    with patch.object(manager, "update_article", return_value=True) as mock_upd, \
-         patch.object(manager, "download_article", return_value=True) as mock_dl:
+    with (
+        patch.object(manager, "update_article", return_value=True) as mock_upd,
+        patch.object(manager, "download_article", return_value=True) as mock_dl,
+    ):
         count = manager.process_category("papers", [article_info], force_update=True)
 
     assert count == 1

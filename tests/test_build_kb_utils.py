@@ -23,7 +23,6 @@ from scripts.build_knowledge_base import (
     clone_repositories,
 )
 
-
 # ---------------------------------------------------------------------------
 # is_excluded_pdf
 # ---------------------------------------------------------------------------
@@ -127,6 +126,7 @@ def test_emit_progress_outputs_json(capsys):
     captured = capsys.readouterr()
     assert "PROGRESS_JSON:" in captured.out
     import json
+
     data = json.loads(captured.out.split("PROGRESS_JSON: ")[1])
     assert data["percent"] == 50
     assert data["stage"] == "cloning"
@@ -189,8 +189,9 @@ def test_extract_text_fallback_with_pypdf2(tmp_path):
     mock_reader = MagicMock()
     mock_reader.pages = [mock_page]
     mock_pdf_reader_class = MagicMock(return_value=mock_reader)
-    
+
     import types
+
     fake_pypdf2 = types.ModuleType("PyPDF2")
     fake_pypdf2.PdfReader = mock_pdf_reader_class
 
@@ -203,7 +204,7 @@ def test_extract_text_fallback_with_pypdf2(tmp_path):
             sys.modules.pop("PyPDF2", None)
         else:
             sys.modules["PyPDF2"] = saved
-    
+
     assert result is not None
     assert len(result) > 100
 
@@ -219,13 +220,14 @@ def test_extract_text_fallback_pypdf2_short_text(tmp_path):
     mock_pdf_reader_class = MagicMock(return_value=mock_reader)
 
     import types
+
     fake_pypdf2 = types.ModuleType("PyPDF2")
     fake_pypdf2.PdfReader = mock_pdf_reader_class
-    
+
     # Also ensure pdfplumber fails to avoid fallthrough
     fake_pdfplumber = types.ModuleType("pdfplumber")
     fake_pdfplumber.open = MagicMock(side_effect=ImportError("no pdfplumber"))
-    
+
     # And fitz fails
     fake_fitz = types.ModuleType("fitz")
     fake_fitz.open = MagicMock(side_effect=ImportError("no fitz"))
@@ -234,7 +236,7 @@ def test_extract_text_fallback_pypdf2_short_text(tmp_path):
     sys.modules["PyPDF2"] = fake_pypdf2
     sys.modules["pdfplumber"] = fake_pdfplumber
     sys.modules["fitz"] = fake_fitz
-    
+
     try:
         result = extract_text_fallback(str(pdf_path))
     finally:
@@ -243,7 +245,7 @@ def test_extract_text_fallback_pypdf2_short_text(tmp_path):
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
-    
+
     assert result is None
 
 
@@ -253,6 +255,7 @@ def test_extract_text_fallback_all_fail(tmp_path):
     pdf_path.write_bytes(b"fake")
 
     import types
+
     modules = ["PyPDF2", "pdfplumber", "fitz"]
     saved = {k: sys.modules.get(k) for k in modules}
     for mod in modules:
@@ -271,6 +274,8 @@ def test_extract_text_fallback_all_fail(tmp_path):
                 sys.modules[k] = v
 
     assert result is None
+
+
 # ---------------------------------------------------------------------------
 # process_pdf_with_fallback
 # ---------------------------------------------------------------------------
@@ -289,10 +294,10 @@ def test_process_pdf_fallback_skip_pdfs(tmp_path, monkeypatch):
 def test_process_pdf_fallback_success(tmp_path, monkeypatch):
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake pdf content " * 50)
-    
+
     monkeypatch.setattr(kb_module, "TIKA_AVAILABLE", False)
     monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
-    
+
     with patch.object(kb_module, "extract_text_fallback", return_value="extracted text " * 50):
         content, success = process_pdf_with_fallback(pdf_path)
     assert success is True
@@ -302,11 +307,11 @@ def test_process_pdf_fallback_success(tmp_path, monkeypatch):
 def test_process_pdf_fallback_content_too_short(tmp_path, monkeypatch):
     pdf_path = tmp_path / "tiny.pdf"
     pdf_path.write_bytes(b"fake pdf")
-    
+
     monkeypatch.setattr(kb_module, "TIKA_AVAILABLE", False)
     monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
     monkeypatch.setattr(kb_module, "MIN_PDF_TEXT_CHARS", 10000)  # Very high threshold
-    
+
     with patch.object(kb_module, "extract_text_fallback", return_value="short"):
         content, success = process_pdf_with_fallback(pdf_path)
     assert success is False
@@ -334,26 +339,22 @@ def _write_articles_config(path: Path, config: dict) -> None:
 
 def test_download_pdf_success(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]
-    })
-    
+    _write_articles_config(config_path, {"papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]})
+
     mock_session = MagicMock()
     mock_session.get.return_value = _make_requests_response()
     mock_session.max_redirects = 15
 
     with patch("scripts.build_knowledge_base.requests.Session", return_value=mock_session):
         result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"))
-    
+
     assert "paper1" in str(result["successful_downloads"])
 
 
 def test_download_pdf_already_exists(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "existing", "url": "https://example.com/existing.pdf"}]
-    })
-    
+    _write_articles_config(config_path, {"papers": [{"name": "existing", "url": "https://example.com/existing.pdf"}]})
+
     # Create the file
     dest = tmp_path / "raw" / "papers" / "existing.pdf"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -361,46 +362,40 @@ def test_download_pdf_already_exists(tmp_path):
 
     with patch("scripts.build_knowledge_base.requests.Session"):
         result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"))
-    
+
     assert "papers/existing" in result["skipped_existing"]
 
 
 def test_download_pdf_dry_run(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "test", "url": "https://example.com/test.pdf"}]
-    })
-    
+    _write_articles_config(config_path, {"papers": [{"name": "test", "url": "https://example.com/test.pdf"}]})
+
     mock_session = MagicMock()
     with patch("scripts.build_knowledge_base.requests.Session", return_value=mock_session):
         result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"), dry_run=True)
-    
+
     mock_session.get.assert_not_called()
     assert not (tmp_path / "raw" / "papers" / "test.pdf").exists()
 
 
 def test_download_pdf_failure(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "bad", "url": "https://example.com/bad.pdf"}]
-    })
-    
+    _write_articles_config(config_path, {"papers": [{"name": "bad", "url": "https://example.com/bad.pdf"}]})
+
     mock_session = MagicMock()
     mock_session.get.side_effect = requests.ConnectionError("connection refused")
 
     with patch("scripts.build_knowledge_base.requests.Session", return_value=mock_session):
         result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"))
-    
+
     assert any("bad" in entry for entry in result["failed_downloads"])
 
 
 def test_download_pdf_html_response(tmp_path):
     """PDF download that returns HTML (anti-scraping) should fail."""
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "html-paper", "url": "https://example.com/paper.pdf"}]
-    })
-    
+    _write_articles_config(config_path, {"papers": [{"name": "html-paper", "url": "https://example.com/paper.pdf"}]})
+
     mock_session = MagicMock()
     mock_session.get.return_value = _make_requests_response(
         content=b"<html>Access denied</html>",
@@ -409,25 +404,26 @@ def test_download_pdf_html_response(tmp_path):
 
     with patch("scripts.build_knowledge_base.requests.Session", return_value=mock_session):
         result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"))
-    
+
     assert any("html-paper" in entry for entry in result["failed_downloads"])
 
 
 def test_download_pdf_with_category_filter(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "p1", "url": "https://example.com/p1.pdf"}],
-        "other": [{"name": "p2", "url": "https://example.com/p2.pdf"}],
-    })
-    
+    _write_articles_config(
+        config_path,
+        {
+            "papers": [{"name": "p1", "url": "https://example.com/p1.pdf"}],
+            "other": [{"name": "p2", "url": "https://example.com/p2.pdf"}],
+        },
+    )
+
     mock_session = MagicMock()
     mock_session.get.return_value = _make_requests_response()
-    
+
     with patch("scripts.build_knowledge_base.requests.Session", return_value=mock_session):
-        result = download_pdf_articles(
-            str(config_path), base_path=str(tmp_path / "raw"), category="papers"
-        )
-    
+        result = download_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"), category="papers")
+
     # Only paper from "papers" category should be processed
     assert mock_session.get.call_count == 1
 
@@ -445,9 +441,7 @@ def _write_repos_config(path: Path, config: dict) -> None:
 
 def test_clone_repositories_skips_existing(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "existing", "url": "https://github.com/org/existing.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "existing", "url": "https://github.com/org/existing.git"}]})
     dest = tmp_path / "raw" / "science" / "existing"
     dest.mkdir(parents=True, exist_ok=True)
 
@@ -459,9 +453,7 @@ def test_clone_repositories_skips_existing(tmp_path):
 
 def test_clone_repositories_dry_run(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "new-repo", "url": "https://github.com/org/new-repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "new-repo", "url": "https://github.com/org/new-repo.git"}]})
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), dry_run=True)
@@ -471,75 +463,63 @@ def test_clone_repositories_dry_run(tmp_path):
 
 def test_clone_repositories_force_update_existing(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]})
     dest = tmp_path / "raw" / "science" / "repo"
     dest.mkdir(parents=True, exist_ok=True)
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="main\n")
-        result = clone_repositories(
-            str(config_path), base_path=str(tmp_path / "raw"), force_update=True
-        )
+        result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), force_update=True)
 
     assert "science/repo" in result["successful_updates"]
 
 
 def test_clone_repositories_force_update_with_ref(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git", "ref": "v1.0"}]
-    })
+    _write_repos_config(
+        config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git", "ref": "v1.0"}]}
+    )
     dest = tmp_path / "raw" / "science" / "repo"
     dest.mkdir(parents=True, exist_ok=True)
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="main\n")
-        result = clone_repositories(
-            str(config_path), base_path=str(tmp_path / "raw"), force_update=True
-        )
+        result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), force_update=True)
     assert "science/repo" in result["successful_updates"]
 
 
 def test_clone_repositories_force_update_with_sha_ref(tmp_path):
     sha = "a" * 40
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git", "ref": sha}]
-    })
+    _write_repos_config(
+        config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git", "ref": sha}]}
+    )
     dest = tmp_path / "raw" / "science" / "repo"
     dest.mkdir(parents=True, exist_ok=True)
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="main\n")
-        result = clone_repositories(
-            str(config_path), base_path=str(tmp_path / "raw"), force_update=True
-        )
+        result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), force_update=True)
     assert "science/repo" in result["successful_updates"]
 
 
 def test_clone_repositories_update_failure(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]})
     dest = tmp_path / "raw" / "science" / "repo"
     dest.mkdir(parents=True, exist_ok=True)
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.CalledProcessError(1, ["git"], stderr="remote error")
-        result = clone_repositories(
-            str(config_path), base_path=str(tmp_path / "raw"), force_update=True
-        )
+        result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), force_update=True)
     assert any("repo" in entry for entry in result["failed_updates"])
 
 
 def test_clone_repositories_clone_with_ref(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "ref-repo", "url": "https://github.com/org/repo.git", "ref": "v2.0"}]
-    })
+    _write_repos_config(
+        config_path, {"science": [{"name": "ref-repo", "url": "https://github.com/org/repo.git", "ref": "v2.0"}]}
+    )
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
@@ -547,14 +527,12 @@ def test_clone_repositories_clone_with_ref(tmp_path):
 
     # Should have cloned with --branch v2.0
     clone_calls = [c.args[0] for c in mock_run.call_args_list if c.args and c.args[0][:2] == ["git", "clone"]]
-    assert any("--branch" in call and "v2.0" in call for call in clone_calls)
+    assert any("--branch" in clc and "v2.0" in clc for clc in clone_calls)
 
 
 def test_clone_repositories_clone_failure(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "bad", "url": "https://github.com/org/bad.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "bad", "url": "https://github.com/org/bad.git"}]})
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.CalledProcessError(128, ["git"], stderr="not found")
@@ -565,26 +543,21 @@ def test_clone_repositories_clone_failure(tmp_path):
 
 def test_clone_repositories_dry_run_existing(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]})
     dest = tmp_path / "raw" / "science" / "repo"
     dest.mkdir(parents=True, exist_ok=True)
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
-        result = clone_repositories(
-            str(config_path), base_path=str(tmp_path / "raw"),
-            dry_run=True, force_update=True
-        )
+        result = clone_repositories(str(config_path), base_path=str(tmp_path / "raw"), dry_run=True, force_update=True)
     mock_run.assert_not_called()
 
 
 def test_clone_repositories_with_sha_ref_clone(tmp_path):
     sha = "b" * 40
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "sha-repo", "url": "https://github.com/org/repo.git", "ref": sha}]
-    })
+    _write_repos_config(
+        config_path, {"science": [{"name": "sha-repo", "url": "https://github.com/org/repo.git", "ref": sha}]}
+    )
 
     with patch("scripts.build_knowledge_base.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
@@ -608,9 +581,7 @@ from scripts.build_knowledge_base import cleanup_pdf_articles, cleanup_raw_repos
 
 def test_cleanup_pdf_articles_removes_files(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]
-    })
+    _write_articles_config(config_path, {"papers": [{"name": "paper1", "url": "https://example.com/paper1.pdf"}]})
 
     pdf_file = tmp_path / "raw" / "papers" / "paper1.pdf"
     pdf_file.parent.mkdir(parents=True, exist_ok=True)
@@ -622,18 +593,14 @@ def test_cleanup_pdf_articles_removes_files(tmp_path):
 
 def test_cleanup_pdf_articles_handles_missing_file(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "nonexistent", "url": "https://example.com/p.pdf"}]
-    })
+    _write_articles_config(config_path, {"papers": [{"name": "nonexistent", "url": "https://example.com/p.pdf"}]})
     # Should not raise even if file doesn't exist
     cleanup_pdf_articles(str(config_path), base_path=str(tmp_path / "raw"))
 
 
 def test_cleanup_pdf_articles_removes_empty_dirs(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "paper1", "url": "https://example.com/p.pdf"}]
-    })
+    _write_articles_config(config_path, {"papers": [{"name": "paper1", "url": "https://example.com/p.pdf"}]})
     # Create empty category dir
     empty_dir = tmp_path / "raw" / "papers"
     empty_dir.mkdir(parents=True, exist_ok=True)
@@ -647,10 +614,13 @@ def test_cleanup_pdf_articles_removes_empty_dirs(tmp_path):
 
 def test_cleanup_pdf_articles_with_category_filter(tmp_path):
     config_path = tmp_path / "articles.yml"
-    _write_articles_config(config_path, {
-        "papers": [{"name": "p1", "url": "https://example.com/p1.pdf"}],
-        "other": [{"name": "p2", "url": "https://example.com/p2.pdf"}],
-    })
+    _write_articles_config(
+        config_path,
+        {
+            "papers": [{"name": "p1", "url": "https://example.com/p1.pdf"}],
+            "other": [{"name": "p2", "url": "https://example.com/p2.pdf"}],
+        },
+    )
     pdf1 = tmp_path / "raw" / "papers" / "p1.pdf"
     pdf2 = tmp_path / "raw" / "other" / "p2.pdf"
     pdf1.parent.mkdir(parents=True, exist_ok=True)
@@ -670,9 +640,7 @@ def test_cleanup_pdf_articles_with_category_filter(tmp_path):
 
 def test_cleanup_raw_repositories_removes_dirs(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "myrepo", "url": "https://github.com/org/repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "myrepo", "url": "https://github.com/org/repo.git"}]})
     repo_dir = tmp_path / "raw" / "science" / "myrepo"
     repo_dir.mkdir(parents=True, exist_ok=True)
     (repo_dir / "file.py").write_text("code")
@@ -683,18 +651,14 @@ def test_cleanup_raw_repositories_removes_dirs(tmp_path):
 
 def test_cleanup_raw_repositories_handles_missing(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "ghost", "url": "https://github.com/org/ghost.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "ghost", "url": "https://github.com/org/ghost.git"}]})
     # Should not raise even if directory doesn't exist
     cleanup_raw_repositories(str(config_path), base_path=str(tmp_path / "raw"))
 
 
 def test_cleanup_raw_repositories_removes_empty_cat_dirs(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]
-    })
+    _write_repos_config(config_path, {"science": [{"name": "repo", "url": "https://github.com/org/repo.git"}]})
     repo_dir = tmp_path / "raw" / "science" / "repo"
     repo_dir.mkdir(parents=True, exist_ok=True)
     (repo_dir / "main.py").write_text("code")
@@ -706,10 +670,13 @@ def test_cleanup_raw_repositories_removes_empty_cat_dirs(tmp_path):
 
 def test_cleanup_raw_repositories_with_category_filter(tmp_path):
     config_path = tmp_path / "repos.yml"
-    _write_repos_config(config_path, {
-        "science": [{"name": "keep_science", "url": "https://github.com/org/r.git"}],
-        "tools": [{"name": "del_tools", "url": "https://github.com/org/t.git"}],
-    })
+    _write_repos_config(
+        config_path,
+        {
+            "science": [{"name": "keep_science", "url": "https://github.com/org/r.git"}],
+            "tools": [{"name": "del_tools", "url": "https://github.com/org/t.git"}],
+        },
+    )
     science_dir = tmp_path / "raw" / "science" / "keep_science"
     tools_dir = tmp_path / "raw" / "tools" / "del_tools"
     science_dir.mkdir(parents=True, exist_ok=True)
@@ -726,8 +693,6 @@ def test_cleanup_raw_repositories_with_category_filter(tmp_path):
 # Additional build_txtai_index tests
 # ---------------------------------------------------------------------------
 
-import types
-import sys
 from scripts.build_knowledge_base import build_txtai_index
 
 
@@ -743,6 +708,7 @@ class DummyEmbeddings2:
 
     def save(self, path):
         from pathlib import Path
+
         Path(path).mkdir(parents=True, exist_ok=True)
 
     def search(self, query, limit):

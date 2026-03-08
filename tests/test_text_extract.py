@@ -41,6 +41,7 @@ Content here.
 def test_extract_text_from_rst_fallback_no_docutils():
     """Exercise the heuristic fallback when docutils is not available."""
     from unittest.mock import patch
+
     # Simulate docutils.core being absent by removing it from sys.modules
     with patch.dict("sys.modules", {"docutils.core": None}):
         # Use plain RST without directives to avoid the fallback directive regex
@@ -82,6 +83,7 @@ def test_extract_text_from_rst_bytes_output(monkeypatch):
 def test_extract_text_from_tex_fallback_no_pylatexenc():
     """Exercise heuristic fallback when pylatexenc is not available."""
     from unittest.mock import patch
+
     with patch.dict("sys.modules", {"pylatexenc.latex2text": None}):
         sample = r"\documentclass{article}\begin{document}Hello \textbf{World}!% comment\end{document}"
         out = text_extract.extract_text_from_tex(sample)

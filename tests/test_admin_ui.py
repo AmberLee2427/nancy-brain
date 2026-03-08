@@ -15,13 +15,11 @@ def test_load_config():
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "config" / "repositories.yml"
         config_file.parent.mkdir()
-        config_file.write_text(
-            """
+        config_file.write_text("""
 test_tools:
   - name: test-repo
     url: https://github.com/test/repo.git
-"""
-        )
+""")
 
         # Change to tmpdir for test
         import os
@@ -61,14 +59,12 @@ def test_load_articles_config():
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "config" / "articles.yml"
         config_file.parent.mkdir()
-        config_file.write_text(
-            """
+        config_file.write_text("""
 papers:
   - name: test-paper
     url: https://arxiv.org/pdf/test.pdf
     description: A test paper
-"""
-        )
+""")
 
         import os
 

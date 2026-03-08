@@ -13,10 +13,10 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-
 # ---------------------------------------------------------------------------
 # Setup: mock streamlit and http_api before importing admin_ui
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True, scope="module")
 def mock_heavy_deps():
@@ -59,12 +59,14 @@ def admin_ui_module(mock_heavy_deps):
     # Remove cached module if it was already imported
     sys.modules.pop("nancy_brain.admin_ui", None)
     import nancy_brain.admin_ui as admin_ui
+
     return admin_ui
 
 
 # ---------------------------------------------------------------------------
 # load_config
 # ---------------------------------------------------------------------------
+
 
 def test_load_config_existing(tmp_path, admin_ui_module):
     config = {"science": [{"name": "repo1", "url": "https://github.com/org/repo1.git"}]}
@@ -85,6 +87,7 @@ def test_load_config_missing(tmp_path, admin_ui_module):
 # load_articles_config
 # ---------------------------------------------------------------------------
 
+
 def test_load_articles_config_existing(tmp_path, admin_ui_module):
     config = {"papers": [{"name": "paper1", "url": "https://example.com/p.pdf"}]}
     config_file = tmp_path / "articles.yml"
@@ -103,6 +106,7 @@ def test_load_articles_config_missing(tmp_path, admin_ui_module):
 # ---------------------------------------------------------------------------
 # save_config
 # ---------------------------------------------------------------------------
+
 
 def test_save_config_creates_file(tmp_path, admin_ui_module):
     config = {"science": [{"name": "repo1", "url": "https://github.com/org/repo1.git"}]}
@@ -125,6 +129,7 @@ def test_save_config_raises_on_error(tmp_path, admin_ui_module):
 # save_articles_config
 # ---------------------------------------------------------------------------
 
+
 def test_save_articles_config_creates_file(tmp_path, admin_ui_module):
     config = {"papers": [{"name": "paper1", "url": "https://example.com/p.pdf"}]}
     config_file = tmp_path / "config" / "articles.yml"
@@ -136,6 +141,7 @@ def test_save_articles_config_creates_file(tmp_path, admin_ui_module):
 # ---------------------------------------------------------------------------
 # run_build_command
 # ---------------------------------------------------------------------------
+
 
 def test_run_build_command_no_articles(tmp_path, admin_ui_module):
     with patch("subprocess.run") as mock_run:
@@ -168,6 +174,7 @@ def test_run_build_command_with_articles_no_file(tmp_path, admin_ui_module):
 # _init_session_state_safe
 # ---------------------------------------------------------------------------
 
+
 def test_init_session_state_safe_no_crash(admin_ui_module):
     """Should not raise even if st.session_state is mocked."""
     admin_ui_module._init_session_state_safe()  # Should not raise
@@ -176,6 +183,7 @@ def test_init_session_state_safe_no_crash(admin_ui_module):
 # ---------------------------------------------------------------------------
 # safe_rerun
 # ---------------------------------------------------------------------------
+
 
 def test_safe_rerun_no_crash(admin_ui_module, mock_heavy_deps):
     """safe_rerun should not raise."""
@@ -194,6 +202,7 @@ def test_safe_rerun_experimental(admin_ui_module, mock_heavy_deps):
 # ---------------------------------------------------------------------------
 # show_error
 # ---------------------------------------------------------------------------
+
 
 def test_show_error_basic(admin_ui_module):
     """show_error should call st.error and not raise."""
@@ -215,8 +224,10 @@ def test_show_error_with_exception(admin_ui_module):
 # run_ui tests
 # ---------------------------------------------------------------------------
 
+
 class DictLikeState(dict):
     """A dict that also supports attribute-style access (like Streamlit session_state)."""
+
     def __getattr__(self, key):
         try:
             return self[key]
@@ -263,6 +274,7 @@ def _setup_mock_st_for_page(mock_st, page_name):
 
     def mock_tabs(tab_names):
         return [make_col() for _ in tab_names]
+
     mock_st.tabs = MagicMock(side_effect=mock_tabs)
 
     # Buttons return False (not pressed) by default
