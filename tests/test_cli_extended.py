@@ -258,7 +258,7 @@ def test_import_env_command_success(tmp_path):
         env_file = Path("env.yml")
         env_file.write_text("name: test_env\ndependencies:\n  - pip:\n    - some_pkg\n")
 
-        with patch("nancy_brain.cli.import_from_env" if False else "nancy_brain.env_import.import_from_env") as _:
+        with patch("nancy_brain.env_import.import_from_env") as _:
             with patch("nancy_brain.cli.subprocess.run"):
                 with patch("nancy_brain.env_import.requests.get") as mock_get:
                     mock_get.return_value = MagicMock(

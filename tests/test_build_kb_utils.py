@@ -899,11 +899,12 @@ def test_build_txtai_index_text_file_exception(monkeypatch, tmp_path):
     py_file.write_text("content here " * 50, encoding="utf-8")
 
     original_open = open
-    call_count = [0]
-    
+    call_count = 0
+
     def mock_open(path, *args, **kwargs):
-        call_count[0] += 1
-        if str(path).endswith("bad.py") and call_count[0] > 2:
+        nonlocal call_count
+        call_count += 1
+        if str(path).endswith("bad.py") and call_count > 2:
             raise IOError("file read error")
         return original_open(path, *args, **kwargs)
 

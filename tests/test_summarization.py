@@ -14,58 +14,58 @@ from nancy_brain.summarization import SummaryGenerator, SummaryResult
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def cache_dir(tmp_path):
+def summary_cache_dir(tmp_path):
     return tmp_path / "summary_cache"
 
 
 @pytest.fixture
-def generator_disabled(cache_dir):
+def generator_disabled(summary_cache_dir):
     """A generator with no API key and no local mode -> disabled."""
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": ""}):
-        return SummaryGenerator(cache_dir=cache_dir, enabled=True)
+        return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
 @pytest.fixture
-def generator_with_key(cache_dir):
+def generator_with_key(summary_cache_dir):
     """A generator with a fake API key -> enabled (Anthropic mode)."""
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fake-key", "NB_USE_LOCAL_SUMMARY": ""}):
-        return SummaryGenerator(cache_dir=cache_dir, enabled=True)
+        return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
 @pytest.fixture
-def generator_local(cache_dir):
+def generator_local(summary_cache_dir):
     """A generator in local mode."""
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": "true"}):
-        return SummaryGenerator(cache_dir=cache_dir, enabled=True)
+        return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
 # ---------------------------------------------------------------------------
 # __init__
 # ---------------------------------------------------------------------------
 
-def test_init_disabled_when_no_key(cache_dir):
+def test_init_disabled_when_no_key(summary_cache_dir):
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": ""}):
-        gen = SummaryGenerator(cache_dir=cache_dir)
+        gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.enabled is False
 
 
-def test_init_enabled_with_key(cache_dir):
+def test_init_enabled_with_key(summary_cache_dir):
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key", "NB_USE_LOCAL_SUMMARY": ""}):
-        gen = SummaryGenerator(cache_dir=cache_dir)
+        gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.enabled is True
-    assert cache_dir.exists()
+    assert summary_cache_dir.exists()
 
 
-def test_init_local_mode(cache_dir):
+def test_init_local_mode(summary_cache_dir):
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": "true"}):
-        gen = SummaryGenerator(cache_dir=cache_dir)
+        gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.use_local is True
     assert gen.enabled is True
 
 
-def test_init_disabled_flag(cache_dir):
+def test_init_disabled_flag(summary_cache_dir):
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key", "NB_USE_LOCAL_SUMMARY": ""}):
-        gen = SummaryGenerator(cache_dir=cache_dir, enabled=False)
+        gen = SummaryGenerator(cache_dir=summary_cache_dir, enabled=False)
     assert gen.enabled is False
 
 
@@ -87,13 +87,13 @@ def test_summarize_returns_none_empty_content(generator_with_key):
 # summarize - cache hits
 # ---------------------------------------------------------------------------
 
-def test_summarize_returns_cached_result(generator_with_key, cache_dir):
+def test_summarize_returns_cached_result(generator_with_key):
     """If a cache file exists, return the cached result without calling API."""
     # Pre-populate cache
     trimmed = "Short content."
     gen = generator_with_key
     cache_key = gen._cache_key("test/doc.py", trimmed, None, None)
-    cache_file = cache_dir / f"{cache_key}.json"
+    cache_file = gen.cache_dir / f"{cache_key}.json"
     cache_file.write_text(json.dumps({
         "summary": "Cached summary.",
         "weight": 1.2,
@@ -108,12 +108,12 @@ def test_summarize_returns_cached_result(generator_with_key, cache_dir):
     assert result.weight == pytest.approx(1.2)
 
 
-def test_summarize_ignores_corrupt_cache(generator_with_key, cache_dir):
+def test_summarize_ignores_corrupt_cache(generator_with_key):
     """Corrupt cache file should be ignored and fall through to API call."""
     gen = generator_with_key
     trimmed = "Content here."
     cache_key = gen._cache_key("test/corrupt.py", trimmed, None, None)
-    cache_file = cache_dir / f"{cache_key}.json"
+    cache_file = gen.cache_dir / f"{cache_key}.json"
     cache_file.write_text("NOT VALID JSON", encoding="utf-8")
 
     # Mock the API call to return a valid summary
@@ -157,7 +157,7 @@ def test_summarize_invalid_payload(generator_with_key):
     assert result is None
 
 
-def test_summarize_with_readme(generator_with_key, cache_dir):
+def test_summarize_with_readme(generator_with_key):
     gen = generator_with_key
     mock_payload = {"summary": "Summary with readme.", "weight": 1.0}
     with patch.object(gen, "_invoke_model", return_value=mock_payload):
@@ -482,23 +482,31 @@ def test_invoke_local_success(generator_local, monkeypatch):
     mock_torch.inference_mode.return_value.__enter__ = MagicMock(return_value=None)
     mock_torch.inference_mode.return_value.__exit__ = MagicMock(return_value=False)
 
-    mock_tokenizer = MagicMock()
-    mock_tokenizer.apply_chat_template.return_value = "formatted prompt"
-    mock_tokenizer.eos_token_id = 0
-    mock_tokenizer.batch_decode.return_value = ["This is a great summary."]
-    mock_tokenizer.return_value = mock_tokenizer  # Make it callable
+    # Use a callable class to simulate the tokenizer instance
+    class FakeTokenizer:
+        eos_token_id = 0
+
+        def apply_chat_template(self, *args, **kwargs):
+            return "formatted prompt"
+
+        def batch_decode(self, ids, skip_special_tokens=True):
+            return ["This is a great summary."]
+
+        def __call__(self, texts, return_tensors=None):
+            mock_inputs = MagicMock()
+            mock_inputs.input_ids = [[1, 2, 3]]
+            return mock_inputs
+
+        def to(self, device):
+            return self
+
+    tokenizer_instance = FakeTokenizer()
+    mock_auto_tokenizer = MagicMock(return_value=tokenizer_instance)
 
     mock_model = MagicMock()
     mock_model.device = "cpu"
-    mock_model.generate.return_value = MagicMock()
+    mock_model.generate.return_value = [[1, 2, 3, 4]]
 
-    mock_inputs = MagicMock()
-    mock_inputs.input_ids = [[1, 2, 3]]
-    mock_tokenizer.side_effect = None
-    mock_tokenizer.__call__ = MagicMock(return_value=mock_inputs)
-
-    # Set up AutoModel/AutoTokenizer
-    mock_auto_tokenizer = MagicMock(return_value=mock_tokenizer)
     mock_auto_model = MagicMock(return_value=mock_model)
 
     import types
@@ -513,5 +521,5 @@ def test_invoke_local_success(generator_local, monkeypatch):
         gen = generator_local
         result = gen._invoke_local(content="Some content", readme=None)
 
-    # We just need it to not crash; result may be None if parsing fails
+    # Result may be None if parsing fails, or a dict if successful
     assert result is None or isinstance(result, dict)

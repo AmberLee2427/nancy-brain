@@ -8,25 +8,6 @@ from unittest.mock import patch, MagicMock, call
 
 
 # ---------------------------------------------------------------------------
-# Helper to create a mock ArticleManager without heavy deps
-# ---------------------------------------------------------------------------
-
-def _make_manager(tmp_path, mock_rag=None, mock_textractor=None):
-    """Create ArticleManager with mocked RAGService and Textractor."""
-    if mock_rag is None:
-        mock_rag = MagicMock()
-    if mock_textractor is None:
-        mock_textractor = MagicMock()
-
-    with patch("scripts.manage_articles.RAGService", return_value=mock_rag) as _rag_patch, \
-         patch("scripts.manage_articles.Textractor", return_value=mock_textractor) as _txt_patch, \
-         patch("scripts.manage_articles.TXTAI_AVAILABLE", True):
-        from scripts.manage_articles import ArticleManager
-        manager = ArticleManager(knowledge_base_path=tmp_path)
-    return manager, mock_rag, mock_textractor
-
-
-# ---------------------------------------------------------------------------
 # ArticleManager.__init__
 # ---------------------------------------------------------------------------
 
