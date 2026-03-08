@@ -117,6 +117,12 @@ def init(project_name):
     default=None,
     help="Limit build to a single repository by name (within the selected category).",
 )
+@click.option(
+    "--summaries-only",
+    is_flag=True,
+    default=False,
+    help="Warm the summary cache per-repo then exit without building the index. Pair with --repo for one-node-per-repo cluster jobs.",
+)
 def build(
     config,
     articles_config,
@@ -129,6 +135,7 @@ def build(
     max_docs,
     category,
     repo,
+    summaries_only,
 ):
     """Build the knowledge base from configured repositories.
 
@@ -203,6 +210,8 @@ def build(
         cmd.extend(["--category", category])
     if repo:
         cmd.extend(["--repo", repo])
+    if summaries_only:
+        cmd.append("--summaries-only")
 
     # If dry-run requested, still run the underlying script with --dry-run so that
     # repository cloning/downloading/indexing intentions and validation summaries

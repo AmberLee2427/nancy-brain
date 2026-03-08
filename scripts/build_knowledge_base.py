@@ -1333,6 +1333,16 @@ if __name__ == "__main__":
         help="Leave the raw repos and PDFs in place after embeddings are built",
     )
     parser.add_argument(
+        "--summaries-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Clone/update repositories and populate the summary cache, then exit "
+            "without building the embeddings index. Intended for parallel "
+            "cluster pre-warming (use with --repo to process one repo per node)."
+        ),
+    )
+    parser.add_argument(
         "--summaries",
         dest="summaries",
         action="store_true",
@@ -1448,12 +1458,13 @@ if __name__ == "__main__":
             repo_filter: Optional[str] = None,
             dirty: bool = False,
             summaries: bool = False,
+            summaries_only: bool = False,
         ) -> None:
             logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
             logger = logging.getLogger(__name__)
             all_failures = {"repos": {}, "articles": {}, "indexing": {}}
             summary_generator = None
-            if summaries:
+            if summaries or summaries_only:
                 cache_dir = Path(embeddings_path).parent / "cache" / "summaries"
                 summary_generator = SummaryGenerator(cache_dir=cache_dir, enabled=True)
             emit_progress(5, stage="start", detail="Cloning repositories")
@@ -1462,6 +1473,28 @@ if __name__ == "__main__":
             )
 
             emit_progress(25, stage="repos_done", detail="Repositories cloned/updated")
+
+            # --summaries-only: walk files to warm the summary cache, then exit
+            # without writing the embeddings index. For parallel cluster
+            # pre-warming; pair with --repo to process one repo per node.
+            if summaries_only and summary_generator is not None:
+                logger.info(
+                    "--summaries-only: warming summary cache for %s",
+                    repo_filter or "all repos",
+                )
+                build_txtai_index(
+                    config_path,
+                    articles_config_path,
+                    base_path,
+                    embeddings_path,
+                    dry_run=True,  # don't write an index; cache writes happen regardless
+                    category=category,
+                    summary_generator=summary_generator,
+                    repo_filter=repo_filter,
+                )
+                emit_progress(100, stage="done", detail="Summary cache warmed")
+                return
+
             if articles_config_path and os.path.exists(articles_config_path):
                 emit_progress(30, stage="articles", detail="Downloading PDF articles")
                 all_failures["articles"] = download_pdf_articles(
@@ -1511,4 +1544,5 @@ if __name__ == "__main__":
         repo_filter=args.repo,
         dirty=args.dirty,
         summaries=args.summaries,
+        summaries_only=args.summaries_only,
     )
