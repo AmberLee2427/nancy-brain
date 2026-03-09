@@ -45,7 +45,7 @@ jupyter_examples:
 
 **Categories** become path prefixes in search results (e.g., `ml_frameworks/scikit-learn/...`).
 
-### Importing from a Conda Environment
+### Importing Dependencies
 
 If you already have a `environment.yml`, you can auto-populate `repositories.yml` with the GitHub source repos for your pip dependencies:
 
