@@ -47,7 +47,7 @@ jupyter_examples:
 
 ### Importing Dependencies
 
-If you already have a `environment.yml`, you can auto-populate `repositories.yml` with the GitHub source repos for your pip dependencies:
+If you already have an `environment.yml`, you can auto-populate `repositories.yml` with the GitHub source repos for your pip dependencies:
 
 ```bash
 nancy-brain import-env -f environment.yml
