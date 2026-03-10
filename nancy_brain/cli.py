@@ -235,8 +235,16 @@ def serve(host, port):
     # Add package root to Python path for imports
     sys.path.insert(0, str(package_root))
 
-    # Use the app from the package
-    uvicorn.run("connectors.http_api.app:app", host=host, port=port, reload=False)
+    # Initialize RAG service before starting
+    from connectors.http_api.app import app as fastapi_app, initialize_rag_service
+
+    config_path = Path.cwd() / "config" / "repositories.yml"
+    embeddings_path = Path.cwd() / "knowledge_base" / "embeddings"
+    weights_path = Path.cwd() / "config" / "weights.yaml"
+
+    initialize_rag_service(config_path, embeddings_path, weights_path)
+
+    uvicorn.run(fastapi_app, host=host, port=port, reload=False)
 
 
 @cli.command()
@@ -475,7 +483,7 @@ def ui(port):
     ]
 
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=str(package_root))
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Failed to start Streamlit: {e}")
     except FileNotFoundError:

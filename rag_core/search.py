@@ -65,6 +65,11 @@ class Search:
                     config_path.write_text(config_json_path.read_text(encoding="utf-8"), encoding="utf-8")
                 except Exception:
                     pass
+            if not config_json_path.exists() and config_path.exists():
+                try:
+                    config_json_path.write_text(config_path.read_text(encoding="utf-8"), encoding="utf-8")
+                except Exception:
+                    pass
             logger.info(f"Loading general embeddings from {general_index}")
             self.general_embeddings = Embeddings()
             self.general_embeddings.load(str(general_index))

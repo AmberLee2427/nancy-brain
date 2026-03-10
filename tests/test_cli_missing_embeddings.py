@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 def test_search_missing_embeddings_message(tmp_path, capsys):
     """Running the CLI search when embeddings are missing prints a helpful tip."""
     # Run the CLI search command pointing at a temp embeddings path with no index
-    env = dict(**{})
+    env = os.environ.copy()
     cmd = [
         sys.executable,
         "-m",
