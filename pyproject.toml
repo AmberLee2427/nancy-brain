@@ -33,7 +33,7 @@ dependencies = [
     "bcrypt<4.0.0",
     "python-jose>=3.3.0",
     "anthropic",
-    "chunky-files[tree]>=1.0.0", 
+    "chunky-files[tree]>=2.1.1", 
     "astropy>=4.2",
     "zstandard",
     "accelerate>=0.26.0",
@@ -78,11 +78,18 @@ dev = [
     "bump-my-version>=0.11.0",
     "hatch"
 ]
-pdf = [
-    "tika>=2.6.0",
-    "PyPDF2",
-    "pdfplumber",
-    "pymupdf"
+ocr = [
+    "pymupdf>=1.23.0",
+    "nougat-ocr>=0.1.8",
+]
+ocr-gpu = [
+    "pymupdf>=1.23.0",
+    # DeepSeek OCR model (~7B) downloads at runtime via transformers (already a base dep).
+    # Requires CUDA-enabled torch — install separately:
+    #   pip install torch --index-url https://download.pytorch.org/whl/cu121
+    # GPU is also used automatically for local summaries when CUDA torch is present;
+    # set NB_SUMMARY_MODEL to a larger checkpoint (e.g. Qwen/Qwen2.5-Coder-7B-Instruct)
+    # to improve summary quality on GPU nodes.
 ]
 docs = [
     "mkdocs-material>=9.0.0",

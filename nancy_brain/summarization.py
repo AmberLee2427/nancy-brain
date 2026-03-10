@@ -59,6 +59,8 @@ class SummaryGenerator:
         self.cache_dir = Path(cache_dir)
         self.last_error: Optional[Exception] = None
         self.last_error_type: Optional[str] = None
+        self.last_error: Optional[Exception] = None
+        self.last_error_type: Optional[str] = None
         if self.enabled:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -85,6 +87,8 @@ class SummaryGenerator:
             return None
         if not content or not content.strip():
             return None
+        self.last_error = None
+        self.last_error_type = None
         self.last_error = None
         self.last_error_type = None
         trimmed = self._trim_content(content, allow_extra=bool(repo_readme))
@@ -288,6 +292,10 @@ class SummaryGenerator:
             msg = str(exc).lower()
             if "connection" in msg or "connect" in msg or "timeout" in msg:
                 self.last_error_type = "connection"
+            self.last_error = exc
+            msg = str(exc).lower()
+            if "connection" in msg or "connect" in msg or "timeout" in msg:
+                self.last_error_type = "connection"
             logger.warning("Anthropic summarization failed: %s", exc)
             return None
 
@@ -432,6 +440,8 @@ class SummaryGenerator:
             return {"summary": summary_text.strip(), "weight": weight, "model": "local-Qwen2.5-Coder-0.5B"}
 
         except Exception as e:
+            self.last_error = e
+            self.last_error_type = "local"
             self.last_error = e
             self.last_error_type = "local"
             logger.error(f"Local summarization failed: {e}")

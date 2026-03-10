@@ -94,7 +94,7 @@ def init(project_name):
 @click.option(
     "--summaries/--no-summaries",
     default=None,
-    help="Generate Anthropic summaries during build (defaults to ENABLE_DOC_SUMMARIES env)",
+    help="Generate document summaries during build (local if NB_USE_LOCAL_SUMMARY=true; otherwise Anthropic)",
 )
 @click.option(
     "--batch-size",

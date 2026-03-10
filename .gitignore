@@ -152,6 +152,7 @@ tmp_emb
 test_summary_cache
 tmp*
 test_*
+!tests/test_*.py
 
 # Local stuff
 bot/config/*
