@@ -34,6 +34,8 @@ def test_summary_on_readme(tmp_path):
         repo_name="nancy-brain",
         metadata={"file_type": ".md"},
     )
+    if result is None and summary_gen.last_error_type == "connection":
+        pytest.skip("Anthropic connection unavailable")
     assert result is not None, "Summarizer returned no result"
     assert isinstance(result.summary, str) and result.summary.strip(), "Summary text missing"
     assert isinstance(result.weight, float), "Summary weight missing"

@@ -29,6 +29,8 @@ def test_llm_summary_json_and_weight():
         repo_name="nancy-brain",
         metadata={"file_type": ".py"},
     )
+    if result is None and summary_gen.last_error_type == "connection":
+        pytest.skip("Anthropic connection unavailable")
     assert result is not None, "LLM did not return a result"
 
     # Assert JSON structure
