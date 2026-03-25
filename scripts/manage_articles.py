@@ -6,8 +6,7 @@ This script helps manage journal articles (PDFs) for Nancy's microlensing knowle
 It can process PDF files, extract text, and add them to the embeddings database.
 
 Requirements:
-- Java (for Apache Tika PDF processing)
-- txtai with pipeline extras: pip install txtai[pipeline]
+- Optional OCR extras: pip install nancy-brain[ocr] or nancy-brain[ocr-gpu]
 
 Usage:
     python scripts/manage_articles.py add /path/to/article.pdf
@@ -33,14 +32,21 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from rag_core.service import RAGService
+from nancy_brain.pdf_ocr import PDFOCRResult, extract_pdf_markdown, get_pdf_ocr_backend_status
 
-try:
-    from txtai.pipeline import Textractor
+TXTAI_AVAILABLE = True
 
-    TXTAI_AVAILABLE = True
-except ImportError:
-    TXTAI_AVAILABLE = False
-    Textractor = None
+
+class Textractor:
+    """Compatibility wrapper that now delegates PDF extraction to the OCR pipeline."""
+
+    def __init__(self, *args, cache_dir: Optional[Path] = None, **kwargs):
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.last_result = None
+
+    def __call__(self, pdf_path: str | Path) -> str:
+        self.last_result = extract_pdf_markdown(pdf_path, cache_dir=self.cache_dir)
+        return self.last_result.markdown or ""
 
 
 class ArticleManager:
@@ -59,24 +65,17 @@ class ArticleManager:
         self.knowledge_base_path = knowledge_base_path
         self.articles_path = knowledge_base_path / "raw" / "journal_articles"
         self.articles_path.mkdir(parents=True, exist_ok=True)
+        self.pdf_ocr_cache_dir = self.knowledge_base_path / "cache" / "pdf_ocr"
 
         # Initialize RAG service
         self.rag = RAGService()
 
-        # Initialize textractor for PDF processing
-        try:
-            self.textractor = Textractor(
-                paragraphs=True,
-                minlength=50,  # Minimum paragraph length
-                join=True,  # Join paragraphs
-                sections=True,  # Enable section parsing
-            )
-            print("✅ Textractor initialized with Tika support")
-        except ImportError as e:
-            print(f"❌ Failed to initialize Textractor: {e}")
-            print("💡 Install with: pip install txtai[pipeline]")
-            print("💡 Ensure Java is installed for PDF support")
-            sys.exit(1)
+        self.textractor = Textractor(cache_dir=self.pdf_ocr_cache_dir)
+        backend_status = get_pdf_ocr_backend_status()
+        if backend_status.available:
+            print(f"✅ PDF OCR backend ready: {backend_status.name} ({backend_status.model})")
+        else:
+            print(f"⚠️  PDF OCR backend unavailable: {backend_status.reason}")
 
     def add_article(self, pdf_path: Path, article_id: Optional[str] = None) -> bool:
         """
@@ -110,10 +109,20 @@ class ArticleManager:
             print("🔄 Extracting text from PDF...")
             try:
                 text_content = self.textractor(str(pdf_path))
+                ocr_result = getattr(self.textractor, "last_result", None)
+                if not isinstance(ocr_result, PDFOCRResult):
+                    ocr_result = None
+                text_content = text_content.strip()
+                if ocr_result is not None and ocr_result.warning:
+                    print(f"⚠️  OCR note: {ocr_result.warning}")
                 if not text_content or len(text_content.strip()) < 100:
                     print("❌ Failed to extract meaningful text from PDF")
                     return False
-                print(f"✅ Extracted {len(text_content)} characters")
+                if ocr_result is not None:
+                    cache_state = "hit" if ocr_result.cached else "miss"
+                    print(f"✅ Extracted {len(text_content)} characters with {ocr_result.backend} OCR ({cache_state})")
+                else:
+                    print(f"✅ Extracted {len(text_content)} characters")
             except Exception as e:
                 print(f"❌ Error extracting text: {e}")
                 return False

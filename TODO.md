@@ -125,7 +125,7 @@
   - [ ] Model comparison and benchmarking
   - ✅ Automatic model selection
 - [ ] **PDF Processing: Replace Tika with OCR pipeline**
-  - [ ] Remove Tika-based pipeline (`pdf_utils.py`, `manage_pdf_articles.py`) — it's unreliable and being replaced
+  - [ ] Remove Tika-based pipeline (`pdf_utils.py`, `manage_pdf_articles.py`) — it's unreliable and I hate it
   - [ ] **DeepSeek OCR** as primary backend (GPU, ~7B VLM): PDF pages → images → structured Markdown
   - [ ] **Nougat** (`nougat-ocr`) as CPU fallback (~250M): same image→Markdown pipeline, no GPU required
   - [ ] Install extras: `pip install nancy-brain[ocr]` (nougat + pymupdf) and `[ocr-gpu]` (pymupdf; needs CUDA torch)
@@ -177,13 +177,13 @@
   - ✅ Authentication improvements
 
 ### Hosting
-- [ ] Host a remote MCP server
-- [ ] Actions
-- [ ] Custom GPT
+- [x] Host a remote MCP server
+- [x] Actions
+- [x] Custom GPT
 
 ### Chunking
 - [x] Delegate to a subpackage (`chunky`) — v2.1.0 with forward-merge and tree-sitter `max_chars` fix
-- [ ] **Tree-sitter gap-filling** (Option A): emit non-function spans so 100% of C/C++/Bash/HTML files are indexed (see `chunky/docs/design/TREESITTER_COVERAGE_BUG.md`)
+- [x] **Tree-sitter gap-filling** (Option A): emit non-function spans so 100% of C/C++/Bash/HTML files are indexed (see `chunky/docs/design/TREESITTER_COVERAGE_BUG.md`)
 - [ ] Broader per-language tree-sitter queries (Option B, tracked in `chunky/TODO.md`)
 - [ ] Notebook chunking review
 - [ ] Visual inspection checks once OCR pipeline produces Markdown output
@@ -236,16 +236,16 @@
  * [x] Update MCPRAGAdapter to send auth headers
 
 ### v0.5.0 (Beta testing for user readiness - current)
-- [ ] Working NancyGPT
-- [ ] Adoption instruction for NancyBrain (with actual, live MCP server address) and link to the NancyGPT in the NancyBot Slack home page. 
-- [ ] Debug issues Nancy is experiencing with the NancyBrain MCP.
+- [x] Working NancyGPT (although prox mox is downn RN for some reason)
+- [x] Adoption instruction for NancyBrain (with actual, live MCP server address) and link to the NancyGPT in the NancyBot Slack home page. 
+- [x] Debug issues Nancy is experiencing with the NancyBrain MCP.
   - Retrieve
   - Tree
   - Search
-- [ ] Debug any issues NancyGPT is having with NancyBrain Actions
-- [ ] Finish summary generation for remaining files (~30K files on Unity; use existing cache)
-- [ ] `--repo` CLI option for parallel per-repo builds across cluster nodes
-- [ ] Small-file and data-file summary skipping to reduce compute waste
+- [x] Debug any issues NancyGPT is having with NancyBrain Actions
+- [x] Finish summary generation for remaining files (~30K files on Unity; use existing cache)
+- [x] `--repo` CLI option for parallel per-repo builds across cluster nodes
+- [x] Small-file and data-file summary skipping to reduce compute waste
 - [ ] Pre-process ~30 articles with DeepSeek OCR on GPU node for conference demo
 
 ### v1.0.x (Stable Release)

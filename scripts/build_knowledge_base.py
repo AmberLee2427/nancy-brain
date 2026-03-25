@@ -4,8 +4,6 @@ Orchestrates the full knowledge base build pipeline (cloning, direct txtai index
 """
 
 import os
-
-import warnings
 import sys
 
 # Allow duplicate OpenMP runtime loading when not explicitly configured. This mirrors
@@ -30,6 +28,7 @@ except Exception:
 
 from chunky import ChunkPipeline, ChunkerConfig, Document
 from nancy_brain.chunking import strip_chunk_suffix
+from nancy_brain.pdf_ocr import extract_pdf_markdown, get_pdf_ocr_backend_status
 from nancy_brain.summarization import SummaryGenerator
 from scripts.script_utils import is_full_commit_sha as _is_full_commit_sha
 
@@ -51,28 +50,6 @@ if load_dotenv is not None:
 
 # Ensure OpenMP duplicate setting persists after dotenv loads
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-# Add import for direct Tika PDF processing
-# Suppress a noisy deprecation warning coming from tika's use of pkg_resources
-try:
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            category=UserWarning,
-            message=r"pkg_resources is deprecated as an API.*",
-        )
-        import tika
-        from tika import parser as tika_parser
-
-    TIKA_AVAILABLE = True
-except ImportError:
-    TIKA_AVAILABLE = False
-except Exception:
-    # If any other import-time error occurs, disable Tika but continue with fallback methods.
-    TIKA_AVAILABLE = False
-
-# Global flag (fix for previous scoping issue)
-tika_ready = False
 
 # PDF exclusion & thresholds
 MIN_PDF_BYTES = int(os.environ.get("MIN_PDF_BYTES", "5000"))  # skip tiny/image-y PDFs
@@ -215,90 +192,26 @@ PDF_REQUEST_HEADERS = {
     "Accept": "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
 }
 
-# --- Fallback PDF extraction methods (original content) ---
 
-
-def extract_text_fallback(pdf_path):
-    import logging
-
+def process_pdf_with_ocr(pdf_path, cache_dir=None):
     logger = logging.getLogger(__name__)
-    try:
-        import PyPDF2
+    ocr_result = extract_pdf_markdown(pdf_path, cache_dir=cache_dir)
+    content = (ocr_result.markdown or "").strip()
+    if not content:
+        if ocr_result.warning:
+            logger.warning("PDF OCR failed for %s: %s", pdf_path, ocr_result.warning)
+        return None, ocr_result, False
 
-        with open(pdf_path, "rb") as file:
-            reader = PyPDF2.PdfReader(file)
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-            if len(text.strip()) > 100:
-                return text.strip()
-    except Exception:
-        pass
-    try:
-        import pdfplumber
+    if len(content) < MIN_PDF_TEXT_CHARS:
+        logger.debug(
+            "Discarding PDF %s (OCR markdown chars %s < %s)",
+            pdf_path,
+            len(content),
+            MIN_PDF_TEXT_CHARS,
+        )
+        return None, ocr_result, False
 
-        text = ""
-        with pdfplumber.open(pdf_path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-        if len(text.strip()) > 100:
-            return text.strip()
-    except Exception:
-        pass
-    try:
-        import fitz
-
-        doc = fitz.open(str(pdf_path))
-        text = ""
-        for page in doc:
-            text += page.get_text() + "\n"
-        doc.close()
-        if len(text.strip()) > 100:
-            return text.strip()
-    except Exception:
-        pass
-    return None
-
-
-# --- Modified process_pdf_with_fallback with global tika_ready ---
-
-
-def process_pdf_with_fallback(pdf_path, repo_info=None, article_info=None):
-    logger = logging.getLogger(__name__)
-    global tika_ready
-    if TIKA_AVAILABLE and not tika_ready and not SKIP_PDFS:
-        try:
-            os.environ.setdefault("TIKA_CLIENT_TIMEOUT", "60")
-            os.environ.setdefault("TIKA_SERVER_TIMEOUT", "60")
-            os.environ.setdefault("TIKA_STARTUP_TIMEOUT", "120")
-            tika.initVM()
-            tika_ready = True
-            logger.info("✅ Tika VM initialized (lazy) for PDF processing")
-        except Exception as e:
-            logger.warning(f"Failed lazy Tika init: {e}")
-    if TIKA_AVAILABLE and tika_ready and not SKIP_PDFS:
-        try:
-            parsed = tika_parser.from_file(str(pdf_path))
-            content = parsed.get("content", "") if parsed else ""
-            if content and len(content.strip()) > 100:
-                return content.strip(), True
-        except Exception as e:
-            logger.warning(f"Tika processing failed for {pdf_path}: {e}")
-    logger.info(f"Using fallback PDF extraction for {pdf_path}")
-    content = extract_text_fallback(pdf_path)
-    if content:
-        # Enforce minimum extracted chars
-        if len(content) < MIN_PDF_TEXT_CHARS:
-            logger.debug(f"Discarding PDF {pdf_path} (extracted chars {len(content)} < {MIN_PDF_TEXT_CHARS})")
-            return None, False
-        return content, True
-    else:
-        logger.warning(f"All PDF extraction methods failed for {pdf_path}")
-        return None, False
+    return content, ocr_result, True
 
 
 # --- Utility function (unchanged from original) ---
@@ -519,7 +432,7 @@ def clone_repositories(
     return failures
 
 
-# --- Build index (original with early Tika fix) ---
+# --- Build index ---
 
 
 def build_txtai_index(
@@ -555,31 +468,14 @@ def build_txtai_index(
         logger.info(f"Code model: {code_model}")
     if SKIP_PDFS:
         logger.info("SKIP_PDF_PROCESSING enabled; PDF documents will be ignored during build.")
-    global tika_ready
-    pdf_fallback_available = False
-    try:
-        import PyPDF2  # noqa: F401
-
-        pdf_fallback_available = True
-        logger.info("✅ PyPDF2 available as fallback")
-    except Exception:
-        try:
-            import pdfplumber  # noqa: F401
-
-            pdf_fallback_available = True
-            logger.info("✅ pdfplumber available as fallback")
-        except Exception:
-            pass
-    if TIKA_AVAILABLE and not tika_ready and not SKIP_PDFS:
-        try:
-            os.environ.setdefault("TIKA_CLIENT_TIMEOUT", "60")
-            os.environ.setdefault("TIKA_SERVER_TIMEOUT", "60")
-            os.environ.setdefault("TIKA_STARTUP_TIMEOUT", "120")
-            tika.initVM()
-            tika_ready = True
-            logger.info("✅ Tika VM initialized for PDF processing")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Tika VM: {e}. Will use fallback methods if available.")
+    pdf_ocr_status = get_pdf_ocr_backend_status()
+    if not SKIP_PDFS:
+        if pdf_ocr_status.available:
+            logger.info("✅ PDF OCR backend selected: %s (%s)", pdf_ocr_status.name, pdf_ocr_status.model)
+        else:
+            logger.warning(
+                "PDF OCR unavailable; PDFs will be skipped unless OCR extras are installed: %s", pdf_ocr_status.reason
+            )
     try:
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
@@ -699,6 +595,7 @@ def build_txtai_index(
 
     documents = []
     pipeline = ChunkPipeline()
+    pdf_ocr_cache_dir = Path(base_path).parent / "cache" / "pdf_ocr"
     chunk_config = ChunkerConfig(
         max_chars=int(os.environ.get("CHUNKY_MAX_CHARS", "1000")),
         lines_per_chunk=int(os.environ.get("CHUNKY_LINES_PER_CHUNK", "40")),
@@ -924,14 +821,18 @@ def build_txtai_index(
             for pdf_path in pdf_files:
                 try:
                     pdf_candidate_count += 1
-                    content, success = process_pdf_with_fallback(pdf_path, repo_info=repo)
+                    content, ocr_result, success = process_pdf_with_ocr(pdf_path, cache_dir=pdf_ocr_cache_dir)
                     size = pdf_path.stat().st_size if pdf_path.exists() else 0
                     if success and content:
                         relative_path = pdf_path.relative_to(repo_dir)
                         doc_id = f"{cat}/{repo_name}/{relative_path}"
                         metadata = (
-                            f"Source: Repository PDF from {repo['url']}\n"
-                            f"Path: {relative_path}\nType: Repository Document\n\n"
+                            f"# Repository PDF\n\n"
+                            f"- Repository: {repo_name}\n"
+                            f"- Source: {repo['url']}\n"
+                            f"- Path: `{relative_path}`\n"
+                            f"- OCR backend: {ocr_result.backend}\n"
+                            f"- OCR cache: {'hit' if ocr_result.cached else 'miss'}\n\n"
                         )
                         full_content = metadata + content
                         if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
@@ -977,7 +878,8 @@ def build_txtai_index(
                                     summarized_docs.add(doc_id)
                                 elif not failed_due_to_exception:
                                     summary_stats["failures"] += 1
-                        document = Document(path=pdf_path, content=full_content, metadata={"doc_id": doc_id})
+                        markdown_path = Path(f"{pdf_path}.ocr.md")
+                        document = Document(path=markdown_path, content=full_content, metadata={"doc_id": doc_id})
                         chunks = pipeline.chunk_documents([document], config=chunk_config)
                         if not chunks:
                             logger.debug(f"Skipping low-value PDF: {doc_id}")
@@ -990,6 +892,9 @@ def build_txtai_index(
                             meta.setdefault("repository", repo_name)
                             meta.setdefault("pdf_size_bytes", size)
                             meta.setdefault("source_url", repo.get("url"))
+                            meta.setdefault("ocr_backend", ocr_result.backend)
+                            meta.setdefault("ocr_cached", ocr_result.cached)
+                            meta.setdefault("ocr_cache_key", ocr_result.cache_key)
                             documents.append(
                                 (
                                     chunk.chunk_id,
@@ -1003,12 +908,19 @@ def build_txtai_index(
                             "size": size,
                             "chars": len(content),
                             "chunk_count": len(chunks),
+                            "backend": ocr_result.backend,
+                            "cached": ocr_result.cached,
+                            "cache_key": ocr_result.cache_key,
+                            "page_count": ocr_result.page_count,
                         }
                     else:
-                        failures["failed_pdf_files"].append(f"{pdf_path}: No meaningful text extracted")
+                        reason = ocr_result.warning or "No meaningful markdown extracted"
+                        failures["failed_pdf_files"].append(f"{pdf_path}: {reason}")
                         pdf_status[str(pdf_path)] = {
                             "status": "failed_extract",
                             "size": size,
+                            "backend": ocr_result.backend,
+                            "reason": reason,
                         }
                 except Exception as e:
                     failures["failed_pdf_files"].append(f"{pdf_path}: {str(e)}")
@@ -1027,99 +939,111 @@ def build_txtai_index(
             if not pdf_file.exists():
                 failures["skipped_articles"].append(f"{cat}/{article_name}")
                 continue
-            if tika_ready or pdf_fallback_available:
-                try:
-                    pdf_candidate_count += 1
-                    content, success = process_pdf_with_fallback(pdf_file, article_info=article)
-                    if success and content:
-                        doc_id = f"journal_articles/{cat}/{article_name}"
-                        metadata = (
-                            f"Title: {article['description']}\n"
-                            f"Source: {article.get('url', 'Unknown')}\nType: Journal Article\n\n"
-                        )
-                        full_content = metadata + content
-                        if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
-                            if not should_skip_summary(doc_id, full_content, pdf_file):
-                                summary_stats["requests"] += 1
-                                summary_payload = None
-                                failed_due_to_exception = False
-                                try:
-                                    summary_payload = summary_generator.summarize(
-                                        doc_id=doc_id,
-                                        content=full_content,
-                                        repo_name=cat,
-                                        repo_readme=None,
-                                        repo_readme_path=None,
-                                        metadata={"category": cat, "source": "journal_pdf", "article": article_name},
-                                    )
-                                except Exception as exc:
-                                    failed_due_to_exception = True
-                                    summary_stats["failures"] += 1
-                                    logger.warning("Summary generation failed for %s: %s", doc_id, exc)
-                                if summary_payload is not None:
-                                    summary_stats["responses"] += 1
-                                    if summary_payload.cached:
-                                        summary_stats["cached_hits"] += 1
-                                    summary_meta = {
-                                        "source_document": doc_id,
-                                        "category": cat,
-                                        "doc_type": "summary",
-                                        "model": summary_payload.model,
-                                        "cached": summary_payload.cached,
-                                    }
-                                    if summary_payload.repo_readme_path:
-                                        summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
-                                    summary_documents.append(
-                                        (
-                                            f"summaries/{doc_id}",
-                                            summary_payload.summary,
-                                            json.dumps(summary_meta, ensure_ascii=False),
-                                        )
-                                    )
-                                    auto_model_weights[doc_id] = summary_payload.weight
-                                    summarized_docs.add(doc_id)
-                                elif not failed_due_to_exception:
-                                    summary_stats["failures"] += 1
-                        document = Document(path=pdf_file, content=full_content, metadata={"doc_id": doc_id})
-                        chunks = pipeline.chunk_documents([document], config=chunk_config)
-                        if not chunks:
-                            logger.debug(f"Skipping low-value journal PDF: {doc_id}")
-                            failures["skipped_low_value"].append(doc_id)
-                            continue
-                        size_bytes = pdf_file.stat().st_size if pdf_file.exists() else 0
-                        for chunk in chunks:
-                            meta = dict(chunk.metadata)
-                            meta.setdefault("source_document", doc_id)
-                            meta.setdefault("article_name", article_name)
-                            meta.setdefault("category", meta.get("category", "docs"))
-                            meta.setdefault("pdf_size_bytes", size_bytes)
-                            meta.setdefault("source_url", article.get("url"))
-                            documents.append(
-                                (
-                                    chunk.chunk_id,
-                                    chunk.text,
-                                    json.dumps(meta, ensure_ascii=False),
+            try:
+                pdf_candidate_count += 1
+                content, ocr_result, success = process_pdf_with_ocr(pdf_file, cache_dir=pdf_ocr_cache_dir)
+                if success and content:
+                    doc_id = f"journal_articles/{cat}/{article_name}"
+                    metadata = (
+                        f"# Journal Article\n\n"
+                        f"- Title: {article['description']}\n"
+                        f"- Source: {article.get('url', 'Unknown')}\n"
+                        f"- OCR backend: {ocr_result.backend}\n"
+                        f"- OCR cache: {'hit' if ocr_result.cached else 'miss'}\n\n"
+                    )
+                    full_content = metadata + content
+                    if summary_generator is not None and summary_stats["enabled"] and doc_id not in summarized_docs:
+                        if not should_skip_summary(doc_id, full_content, pdf_file):
+                            summary_stats["requests"] += 1
+                            summary_payload = None
+                            failed_due_to_exception = False
+                            try:
+                                summary_payload = summary_generator.summarize(
+                                    doc_id=doc_id,
+                                    content=full_content,
+                                    repo_name=cat,
+                                    repo_readme=None,
+                                    repo_readme_path=None,
+                                    metadata={"category": cat, "source": "journal_pdf", "article": article_name},
                                 )
+                            except Exception as exc:
+                                failed_due_to_exception = True
+                                summary_stats["failures"] += 1
+                                logger.warning("Summary generation failed for %s: %s", doc_id, exc)
+                            if summary_payload is not None:
+                                summary_stats["responses"] += 1
+                                if summary_payload.cached:
+                                    summary_stats["cached_hits"] += 1
+                                summary_meta = {
+                                    "source_document": doc_id,
+                                    "category": cat,
+                                    "doc_type": "summary",
+                                    "model": summary_payload.model,
+                                    "cached": summary_payload.cached,
+                                }
+                                if summary_payload.repo_readme_path:
+                                    summary_meta["repo_readme_path"] = summary_payload.repo_readme_path
+                                summary_documents.append(
+                                    (
+                                        f"summaries/{doc_id}",
+                                        summary_payload.summary,
+                                        json.dumps(summary_meta, ensure_ascii=False),
+                                    )
+                                )
+                                auto_model_weights[doc_id] = summary_payload.weight
+                                summarized_docs.add(doc_id)
+                            elif not failed_due_to_exception:
+                                summary_stats["failures"] += 1
+                    markdown_path = Path(f"{pdf_file}.ocr.md")
+                    document = Document(path=markdown_path, content=full_content, metadata={"doc_id": doc_id})
+                    chunks = pipeline.chunk_documents([document], config=chunk_config)
+                    if not chunks:
+                        logger.debug(f"Skipping low-value journal PDF: {doc_id}")
+                        failures["skipped_low_value"].append(doc_id)
+                        continue
+                    size_bytes = pdf_file.stat().st_size if pdf_file.exists() else 0
+                    for chunk in chunks:
+                        meta = dict(chunk.metadata)
+                        meta.setdefault("source_document", doc_id)
+                        meta.setdefault("article_name", article_name)
+                        meta.setdefault("category", meta.get("category", "docs"))
+                        meta.setdefault("pdf_size_bytes", size_bytes)
+                        meta.setdefault("source_url", article.get("url"))
+                        meta.setdefault("ocr_backend", ocr_result.backend)
+                        meta.setdefault("ocr_cached", ocr_result.cached)
+                        meta.setdefault("ocr_cache_key", ocr_result.cache_key)
+                        documents.append(
+                            (
+                                chunk.chunk_id,
+                                chunk.text,
+                                json.dumps(meta, ensure_ascii=False),
                             )
-                        failures["successful_pdf_files"] += 1
-                        pdf_status[doc_id] = {
-                            "status": "indexed",
-                            "size": size_bytes,
-                            "chars": len(content),
-                            "chunk_count": len(chunks),
-                        }
-                    else:
-                        failures["failed_pdf_files"].append(f"{pdf_file}: No meaningful text extracted")
-                        pdf_status[str(pdf_file)] = {"status": "failed_extract"}
-                except Exception as e:
-                    failures["failed_pdf_files"].append(f"{pdf_file}: {str(e)}")
-                    pdf_status[str(pdf_file)] = {
-                        "status": "error",
-                        "error": str(e)[:120],
+                        )
+                    failures["successful_pdf_files"] += 1
+                    pdf_status[doc_id] = {
+                        "status": "indexed",
+                        "size": size_bytes,
+                        "chars": len(content),
+                        "chunk_count": len(chunks),
+                        "backend": ocr_result.backend,
+                        "cached": ocr_result.cached,
+                        "cache_key": ocr_result.cache_key,
+                        "page_count": ocr_result.page_count,
                     }
-            else:
-                failures["failed_pdf_files"].append(f"{pdf_file}: No PDF processing available")
-                pdf_status[str(pdf_file)] = {"status": "no_processing"}
+                else:
+                    reason = ocr_result.warning or "No meaningful markdown extracted"
+                    failures["failed_pdf_files"].append(f"{pdf_file}: {reason}")
+                    pdf_status[str(pdf_file)] = {
+                        "status": "failed_extract",
+                        "backend": ocr_result.backend,
+                        "reason": reason,
+                    }
+            except Exception as e:
+                failures["failed_pdf_files"].append(f"{pdf_file}: {str(e)}")
+                pdf_status[str(pdf_file)] = {
+                    "status": "error",
+                    "error": str(e)[:120],
+                }
     summary_stats["documents_added"] = len(summary_documents)
     failures["summary_stats"] = summary_stats
     if summary_documents:

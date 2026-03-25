@@ -306,24 +306,21 @@ journal_articles:
     url: https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF
     description: Paczynski (1986) – Gravitational microlensing
 ```
-2. Install Java (for Tika PDF extraction) – macOS:
+2. Install OCR extras:
 ```bash
-brew install openjdk
-export JAVA_HOME="/opt/homebrew/opt/openjdk"
-export PATH="$JAVA_HOME/bin:$PATH"
+pip install -e ".[ocr]"
+# GPU / DeepSeek OCR path
+pip install -e ".[ocr-gpu]"
 ```
-3. (Optional fallback only) Install lightweight PDF libs if you skip Java:
-```bash
-pip install PyPDF2 pdfplumber
-```
-4. Build with articles (explicit):
+3. Build with articles (explicit):
 ```bash
 python scripts/build_knowledge_base.py --config config/repositories.yml --articles-config config/articles.yml
 ```
-5. Keep raw PDFs for inspection: add `--dirty`.
+4. Keep raw PDFs for inspection: add `--dirty`.
 
 Notes:
-- If Java/Tika not available, script attempts fallback extraction (needs PyPDF2/pdfplumber or fitz).
+- The build auto-selects DeepSeek OCR when CUDA is available and the model can be loaded.
+- OCR markdown is cached per PDF content hash under `knowledge_base/cache/pdf_ocr`.
 - Cleanups remove raw PDFs unless `--dirty` supplied.
 - Article docs are indexed under `journal_articles/<category>/<name>`.
 

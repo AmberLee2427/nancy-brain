@@ -33,11 +33,8 @@ python scripts/manage_repositories.py --category jupyter_notebooks
 
 ### **PDF Article Management**
 ```bash
-# List configured PDF articles
-python scripts/manage_pdf_articles.py --list
-
-# Download PDFs by category
-python scripts/manage_pdf_articles.py --category journal_articles
+# Download and index PDFs from config/articles.yml
+python scripts/build_knowledge_base.py --config config/repositories.yml --articles-config config/articles.yml
 
 # Add individual PDFs manually
 python scripts/manage_articles.py add /path/to/paper.pdf
@@ -49,7 +46,6 @@ python scripts/manage_articles.py add /path/to/paper.pdf
 |--------|---------|--------------|
 | `build_knowledge_base.py` | **Main pipeline** | Downloads repos + PDFs, builds embeddings, cleanup |
 | `manage_repositories.py` | Git repository management | Clone, update, list repos from config |
-| `manage_pdf_articles.py` | PDF download management | Download PDFs from URLs like repos |
 | `manage_articles.py` | Individual PDF management | Add single PDFs manually |
 
 ## ⚙️ **Configuration Files**
@@ -100,7 +96,7 @@ roman_mission:
 ### **Integrated Build Process:**
 1. **Download repos** → Clone/update git repositories from `repositories.yml`
 2. **Download PDFs** → Fetch PDF articles from URLs in `articles.yml`  
-3. **Extract text** → Use txtai Textractor + Apache Tika for PDF processing
+3. **OCR to Markdown** → Render PDF pages with PyMuPDF and run DeepSeek OCR (with cache reuse)
 4. **Build embeddings** → Create unified search index with both code and papers
 5. **Cleanup** → Remove raw files, keep only the embeddings
 
@@ -148,10 +144,6 @@ python scripts/build_knowledge_base.py --category journal_articles
 python scripts/manage_repositories.py --clean --dry-run
 python scripts/manage_repositories.py --clean
 
-# Clean up orphaned PDF articles
-python scripts/manage_pdf_articles.py --clean --dry-run
-python scripts/manage_pdf_articles.py --clean
-
 # Manual article management
 python scripts/manage_articles.py list
 python scripts/manage_articles.py add /path/to/new_paper.pdf
@@ -161,13 +153,12 @@ python scripts/manage_articles.py remove "journal_articles/article_name"
 ## 📦 **Dependencies**
 
 ```bash
-# Core requirements (in roman-slack-bot conda env)
-pip install "txtai[pipeline]"  # PDF processing
+# Core requirements (in the nancy-brain env)
+pip install "nancy-brain[ocr-gpu]"  # DeepSeek OCR path
+# or CPU-oriented extras for the future Nougat fallback
+pip install "nancy-brain[ocr]"
 pip install requests          # PDF downloads  
 pip install pyyaml           # Config files
-
-# System requirements
-java -version                # Required for Apache Tika PDF processing
 ```
 
 ## 🐛 **Troubleshooting**
@@ -178,17 +169,17 @@ export KMP_DUPLICATE_LIB_OK=TRUE
 conda activate roman-slack-bot
 ```
 
-### **Tika Server Issues**
-If PDF processing fails with Tika server errors:
+### **OCR Backend Issues**
+If PDF processing fails because OCR is unavailable:
 ```bash
-# Restart and try individual categories
+# Re-run and keep the raw PDFs for inspection
 python scripts/build_knowledge_base.py --category journal_articles --dirty
 ```
 
 ### **PDF Download Issues**
 - Some publisher PDFs require authentication
 - Use stable URLs (arXiv works reliably: `https://arxiv.org/pdf/####.####.pdf`)
-- Test downloads manually with `manage_pdf_articles.py`
+- OCR Markdown is cached under `knowledge_base/cache/pdf_ocr`; deleting a hash entry forces re-processing
 
 ## 🎯 **Integration with Nancy**
 

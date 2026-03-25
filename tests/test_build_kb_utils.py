@@ -1,5 +1,6 @@
 """Additional tests for scripts/build_knowledge_base.py utility functions."""
 
+import json
 import os
 import sys
 import types
@@ -10,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 import requests
 
+from nancy_brain.pdf_ocr import PDFOCRResult
 import scripts.build_knowledge_base as kb_module
 from scripts.build_knowledge_base import (
     is_excluded_pdf,
@@ -17,8 +19,7 @@ from scripts.build_knowledge_base import (
     collect_repo_files,
     emit_progress,
     get_file_type_category,
-    extract_text_fallback,
-    process_pdf_with_fallback,
+    process_pdf_with_ocr,
     download_pdf_articles,
     clone_repositories,
 )
@@ -96,7 +97,8 @@ def test_collect_repo_files_text_files(tmp_path):
     assert len(pdf_files) == 0
 
 
-def test_collect_repo_files_with_pdf(tmp_path):
+def test_collect_repo_files_with_pdf(tmp_path, monkeypatch):
+    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
     (tmp_path / "paper.pdf").write_bytes(b"%PDF-1.4 content")
     text_files, pdf_files = collect_repo_files(tmp_path)
     assert len(pdf_files) == 1
@@ -176,144 +178,60 @@ def test_get_file_type_category_cpp():
 
 
 # ---------------------------------------------------------------------------
-# extract_text_fallback
+# process_pdf_with_ocr
 # ---------------------------------------------------------------------------
 
 
-def test_extract_text_fallback_with_pypdf2(tmp_path):
-    pdf_path = tmp_path / "test.pdf"
-    pdf_path.write_bytes(b"fake pdf")
-
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "Some extracted text content " * 5
-    mock_reader = MagicMock()
-    mock_reader.pages = [mock_page]
-    mock_pdf_reader_class = MagicMock(return_value=mock_reader)
-
-    import types
-
-    fake_pypdf2 = types.ModuleType("PyPDF2")
-    fake_pypdf2.PdfReader = mock_pdf_reader_class
-
-    saved = sys.modules.get("PyPDF2")
-    sys.modules["PyPDF2"] = fake_pypdf2
-    try:
-        result = extract_text_fallback(str(pdf_path))
-    finally:
-        if saved is None:
-            sys.modules.pop("PyPDF2", None)
-        else:
-            sys.modules["PyPDF2"] = saved
-
-    assert result is not None
-    assert len(result) > 100
-
-
-def test_extract_text_fallback_pypdf2_short_text(tmp_path):
-    pdf_path = tmp_path / "short.pdf"
-    pdf_path.write_bytes(b"fake pdf")
-
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "short"
-    mock_reader = MagicMock()
-    mock_reader.pages = [mock_page]
-    mock_pdf_reader_class = MagicMock(return_value=mock_reader)
-
-    import types
-
-    fake_pypdf2 = types.ModuleType("PyPDF2")
-    fake_pypdf2.PdfReader = mock_pdf_reader_class
-
-    # Also ensure pdfplumber fails to avoid fallthrough
-    fake_pdfplumber = types.ModuleType("pdfplumber")
-    fake_pdfplumber.open = MagicMock(side_effect=ImportError("no pdfplumber"))
-
-    # And fitz fails
-    fake_fitz = types.ModuleType("fitz")
-    fake_fitz.open = MagicMock(side_effect=ImportError("no fitz"))
-
-    saved = {k: sys.modules.get(k) for k in ["PyPDF2", "pdfplumber", "fitz"]}
-    sys.modules["PyPDF2"] = fake_pypdf2
-    sys.modules["pdfplumber"] = fake_pdfplumber
-    sys.modules["fitz"] = fake_fitz
-
-    try:
-        result = extract_text_fallback(str(pdf_path))
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
-
-    assert result is None
-
-
-def test_extract_text_fallback_all_fail(tmp_path):
-    """All extraction methods fail -> returns None."""
-    pdf_path = tmp_path / "fail.pdf"
-    pdf_path.write_bytes(b"fake")
-
-    import types
-
-    modules = ["PyPDF2", "pdfplumber", "fitz"]
-    saved = {k: sys.modules.get(k) for k in modules}
-    for mod in modules:
-        fake = types.ModuleType(mod)
-        sys.modules[mod] = fake
-
-    try:
-        result = extract_text_fallback(str(pdf_path))
-    except Exception:
-        result = None
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
-
-    assert result is None
-
-
-# ---------------------------------------------------------------------------
-# process_pdf_with_fallback
-# ---------------------------------------------------------------------------
-
-
-def test_process_pdf_fallback_skip_pdfs(tmp_path, monkeypatch):
-    monkeypatch.setattr(kb_module, "SKIP_PDFS", True)
+def test_process_pdf_with_ocr_unavailable(tmp_path, monkeypatch):
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake pdf content")
-    content, success = process_pdf_with_fallback(pdf_path)
-    # When SKIP_PDFS is set, tika is skipped; rely on fallback
-    # Should return None/False since no fallback libs available
+    mocked_result = PDFOCRResult(
+        markdown=None,
+        backend="none",
+        cached=False,
+        cache_key="abc123",
+        warning="CUDA unavailable",
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result):
+        content, ocr_result, success = process_pdf_with_ocr(pdf_path)
+    assert content is None
     assert isinstance(success, bool)
+    assert ocr_result.warning == "CUDA unavailable"
 
 
-def test_process_pdf_fallback_success(tmp_path, monkeypatch):
+def test_process_pdf_with_ocr_success(tmp_path, monkeypatch):
     pdf_path = tmp_path / "test.pdf"
     pdf_path.write_bytes(b"fake pdf content " * 50)
-
-    monkeypatch.setattr(kb_module, "TIKA_AVAILABLE", False)
-    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
-
-    with patch.object(kb_module, "extract_text_fallback", return_value="extracted text " * 50):
-        content, success = process_pdf_with_fallback(pdf_path)
+    cache_dir = tmp_path / "cache"
+    mocked_result = PDFOCRResult(
+        markdown="extracted markdown " * 50,
+        backend="deepseek",
+        cached=False,
+        cache_key="abc123",
+        model="deepseek-ai/DeepSeek-OCR",
+        page_count=2,
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result) as mock_extract:
+        content, ocr_result, success = process_pdf_with_ocr(pdf_path, cache_dir=cache_dir)
     assert success is True
     assert content is not None
+    assert ocr_result.backend == "deepseek"
+    mock_extract.assert_called_once_with(pdf_path, cache_dir=cache_dir)
 
 
-def test_process_pdf_fallback_content_too_short(tmp_path, monkeypatch):
+def test_process_pdf_with_ocr_content_too_short(tmp_path, monkeypatch):
     pdf_path = tmp_path / "tiny.pdf"
     pdf_path.write_bytes(b"fake pdf")
-
-    monkeypatch.setattr(kb_module, "TIKA_AVAILABLE", False)
-    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
     monkeypatch.setattr(kb_module, "MIN_PDF_TEXT_CHARS", 10000)  # Very high threshold
 
-    with patch.object(kb_module, "extract_text_fallback", return_value="short"):
-        content, success = process_pdf_with_fallback(pdf_path)
+    mocked_result = PDFOCRResult(
+        markdown="short",
+        backend="deepseek",
+        cached=False,
+        cache_key="abc123",
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result):
+        content, _, success = process_pdf_with_ocr(pdf_path)
     assert success is False
 
 
@@ -792,10 +710,11 @@ def test_build_txtai_index_dry_run(monkeypatch, tmp_path):
 
 
 def test_build_txtai_index_with_pdf_file(monkeypatch, tmp_path):
-    """PDF files are processed (fallback to None when no extractor available)."""
+    """PDF files are processed even when OCR produces no markdown."""
     _install_embeddings(monkeypatch)
     monkeypatch.setenv("USE_DUAL_EMBEDDING", "false")
     monkeypatch.setenv("SKIP_PDF_PROCESSING", "")
+    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
 
     config_path = tmp_path / "repositories.yml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -810,13 +729,19 @@ def test_build_txtai_index_with_pdf_file(monkeypatch, tmp_path):
     pdf_path = repo_dir / "report.pdf"
     pdf_path.write_bytes(b"%PDF-1.4 " + b"x" * 10000)
 
-    with patch.object(kb_module, "TIKA_AVAILABLE", False):
-        with patch.object(kb_module, "extract_text_fallback", return_value=None):
-            failures = build_txtai_index(
-                str(config_path),
-                base_path=str(tmp_path / "raw"),
-                embeddings_path=str(tmp_path / "embeddings"),
-            )
+    mocked_result = PDFOCRResult(
+        markdown=None,
+        backend="none",
+        cached=False,
+        cache_key="abc123",
+        warning="OCR unavailable",
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result):
+        failures = build_txtai_index(
+            str(config_path),
+            base_path=str(tmp_path / "raw"),
+            embeddings_path=str(tmp_path / "embeddings"),
+        )
     # Either failed to extract or succeeded
     assert isinstance(failures, dict)
 
@@ -825,6 +750,7 @@ def test_build_txtai_index_with_pdf_success(monkeypatch, tmp_path):
     """PDF files with successful extraction get indexed."""
     _install_embeddings(monkeypatch)
     monkeypatch.setenv("USE_DUAL_EMBEDDING", "false")
+    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
 
     config_path = tmp_path / "repositories.yml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -838,16 +764,27 @@ def test_build_txtai_index_with_pdf_success(monkeypatch, tmp_path):
     pdf_path = repo_dir / "paper.pdf"
     pdf_path.write_bytes(b"%PDF-1.4 " + b"x" * 10000)
 
-    long_content = "This is extracted PDF content. " * 100
-
-    with patch.object(kb_module, "TIKA_AVAILABLE", False):
-        with patch.object(kb_module, "extract_text_fallback", return_value=long_content):
-            failures = build_txtai_index(
-                str(config_path),
-                base_path=str(tmp_path / "raw"),
-                embeddings_path=str(tmp_path / "embeddings"),
-            )
+    mocked_result = PDFOCRResult(
+        markdown="# Extracted PDF\n\n" + ("This is extracted PDF content. " * 100),
+        backend="deepseek",
+        cached=False,
+        cache_key="abc123",
+        model="deepseek-ai/DeepSeek-OCR",
+        page_count=1,
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result):
+        failures = build_txtai_index(
+            str(config_path),
+            base_path=str(tmp_path / "raw"),
+            embeddings_path=str(tmp_path / "embeddings"),
+        )
     assert failures["successful_pdf_files"] >= 1
+    indexed_docs = DummyEmbeddings2.instances[0].indexed
+    pdf_chunks = [doc for doc in indexed_docs if doc[0].startswith("science/pdf-ok-repo/paper.pdf#chunk-")]
+    assert pdf_chunks
+    pdf_metadata = [json.loads(doc[2]) for doc in pdf_chunks]
+    assert any(meta.get("chunk_type") == "markdown" for meta in pdf_metadata)
+    assert all(meta.get("ocr_backend") == "deepseek" for meta in pdf_metadata)
 
 
 def test_build_txtai_index_text_file_exception(monkeypatch, tmp_path):
