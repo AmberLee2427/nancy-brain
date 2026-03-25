@@ -275,6 +275,11 @@ from nancy_brain.env_import import (
     _normalize_github_url,
     _extract_github_url,
     _iter_existing_urls,
+    _version_from_pip_spec,
+    _parse_requirements_lines,
+    import_from_requirements,
+    import_from_pyproject,
+    import_from_file,
 )
 
 
@@ -366,3 +371,268 @@ def test_iter_existing_urls_empty_url():
     config = {"science": [{"name": "repo", "url": ""}]}
     urls = _iter_existing_urls(config)
     assert len(urls) == 0
+
+
+# ---------------------------------------------------------------------------
+# Version pinning
+# ---------------------------------------------------------------------------
+
+
+def test_version_from_pip_spec_exact():
+    assert _version_from_pip_spec("numpy==1.24.0") == "1.24.0"
+
+
+def test_version_from_pip_spec_no_pin():
+    assert _version_from_pip_spec("numpy>=1.24.0") is None
+    assert _version_from_pip_spec("numpy") is None
+
+
+def test_pin_versions_adds_ref(tmp_path):
+    env_file = tmp_path / "environment.yml"
+    output_file = tmp_path / "repositories.yml"
+    _write_env(
+        env_file,
+        """
+name: pinned_env
+dependencies:
+  - pip:
+    - mypkg==3.2.1
+""",
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/org/mypkg"}}}
+
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep", return_value=None):
+            result = import_from_env(env_file, category=None, output_path=output_file, pin_versions=True)
+
+    assert result["added"] == 1
+    config = _read_yaml(output_file)
+    entry = config["pinned_env"][0]
+    assert entry["ref"] == "3.2.1"
+
+
+def test_no_pin_versions_no_ref(tmp_path):
+    env_file = tmp_path / "environment.yml"
+    output_file = tmp_path / "repositories.yml"
+    _write_env(
+        env_file,
+        """
+name: unpinned_env
+dependencies:
+  - pip:
+    - mypkg==3.2.1
+""",
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/org/mypkg"}}}
+
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep", return_value=None):
+            result = import_from_env(env_file, category=None, output_path=output_file, pin_versions=False)
+
+    assert result["added"] == 1
+    config = _read_yaml(output_file)
+    entry = config["unpinned_env"][0]
+    assert "ref" not in entry
+
+
+# ---------------------------------------------------------------------------
+# requirements.txt
+# ---------------------------------------------------------------------------
+
+
+def test_parse_requirements_lines_basic():
+    lines = [
+        "numpy==1.24.0",
+        "scipy>=1.10",
+        "# this is a comment",
+        "",
+        "-r other.txt",
+        "--extra-index-url https://example.com",
+        "requests",
+    ]
+    result = _parse_requirements_lines(lines)
+    assert result == ["numpy==1.24.0", "scipy>=1.10", "requests"]
+
+
+def test_parse_requirements_lines_inline_comment():
+    lines = ["numpy==1.24.0  # pinned for stability"]
+    result = _parse_requirements_lines(lines)
+    assert result == ["numpy==1.24.0"]
+
+
+def test_requirements_txt_import(tmp_path):
+    req_file = tmp_path / "requirements.txt"
+    output_file = tmp_path / "repositories.yml"
+    req_file.write_text("numpy==1.24.0\nscipy>=1.10\n", encoding="utf-8")
+
+    responses = [
+        MockResponse({"info": {"project_urls": {"Source": "https://github.com/numpy/numpy"}}}),
+        MockResponse({"info": {"project_urls": {"Source": "https://github.com/scipy/scipy"}}}),
+    ]
+
+    with patch("nancy_brain.env_import.requests.get", side_effect=responses):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_requirements(req_file, category=None, output_path=output_file)
+
+    assert result["added"] == 2
+    config = _read_yaml(output_file)
+    # Default category = stem of filename
+    assert "requirements" in config
+
+
+def test_requirements_txt_pin_versions(tmp_path):
+    req_file = tmp_path / "requirements.txt"
+    output_file = tmp_path / "repositories.yml"
+    req_file.write_text("numpy==1.24.0\n", encoding="utf-8")
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/numpy/numpy"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_requirements(req_file, category=None, output_path=output_file, pin_versions=True)
+
+    assert result["added"] == 1
+    entry = _read_yaml(output_file)["requirements"][0]
+    assert entry["ref"] == "1.24.0"
+
+
+# ---------------------------------------------------------------------------
+# pyproject.toml
+# ---------------------------------------------------------------------------
+
+
+def _write_pyproject(path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+
+
+def test_pyproject_pep621_import(tmp_path):
+    toml_file = tmp_path / "pyproject.toml"
+    output_file = tmp_path / "repositories.yml"
+    _write_pyproject(
+        toml_file,
+        '[project]\nname = "myproject"\ndependencies = ["requests==2.31.0"]\n',
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/psf/requests"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_pyproject(toml_file, category=None, output_path=output_file)
+
+    assert result["added"] == 1
+    config = _read_yaml(output_file)
+    # Category should be the project name
+    assert "myproject" in config
+
+
+def test_pyproject_pep621_pin_versions(tmp_path):
+    toml_file = tmp_path / "pyproject.toml"
+    output_file = tmp_path / "repositories.yml"
+    _write_pyproject(
+        toml_file,
+        '[project]\nname = "myproject"\ndependencies = ["requests==2.31.0"]\n',
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/psf/requests"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_pyproject(toml_file, category=None, output_path=output_file, pin_versions=True)
+
+    assert result["added"] == 1
+    entry = _read_yaml(output_file)["myproject"][0]
+    assert entry["ref"] == "2.31.0"
+
+
+def test_pyproject_poetry_import(tmp_path):
+    toml_file = tmp_path / "pyproject.toml"
+    output_file = tmp_path / "repositories.yml"
+    _write_pyproject(
+        toml_file,
+        '[tool.poetry]\nname = "mypoetryproject"\n\n'
+        '[tool.poetry.dependencies]\npython = "^3.11"\nnumpy = "^1.24.0"\n',
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/numpy/numpy"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_pyproject(toml_file, category=None, output_path=output_file)
+
+    assert result["added"] == 1
+    config = _read_yaml(output_file)
+    assert "mypoetryproject" in config
+
+
+def test_pyproject_poetry_python_skipped(tmp_path):
+    """The 'python' dependency entry in Poetry config should be silently skipped."""
+    toml_file = tmp_path / "pyproject.toml"
+    output_file = tmp_path / "repositories.yml"
+    _write_pyproject(
+        toml_file,
+        '[tool.poetry]\nname = "proj"\n\n' '[tool.poetry.dependencies]\npython = "^3.11"\n',
+    )
+
+    with patch("nancy_brain.env_import.requests.get") as mock_get:
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_pyproject(toml_file, category=None, output_path=output_file)
+
+    mock_get.assert_not_called()
+    assert result["added"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Auto-detect dispatcher
+# ---------------------------------------------------------------------------
+
+
+def test_auto_detect_conda_env(tmp_path):
+    env_file = tmp_path / "environment.yml"
+    output_file = tmp_path / "repositories.yml"
+    _write_env(
+        env_file,
+        "name: myenv\ndependencies:\n  - pip:\n    - somepkg\n",
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/org/somepkg"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_file(env_file, output_path=output_file)
+
+    assert result["added"] == 1
+
+
+def test_auto_detect_requirements_txt(tmp_path):
+    req_file = tmp_path / "requirements.txt"
+    output_file = tmp_path / "repositories.yml"
+    req_file.write_text("somepkg==1.0.0\n", encoding="utf-8")
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/org/somepkg"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_file(req_file, output_path=output_file)
+
+    assert result["added"] == 1
+
+
+def test_auto_detect_pyproject_toml(tmp_path):
+    toml_file = tmp_path / "pyproject.toml"
+    output_file = tmp_path / "repositories.yml"
+    _write_pyproject(
+        toml_file,
+        '[project]\nname = "p"\ndependencies = ["somepkg==1.0.0"]\n',
+    )
+
+    payload = {"info": {"project_urls": {"Source": "https://github.com/org/somepkg"}}}
+    with patch("nancy_brain.env_import.requests.get", return_value=MockResponse(payload)):
+        with patch("nancy_brain.env_import.time.sleep"):
+            result = import_from_file(toml_file, output_path=output_file)
+
+    assert result["added"] == 1
+
+
+def test_auto_detect_unknown_raises(tmp_path):
+    import pytest
+
+    unknown = tmp_path / "deps.xyz"
+    unknown.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="Unrecognised file format"):
+        import_from_file(unknown, output_path=tmp_path / "repositories.yml")

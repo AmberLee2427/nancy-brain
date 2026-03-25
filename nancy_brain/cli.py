@@ -252,12 +252,12 @@ def build(
     "env_file",
     required=True,
     type=click.Path(exists=True),
-    help="Path to the conda environment.yml file",
+    help="Dependency file to import: environment.yml, requirements.txt, or pyproject.toml",
 )
 @click.option(
     "--category",
     default=None,
-    help="Override category key (default: conda env name)",
+    help="Override category key (default: derived from file)",
 )
 @click.option(
     "--output",
@@ -265,9 +265,18 @@ def build(
     help="Path to repositories.yml to update (default: config/repositories.yml)",
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be added without writing")
-def import_env(env_file, category, output, dry_run):
-    """Scan a conda environment.yml and add GitHub-backed packages to repositories.yml."""
-    from nancy_brain.env_import import import_from_env
+@click.option(
+    "--pin-versions",
+    is_flag=True,
+    help="Set ref to the exact pinned version (== specs only) for each entry",
+)
+def import_env(env_file, category, output, dry_run, pin_versions):
+    """Scan a dependency file and add GitHub-backed packages to repositories.yml.
+
+    Supported formats: conda environment.yml, requirements.txt / .in, pyproject.toml.
+    Format is detected automatically from the filename.
+    """
+    from nancy_brain.env_import import import_from_file
 
     env_path = Path(env_file)
     output_path = Path(output)
@@ -277,11 +286,12 @@ def import_env(env_file, category, output, dry_run):
         output_path = Path.cwd() / output_path
 
     try:
-        summary = import_from_env(
-            env_file=env_path,
+        summary = import_from_file(
+            file_path=env_path,
             category=category,
             output_path=output_path,
             dry_run=dry_run,
+            pin_versions=pin_versions,
         )
     except Exception as exc:
         click.echo(f"❌ import-env failed: {exc}")

@@ -31,6 +31,38 @@ nancy-brain ui  # Web interface
 nancy-brain search "your research topic"
 ```
 
+## Dependencies Knowledge Base
+
+One powerful use-case for coding agents: build a searchable KB from your project's
+actual dependencies, locked at the exact versions you have installed.  Agents can
+then search the source code of every library they're working with.
+
+```bash
+# Export your current conda environment (includes exact versions)
+conda env export > environment.yml
+
+# Pull the GitHub source for every pip package and pin to your installed version
+nancy-brain import-env -f environment.yml --pin-versions
+
+# Or from a requirements.txt / pyproject.toml — same command, auto-detected
+nancy-brain import-env -f requirements.txt --pin-versions
+nancy-brain import-env -f pyproject.toml  --pin-versions
+
+# Preview without writing
+nancy-brain import-env -f environment.yml --pin-versions --dry-run
+
+# Then build the KB as normal
+nancy-brain build
+```
+
+With `--pin-versions`, each entry in `repositories.yml` gets a `ref` field set
+to the exact version string from the pin (e.g. `ref: "1.24.0"`), so the cloned
+source matches what you have in your environment.
+
+!!! tip
+    `conda list --export > requirements.txt` gives a flat, pip-style lockfile
+    that also works with `import-env`.
+
 ## Core Workflows
 
 ### Literature Review
