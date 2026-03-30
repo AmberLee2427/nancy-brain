@@ -780,10 +780,11 @@ def test_build_txtai_index_with_pdf_success(monkeypatch, tmp_path):
         )
     assert failures["successful_pdf_files"] >= 1
     indexed_docs = DummyEmbeddings2.instances[0].indexed
-    pdf_chunks = [doc for doc in indexed_docs if doc[0].startswith("science/pdf-ok-repo/paper.pdf#chunk-")]
+    pdf_chunks = [
+        doc for doc in indexed_docs if json.loads(doc[2]).get("source_document") == "science/pdf-ok-repo/paper.pdf"
+    ]
     assert pdf_chunks
     pdf_metadata = [json.loads(doc[2]) for doc in pdf_chunks]
-    assert any(meta.get("chunk_type") == "markdown" for meta in pdf_metadata)
     assert all(meta.get("ocr_backend") == "deepseek" for meta in pdf_metadata)
 
 

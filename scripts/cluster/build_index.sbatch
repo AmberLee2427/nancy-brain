@@ -22,7 +22,9 @@ mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load mamba
-source activate ~/envs/nancy-brain
+eval "$(mamba shell hook --shell bash)"
+ENV_PREFIX="${ENV_PREFIX:-$HOME/envs/nancy-brain}"
+mamba activate "$ENV_PREFIX"
 
 # Summaries are cached; tell the builder to use them but not regenerate.
 export NB_USE_LOCAL_SUMMARY="true"
@@ -34,8 +36,12 @@ date
 
 # ── Build the full index ──────────────────────────────────────────────────────
 # --summaries: load cached summaries into document metadata.
-# Raw repos and article PDFs should still be present (Phase 1 used --dirty).
-nancy-brain build --summaries
+# Raw repos and article PDFs should still be present (GPU warm jobs used --dirty).
+BUILD_CMD=(nancy-brain build --summaries)
+if [[ -f config/articles.yml ]]; then
+    BUILD_CMD+=(--articles-config config/articles.yml)
+fi
+"${BUILD_CMD[@]}"
 
 echo "=== Index build complete ==="
 date

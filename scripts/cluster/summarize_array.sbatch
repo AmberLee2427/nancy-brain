@@ -24,7 +24,9 @@ mkdir -p logs
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load mamba
-source activate ~/envs/nancy-brain
+eval "$(mamba shell hook --shell bash)"
+ENV_PREFIX="${ENV_PREFIX:-$HOME/envs/nancy-brain}"
+mamba activate "$ENV_PREFIX"
 
 # Larger summary model; the 0.5B default is too small for good code summaries.
 export NB_SUMMARY_MODEL="${NB_SUMMARY_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"

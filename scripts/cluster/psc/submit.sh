@@ -28,16 +28,31 @@ echo "▶ Submitting Phase 1 (summarize, array 0-$ARRAY_MAX)..."
 P1_JOB=$(sbatch --parsable "$SBATCH")
 echo "  Phase 1 job ID: $P1_JOB"
 
+ARTICLE_JOB=""
+if [[ -f config/articles.yml ]]; then
+    echo ""
+    echo "▶ Submitting article OCR warm job..."
+    ARTICLE_JOB=$(sbatch --parsable scripts/cluster/psc/warm_articles.sbatch)
+    echo "  Article warm job ID: $ARTICLE_JOB"
+fi
+
 echo ""
 echo "▶ Submitting Phase 2 (build index, depends on Phase 1)..."
+DEPENDENCY="afterok:$P1_JOB"
+if [[ -n "$ARTICLE_JOB" ]]; then
+    DEPENDENCY="${DEPENDENCY}:$ARTICLE_JOB"
+fi
 P2_JOB=$(sbatch --parsable \
-    --dependency="afterok:$P1_JOB" \
+    --dependency="$DEPENDENCY" \
     scripts/cluster/psc/build_index.sbatch)
 echo "  Phase 2 job ID: $P2_JOB"
 
 echo ""
 echo "Monitor with:  squeue --me"
 echo "Phase 1 logs:  logs/summarize_<task>_<jobid>.out"
+if [[ -n "$ARTICLE_JOB" ]]; then
+    echo "Article log:   logs/warm_articles_$ARTICLE_JOB.out"
+fi
 echo "Phase 2 log:   logs/build_index_$P2_JOB.out"
 echo ""
 echo "Output: knowledge_base/embeddings/"

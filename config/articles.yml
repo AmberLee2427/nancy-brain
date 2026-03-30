@@ -1,4 +1,844 @@
-journal_articles: []
+journal_articles:
+- name: Collaboration_2025_arXiv_2508_20860
+  url: https://arxiv.org/pdf/2508.20860.pdf
+  description: Collaboration (2025) - Euclid preparation. LXXIV. Euclidised observations
+    of Hubble Frontier Fields and CLASH galaxy clusters
+- name: Romao_2025_arXiv_2503_09699
+  url: https://arxiv.org/pdf/2503.09699.pdf
+  description: Romao (2025) - Anomaly Detection to identify Transients in LSST Time
+    Series Data
+- name: Rektsini_2024_arXiv_2407_06689
+  url: https://arxiv.org/pdf/2407.06689.pdf
+  description: Rektsini (2024) - Finding planets via gravitational microlensing
+- name: Koshimoto_2023_arXiv_2303_08279
+  url: https://arxiv.org/pdf/2303.08279.pdf
+  description: Koshimoto (2023) - Terrestrial and Neptune mass free-floating planet
+    candidates from the MOA-II 9-year Galactic Bulge survey
+- name: Specht_2022_arXiv_2203_16959
+  url: https://arxiv.org/pdf/2203.16959.pdf
+  description: 'Specht (2022) - Kepler K2 Campaign 9: II. First space-based discovery
+    of an exoplanet using microlensing'
+- name: Bachelet_2022_arXiv_2202_09475
+  url: https://arxiv.org/pdf/2202.09475.pdf
+  description: 'Bachelet (2022) - Euclid-Roman joint microlensing survey: early mass
+    measurement, free floating planets and exomoons'
+- name: Sahu_2022_arXiv_2201_13296
+  url: https://arxiv.org/pdf/2201.13296.pdf
+  description: Sahu (2022) - An Isolated Stellar-Mass Black Hole Detected Through
+    Astrometric Microlensing
+- name: McDonald_2021_arXiv_2107_02746
+  url: https://arxiv.org/pdf/2107.02746.pdf
+  description: 'McDonald (2021) - Kepler K2 Campaign 9: I. Candidate short-duration
+    events from the first space-based survey for planetary microlensing'
+- name: Johnson_2020_arXiv_2006_10760
+  url: https://arxiv.org/pdf/2006.10760.pdf
+  description: 'Johnson (2020) - Predictions of the Nancy Grace Roman Space Telescope
+    Galactic Exoplanet Survey II: Free-Floating Planet Detection Rates'
+- name: Terry_2019_arXiv_1910_02297
+  url: https://arxiv.org/pdf/1910.02297.pdf
+  description: Terry (2019) - Comparing Observed Stellar Kinematics and Surface Densities
+    in a Low Latitude Bulge Field to Galactic Population Synthesis Models
+- name: Penny_2018_arXiv_1808_02490
+  url: https://arxiv.org/pdf/1808.02490.pdf
+  description: 'Penny (2018) - Predictions of the WFIRST Microlensing Survey I: Bound
+    Planet Detection Rates'
+- name: Suzuki_2018_arXiv_1812_11785
+  url: https://arxiv.org/pdf/1812.11785.pdf
+  description: Suzuki (2018) - Microlensing Results Challenge the Core Accretion Runaway
+    Growth Scenario for Gas Giants
+- name: Birrer_2018_arXiv_1803_09746
+  url: https://arxiv.org/pdf/1803.09746.pdf
+  description: 'Birrer (2018) - Lenstronomy: multi-purpose gravitational lens modelling
+    software package'
+- name: Zang_2018_arXiv_1803_09184
+  url: https://arxiv.org/pdf/1803.09184.pdf
+  description: Zang (2018) - Measurement of Source Star Colors with the K2C9-CFHT
+    Multi-color Microlensing Survey
+- name: Tsapras_2018_arXiv_1810_02691
+  url: https://arxiv.org/pdf/1810.02691.pdf
+  description: Tsapras (2018) - Microlensing Searches for Exoplanets
+- name: Suzuki_2016_arXiv_1612_03939
+  url: https://arxiv.org/pdf/1612.03939.pdf
+  description: 'Suzuki (2016) - The Exoplanet Mass-Ratio Function from the MOA-II
+    Survey: Discovery of a Break and Likely Peak at a Neptune Mass'
+- name: Penny_2013_arXiv_1311_1050
+  url: https://arxiv.org/pdf/1311.1050.pdf
+  description: 'Penny (2013) - Speeding up low-mass planetary microlensing simulations
+    and modelling: the Caustic Region Of INfluence'
+- name: Kopparapu_2014_arXiv_1404_5292
+  url: https://arxiv.org/pdf/1404.5292.pdf
+  description: 'Kopparapu (2014) - Habitable Zones Around Main-Sequence Stars: Dependence
+    on Planetary Mass'
+- name: Gould_2013_arXiv_1310_4208
+  url: https://arxiv.org/pdf/1310.4208.pdf
+  description: Gould (2013) - Kepler-like Multi-Plexing for Mass Production of Microlens
+    Parallaxes
+- name: Gaudi_2012
+  url: https://doi.org/10.1146/annurev-astro-081811-125518
+  description: Gaudi (2012) - Microlensing Surveys for Exoplanets
+- name: Skowron_2011_arXiv_1101_3312
+  url: https://arxiv.org/pdf/1101.3312.pdf
+  description: Skowron (2011) - Binary microlensing event OGLE-2009-BLG-020 gives
+    a verifiable mass, distance and orbit predictions
+- name: Gaudi_2010_arXiv_1002_0332
+  url: https://arxiv.org/pdf/1002.0332.pdf
+  description: Gaudi (2010) - Exoplanetary Microlensing
+- name: Gould_2009_arXiv_0910_1832
+  url: https://arxiv.org/pdf/0910.1832.pdf
+  description: 'Gould (2009) - A Second Method to Photometrically Align Multi-Site
+    Microlensing Light Curves: Source Color in Planetary Event MOA-2007-BLG-192'
+- name: Kerins_2008_arXiv_0805_4626
+  url: https://arxiv.org/pdf/0805.4626.pdf
+  description: Kerins (2008) - High precision microlensing maps of the Galactic bulge
+- name: Dong_2008_arXiv_0809_2997
+  url: https://arxiv.org/pdf/0809.2997.pdf
+  description: 'Dong (2008) - Microlensing Event MOA-2007-BLG-400: Exhuming the Buried
+    Signature of a Cool, Jovian-Mass Planet'
+- name: Dong_2008_arXiv_0804_1354
+  url: https://arxiv.org/pdf/0804.1354.pdf
+  description: Dong (2008) - OGLE-2005-BLG-071Lb, the Most Massive M-Dwarf Planetary
+    Companion?
+- name: Skowron_2008_arXiv_0811_2687
+  url: https://arxiv.org/pdf/0811.2687.pdf
+  description: Skowron (2008) - Repeating microlensing events in the OGLE data
+- name: Dominik_2008_arXiv_0811_4173
+  url: https://arxiv.org/pdf/0811.4173.pdf
+  description: Dominik (2008) - Parameter degeneracies and (un)predictability of gravitational
+    microlensing events
+- name: Rahvar_2008_arXiv_0810_3915
+  url: https://arxiv.org/pdf/0810.3915.pdf
+  description: Rahvar (2008) - Planetary microlensing signals from the orbital motion
+    of the source star around the common barycentre
+- name: Bennett_2009_arXiv_0902_3000
+  url: https://arxiv.org/pdf/0902.3000.pdf
+  description: Bennett (2009) - A Census of Exoplanets in Orbits Beyond 0.5 AU via
+    Space-based Microlensing
+- name: Pejcha_2007_arXiv_0712_2217
+  url: https://arxiv.org/pdf/0712.2217.pdf
+  description: Pejcha (2007) - Extended-Source Effect and Chromaticity in Two-Point-Mass
+    Microlensing
+- name: Han_2008_arXiv_0812_1591
+  url: https://arxiv.org/pdf/0812.1591.pdf
+  description: Han (2008) - Distinguishing between Planetary and Binary Interpretations
+    of Microlensing Central Perturbations under Severe Finite-Source Effect
+- name: Cassan_2008_arXiv_0808_1527
+  url: https://arxiv.org/pdf/0808.1527.pdf
+  description: Cassan (2008) - An alternative parameterisation for binary-lens caustic-crossing
+    events
+- name: Mao_2008_arXiv_0811_0441
+  url: https://arxiv.org/pdf/0811.0441.pdf
+  description: Mao (2008) - Introduction to Gravitational Microlensing
+- name: Sanders_2008_arXiv_0803_0468
+  url: https://arxiv.org/pdf/0803.0468.pdf
+  description: 'Sanders (2008) - MOND and the lensing Fundamental Plane: No need for
+    dark matter on galaxy scales'
+- name: Han_2008_arXiv_0805_2642
+  url: https://arxiv.org/pdf/0805.2642.pdf
+  description: Han (2008) - Microlensing Detections of Moons of Exoplanets
+- name: Bennett_2008_arXiv_0806_0025
+  url: https://arxiv.org/pdf/0806.0025.pdf
+  description: Bennett (2008) - A Low-Mass Planet with a Possible Sub-Stellar-Mass
+    Host in Microlensing Event MOA-2007-BLG-192
+- name: Han_2007_arXiv_0708_1215
+  url: https://arxiv.org/pdf/0708.1215.pdf
+  description: Han (2007) - Near-Field Microlensing from Wide-Field Surveys
+- name: Gould_2008_arXiv_0801_2578
+  url: https://arxiv.org/pdf/0801.2578.pdf
+  description: Gould (2008) - Hexadecapole Approximation in Planetary Microlensing
+- name: Kubas_2007_arXiv_0710_5306
+  url: https://arxiv.org/pdf/0710.5306.pdf
+  description: Kubas (2007) - Limits on additional planetary companions to OGLE-2005-BLG-390L
+- name: Gaudi_2007_arXiv_astro_ph_0703125
+  url: https://arxiv.org/pdf/astro-ph/0703125.pdf
+  description: Gaudi (2007) - Discovery of a Very Bright, Nearby Gravitational Microlensing
+    Event
+- name: Novati_2007_arXiv_0711_3758
+  url: https://arxiv.org/pdf/0711.3758.pdf
+  description: Novati (2007) - Microlensing constraints on the Galactic Bulge Initial
+    Mass Function
+- name: Han_2008_arXiv_0801_4828
+  url: https://arxiv.org/pdf/0801.4828.pdf
+  description: Han (2008) - Microlensing Search for Planets with Two Simultaneously
+    Rising Suns
+- name: Dominik_2008_arXiv_0801_2162
+  url: https://arxiv.org/pdf/0801.2162.pdf
+  description: Dominik (2008) - ARTEMiS (Automated Robotic Terrestrial Exoplanet Microlensing
+    Search) - A possible expert-system based cooperative effort to hunt for planets
+    of Earth mass and below
+- name: Lee_2007_arXiv_0709_1992
+  url: https://arxiv.org/pdf/0709.1992.pdf
+  description: Lee (2007) - Microlensing Detections of Planets in Binary Stellar Systems
+- name: Gaudi_2008_arXiv_0802_1920
+  url: https://arxiv.org/pdf/0802.1920.pdf
+  description: Gaudi (2008) - Discovery of a Jupiter/Saturn Analog with Gravitational
+    Microlensing
+- name: Skowron_2008_arXiv_0802_3704
+  url: https://arxiv.org/pdf/0802.3704.pdf
+  description: Skowron (2008) - Binary Lenses in OGLE III EWS Database. Season 2005
+- name: Kozlowski_2007_arXiv_astro_ph_0701488
+  url: https://arxiv.org/pdf/astro-ph/0701488.pdf
+  description: Kozlowski (2007) - The first direct detection of a gravitational micro-lens
+    toward the Galactic bulge
+- name: Fukui_2007_arXiv_0708_1066
+  url: https://arxiv.org/pdf/0708.1066.pdf
+  description: 'Fukui (2007) - Observation of the first gravitational microlensing
+    event in a sparse stellar field : the Tago event'
+- name: Dominik_2007_arXiv_0706_2566
+  url: https://arxiv.org/pdf/0706.2566.pdf
+  description: Dominik (2007) - An anomaly detector with immediate feedback to hunt
+    for planets of Earth mass and below by microlensing
+- name: Smith_2007_arXiv_0707_0550
+  url: https://arxiv.org/pdf/0707.0550.pdf
+  description: 'Smith (2007) - Blending in Gravitational Microlensing Experiments:
+    Source Confusion And Related Systematics'
+- name: Rattenbury_2007_arXiv_0704_1619
+  url: https://arxiv.org/pdf/0704.1619.pdf
+  description: 'Rattenbury (2007) - Proper Motion Dispersions of Red Clump Giants
+    in the Galactic Bulge: Observations and Model Comparisons'
+- name: Novati_2007_arXiv_0704_1408
+  url: https://arxiv.org/pdf/0704.1408.pdf
+  description: Novati (2007) - Probing MACHOs by observation of M31 pixel lensing
+    with the 1.5m Loiano telescope
+- name: Dominik_2007_arXiv_astro_ph_0703305
+  url: https://arxiv.org/pdf/astro-ph/0703305.pdf
+  description: Dominik (2007) - Adaptive Contouring -- an efficient way to calculate
+    microlensing light curves of extended sources
+- name: Sluse_2007_arXiv_astro_ph_0703030
+  url: https://arxiv.org/pdf/astro-ph/0703030.pdf
+  description: 'Sluse (2007) - Multi-wavelength study of the gravitational lens system
+    RXS J1131-1231: III. Long slit spectroscopy: micro-lensing probes the QSO structure'
+- name: Darnley_2006_arXiv_astro_ph_0612704
+  url: https://arxiv.org/pdf/astro-ph/0612704.pdf
+  description: 'Darnley (2006) - The Angstrom Project Alert System: real-time detection
+    of extragalactic microlensing'
+- name: Bennett_2006_arXiv_astro_ph_0611448
+  url: https://arxiv.org/pdf/astro-ph/0611448.pdf
+  description: Bennett (2006) - Characterization of Gravitational Microlensing Planetary
+    Host Stars
+- name: Ingrosso_2006_arXiv_astro_ph_0610239
+  url: https://arxiv.org/pdf/astro-ph/0610239.pdf
+  description: Ingrosso (2006) - A new analysis of the MEGA M31 microlensing events
+- name: Jaroszynski_2007_arXiv_astro_ph_0701919
+  url: https://arxiv.org/pdf/astro-ph/0701919.pdf
+  description: Jaroszynski (2007) - Binary Lenses in OGLE-III EWS Database. Season
+    2004
+- name: Dobler_2006_arXiv_astro_ph_0608391
+  url: https://arxiv.org/pdf/astro-ph/0608391.pdf
+  description: Dobler (2006) - Microlensing of Lensed Supernovae
+- name: Cassan_2006_arXiv_astro_ph_0609290
+  url: https://arxiv.org/pdf/astro-ph/0609290.pdf
+  description: 'Cassan (2006) - OGLE 2004-BLG-254: a K3 III Galactic Bulge Giant spatially
+    resolved by a single microlens'
+- name: Chung_2005_arXiv_astro_ph_0509622
+  url: https://arxiv.org/pdf/astro-ph/0509622.pdf
+  description: Chung (2005) - The possibility of detecting planets in the Andromeda
+    Galaxy
+- name: Assef_2006_arXiv_astro_ph_0604147
+  url: https://arxiv.org/pdf/astro-ph/0604147.pdf
+  description: Assef (2006) - Removing the Microlensing Blending-Parallax Degeneracy
+    Using Source Variability
+- name: Bennett_2006_arXiv_astro_ph_0606038
+  url: https://arxiv.org/pdf/astro-ph/0606038.pdf
+  description: Bennett (2006) - Identification of the OGLE-2003-BLG-235/MOA-2003-BLG-53
+    Planetary Host Star
+- name: Paraficz_2006_arXiv_astro_ph_0607133
+  url: https://arxiv.org/pdf/astro-ph/0607133.pdf
+  description: Paraficz (2006) - Microlensing variability in time-delay quasars
+- name: Hamadache_2006_arXiv_astro_ph_0601510
+  url: https://arxiv.org/pdf/astro-ph/0601510.pdf
+  description: Hamadache (2006) - Galactic Bulge Microlensing Optical Depth from EROS-2
+- name: Kozlowski_2006_arXiv_astro_ph_0604550
+  url: https://arxiv.org/pdf/astro-ph/0604550.pdf
+  description: 'Kozlowski (2006) - Mapping stellar kinematics across the Galactic
+    bar: HST measurements of proper motions in 35 fields'
+- name: Park_2006_arXiv_astro_ph_0602006
+  url: https://arxiv.org/pdf/astro-ph/0602006.pdf
+  description: Park (2006) - Microlensing Sensitivity to Earth-mass Planets in the
+    Habitable Zone
+- name: Gould_2006_arXiv_astro_ph_0603276
+  url: https://arxiv.org/pdf/astro-ph/0603276.pdf
+  description: Gould (2006) - Microlens OGLE-2005-BLG-169 Implies Cool Neptune-Like
+    Planets are Common
+- name: Wyrzykowski_2006_arXiv_astro_ph_0607134
+  url: https://arxiv.org/pdf/astro-ph/0607134.pdf
+  description: Wyrzykowski (2006) - The Optical Gravitational Lensing Experiment.
+    Variable Baseline Microlensing Events in the Galactic Bulge
+- name: Han_2006_arXiv_astro_ph_0603040
+  url: https://arxiv.org/pdf/astro-ph/0603040.pdf
+  description: Han (2006) - Secure Identification of Free-Floating Planets
+- name: Dong_2005_arXiv_astro_ph_0507079
+  url: https://arxiv.org/pdf/astro-ph/0507079.pdf
+  description: Dong (2005) - Planetary Detection Efficiency of the Magnification 3000
+    Microlensing Event OGLE-2004-BLG-343
+- name: Dominik_2005_arXiv_astro_ph_0507540
+  url: https://arxiv.org/pdf/astro-ph/0507540.pdf
+  description: Dominik (2005) - Stochastical distributions of lens and source properties
+    for observed galactic microlensing events
+- name: Han_2005_arXiv_astro_ph_0510206
+  url: https://arxiv.org/pdf/astro-ph/0510206.pdf
+  description: Han (2005) - Properties of Planetary Caustics in Gravitational Microlensing
+- name: Sumi_2005_arXiv_astro_ph_0502363
+  url: https://arxiv.org/pdf/astro-ph/0502363.pdf
+  description: Sumi (2005) - Microlensing optical depth toward the Galactic Bulge
+    using bright sources from OGLE-II
+- name: Ingrosso_2005_arXiv_astro_ph_0509384
+  url: https://arxiv.org/pdf/astro-ph/0509384.pdf
+  description: Ingrosso (2005) - Monte Carlo analysis of the MEGA microlensing events
+    towards M31
+- name: Gaudi_2005_arXiv_astro_ph_0506426
+  url: https://arxiv.org/pdf/astro-ph/0506426.pdf
+  description: Gaudi (2005) - Astrometric Microlensing Constraints on a Massive Body
+    in the Outer Solar System with Gaia
+- name: Poindexter_2005_arXiv_astro_ph_0506183
+  url: https://arxiv.org/pdf/astro-ph/0506183.pdf
+  description: Poindexter (2005) - Systematic Analysis of 22 Microlensing Parallax
+    Candidates
+- name: Popowski_2004_arXiv_astro_ph_0410319
+  url: https://arxiv.org/pdf/astro-ph/0410319.pdf
+  description: Popowski (2004) - Microlensing Optical Depth towards the Galactic Bulge
+    Using Clump Giants from the MACHO Survey
+- name: Thomas_2004_arXiv_astro_ph_0410341
+  url: https://arxiv.org/pdf/astro-ph/0410341.pdf
+  description: Thomas (2004) - Galactic Bulge Microlensing Events from the MACHO Collaboration
+- name: Wood_2005_arXiv_astro_ph_0507210
+  url: https://arxiv.org/pdf/astro-ph/0507210.pdf
+  description: Wood (2005) - Optical Depths and Timescale Distributions in Galactic
+    Microlensing
+- name: Chung_2005_arXiv_astro_ph_0505363
+  url: https://arxiv.org/pdf/astro-ph/0505363.pdf
+  description: Chung (2005) - Properties of Central Caustics in Planetary Microlensing
+- name: Bennett_2005_arXiv_astro_ph_0501101
+  url: https://arxiv.org/pdf/astro-ph/0501101.pdf
+  description: Bennett (2005) - Photometric Confirmation of MACHO Large Magellanic
+    Cloud Microlensing Events
+- name: Han_2005_arXiv_astro_ph_0503687
+  url: https://arxiv.org/pdf/astro-ph/0503687.pdf
+  description: Han (2005) - Analysis of Microlensing Light Curves Induced by Multiple-Planet
+    Systems
+- name: Rattenbury_2005_arXiv_astro_ph_0506013
+  url: https://arxiv.org/pdf/astro-ph/0506013.pdf
+  description: Rattenbury (2005) - Determination of stellar shape in microlensing
+    event MOA 2002-BLG-33
+- name: Udalski_2005_arXiv_astro_ph_0505451
+  url: https://arxiv.org/pdf/astro-ph/0505451.pdf
+  description: Udalski (2005) - A Jovian-mass Planet in Microlensing Event OGLE-2005-BLG-071
+- name: Bozza_2005_arXiv_astro_ph_0503664
+  url: https://arxiv.org/pdf/astro-ph/0503664.pdf
+  description: Bozza (2005) - Gravitational Lensing of stars in the central arcsecond
+    of our Galaxy
+- name: Jaroszynski_2005_arXiv_astro_ph_0507374
+  url: https://arxiv.org/pdf/astro-ph/0507374.pdf
+  description: Jaroszynski (2005) - Mass Estimates for Some of the Binary Lenses in
+    OGLE III Database
+- name: Han_2004_arXiv_astro_ph_0409589
+  url: https://arxiv.org/pdf/astro-ph/0409589.pdf
+  description: Han (2004) - Microlensing Characterization of Wide-Separation Planets
+- name: Brewer_2005_arXiv_astro_ph_0501202
+  url: https://arxiv.org/pdf/astro-ph/0501202.pdf
+  description: 'Brewer (2005) - When Darwin Met Einstein: Gravitational Lens Inversion
+    with Genetic Algorithms'
+- name: Jiang_2004_arXiv_astro_ph_0404394
+  url: https://arxiv.org/pdf/astro-ph/0404394.pdf
+  description: 'Jiang (2004) - OGLE-2003-BLG-238: Microlensing Mass Estimate of an
+    Isolated Star'
+- name: Yoo_2004_arXiv_astro_ph_0403459
+  url: https://arxiv.org/pdf/astro-ph/0403459.pdf
+  description: 'Yoo (2004) - Constraints on Planetary Companions in the Magnification
+    A=256 Microlensing Event: OGLE-2003-BLG-423'
+- name: Gould_2004_arXiv_astro_ph_0405124
+  url: https://arxiv.org/pdf/astro-ph/0405124.pdf
+  description: Gould (2004) - The Mass of the MACHO-LMC-5 Lens Star
+- name: Dominik_2003_arXiv_astro_ph_0309581
+  url: https://arxiv.org/pdf/astro-ph/0309581.pdf
+  description: Dominik (2003) - Theory and practice of microlensing lightcurves around
+    fold singularities
+- name: Bozza_2004_arXiv_astro_ph_0404526
+  url: https://arxiv.org/pdf/astro-ph/0404526.pdf
+  description: 'Bozza (2004) - Gravitational Lensing by Black Holes: a comprehensive
+    treatment and the case of the star S2'
+- name: Snodgrass_2004_arXiv_astro_ph_0403387
+  url: https://arxiv.org/pdf/astro-ph/0403387.pdf
+  description: Snodgrass (2004) - The abundance of galactic planets from OGLE-III
+    2002 microlensing data
+- name: Jaroszynski_2004_arXiv_astro_ph_0408243
+  url: https://arxiv.org/pdf/astro-ph/0408243.pdf
+  description: Jaroszynski (2004) - Binary Lenses in OGLE-III EWS Database. Seasons
+    2002--2003
+- name: Gould_2003_arXiv_astro_ph_0311548
+  url: https://arxiv.org/pdf/astro-ph/0311548.pdf
+  description: 'Gould (2003) - Resolution of the MACHO-LMC-5 Puzzle: The Jerk-Parallax
+    Microlens Degeneracy'
+- name: Bond_2004_arXiv_astro_ph_0404309
+  url: https://arxiv.org/pdf/astro-ph/0404309.pdf
+  description: 'Bond (2004) - OGLE 2003-BLG-235/MOA 2003-BLG-53: A planetary microlensing
+    event'
+- name: Han_2003_arXiv_astro_ph_0311420
+  url: https://arxiv.org/pdf/astro-ph/0311420.pdf
+  description: 'Han (2003) - Gravitational Microlensing: A Tool for Detecting and
+    Characterizing Free-Floating Planets'
+- name: Yoo_2003_arXiv_astro_ph_0309302
+  url: https://arxiv.org/pdf/astro-ph/0309302.pdf
+  description: 'Yoo (2003) - OGLE-2003-BLG-262: Finite-Source Effects from a Point-Mass
+    Lens'
+- name: Alves_2003_arXiv_astro_ph_0312462
+  url: https://arxiv.org/pdf/astro-ph/0312462.pdf
+  description: 'Alves (2003) - The Stellar Halo in the Large Magellanic Cloud: Mass,
+    Luminosity, and Microlensing Predictions'
+- name: Han_2003_arXiv_astro_ph_0303317
+  url: https://arxiv.org/pdf/astro-ph/0303317.pdf
+  description: Han (2003) - Probing the Spatial Distribution of Extrasolar Planets
+    with Gravitational Microlensing
+- name: Agol_2003_arXiv_astro_ph_0303457
+  url: https://arxiv.org/pdf/astro-ph/0303457.pdf
+  description: Agol (2003) - Microlensing of Large Sources
+- name: Heyrovsky_2003_arXiv_astro_ph_0305346
+  url: https://arxiv.org/pdf/astro-ph/0305346.pdf
+  description: Heyrovsky (2003) - Measuring Stellar Limb Darkening by Gravitational
+    Microlensing
+- name: Tsapras_2003_arXiv_astro_ph_0304284
+  url: https://arxiv.org/pdf/astro-ph/0304284.pdf
+  description: Tsapras (2003) - Microlensing limits on numbers and orbits of extra-solar
+    planets from the 1998-2000 OGLE events
+- name: Gould_2003_arXiv_astro_ph_0304314
+  url: https://arxiv.org/pdf/astro-ph/0304314.pdf
+  description: Gould (2003) - Resolving the Microlens Mass Degeneracy for Earth-Mass
+    Planets
+- name: Afonso_2003_arXiv_astro_ph_0303100
+  url: https://arxiv.org/pdf/astro-ph/0303100.pdf
+  description: Afonso (2003) - Bulge Microlensing Optical Depth from EROS 2 observations
+- name: Holder_2002_arXiv_astro_ph_0209532
+  url: https://arxiv.org/pdf/astro-ph/0209532.pdf
+  description: Holder (2002) - External Shear in Quadruply Imaged Lens Systems
+- name: Udalski_2002_arXiv_astro_ph_0210367
+  url: https://arxiv.org/pdf/astro-ph/0210367.pdf
+  description: Udalski (2002) - The Optical Gravitational Lensing Experiment. Is Interstellar
+    Extinction Toward the Galactic Center Anomalous?
+- name: Rhie_2003_arXiv_astro_ph_0305166
+  url: https://arxiv.org/pdf/astro-ph/0305166.pdf
+  description: Rhie (2003) - n-point Gravitational Lenses with 5(n-1) Images
+- name: Smith_2002_arXiv_astro_ph_0210370
+  url: https://arxiv.org/pdf/astro-ph/0210370.pdf
+  description: Smith (2002) - Acceleration and Parallax Effects in Gravitational Microlensing
+- name: Sahu_2002_arXiv_astro_ph_0210554
+  url: https://arxiv.org/pdf/astro-ph/0210554.pdf
+  description: Sahu (2002) - Near-Field Microlensing and Its Effects on Stellar Transit
+    Observations by Kepler
+- name: Agol_2002_arXiv_astro_ph_0207228
+  url: https://arxiv.org/pdf/astro-ph/0207228.pdf
+  description: Agol (2002) - Occultation and Microlensing
+- name: Gaudi_2002_arXiv_astro_ph_0206162
+  url: https://arxiv.org/pdf/astro-ph/0206162.pdf
+  description: 'Gaudi (2002) - Gravitational Microlensing Near Caustics II: Cusps'
+- name: Bennett_2001_arXiv_astro_ph_0109467
+  url: https://arxiv.org/pdf/astro-ph/0109467.pdf
+  description: Bennett (2001) - Gravitational Microlensing Events Due to Stellar Mass
+    Black Holes
+- name: Beskin_2002_arXiv_astro_ph_0208095
+  url: https://arxiv.org/pdf/astro-ph/0208095.pdf
+  description: Beskin (2002) - Detection of compact objects by means of gravitational
+    lensing in binary systems
+- name: Graff_2002_arXiv_astro_ph_0203313
+  url: https://arxiv.org/pdf/astro-ph/0203313.pdf
+  description: Graff (2002) - Microlens Parallaxes of Binary Lenses Measured from
+    a Satellite
+- name: Holz_2002_arXiv_astro_ph_0209039
+  url: https://arxiv.org/pdf/astro-ph/0209039.pdf
+  description: 'Holz (2002) - Retro-MACHOs: Pi in the sky?'
+- name: Smith_2002_arXiv_astro_ph_0206503
+  url: https://arxiv.org/pdf/astro-ph/0206503.pdf
+  description: 'Smith (2002) - Optical Gravitational Lensing Experiment. OGLE-1999-BUL-19:
+    The First Multi-Peak Parallax Event'
+- name: Hendry_2002_arXiv_astro_ph_0210208
+  url: https://arxiv.org/pdf/astro-ph/0210208.pdf
+  description: Hendry (2002) - The microlensing signatures of starspots
+- name: Rattenbury_2002_arXiv_astro_ph_0204478
+  url: https://arxiv.org/pdf/astro-ph/0204478.pdf
+  description: Rattenbury (2002) - Planetary Microlensing at High Magnification
+- name: Agol_2002_arXiv_astro_ph_0203257
+  url: https://arxiv.org/pdf/astro-ph/0203257.pdf
+  description: Agol (2002) - Finding Black Holes with Microlensing
+- name: Gaudi_2001_arXiv_astro_ph_0112531
+  url: https://arxiv.org/pdf/astro-ph/0112531.pdf
+  description: 'Gaudi (2001) - Gravitational Microlensing Near Caustics I: Folds'
+- name: Asada_2002_arXiv_astro_ph_0203424
+  url: https://arxiv.org/pdf/astro-ph/0203424.pdf
+  description: Asada (2002) - Perturbative approach to the astrometric microlensing
+    due to an extrasolar planet
+- name: Armitage_2002_arXiv_astro_ph_0204001
+  url: https://arxiv.org/pdf/astro-ph/0204001.pdf
+  description: Armitage (2002) - Predictions for the frequency and orbital radii of
+    massive extrasolar planets
+- name: Smith_2001_arXiv_astro_ph_0108214
+  url: https://arxiv.org/pdf/astro-ph/0108214.pdf
+  description: Smith (2001) - Parallax Microlensing Events in the OGLE II Database
+    Toward the Galactic Bulge
+- name: An_2001_arXiv_astro_ph_0110095
+  url: https://arxiv.org/pdf/astro-ph/0110095.pdf
+  description: 'An (2001) - First microlens mass measurement: PLANET photometry of
+    EROS BLG-2000-5'
+- name: Bond_2001_arXiv_astro_ph_0102184
+  url: https://arxiv.org/pdf/astro-ph/0102184.pdf
+  description: Bond (2001) - Study by MOA of extra-solar planets in gravitational
+    microlensing events of high magnification
+- name: Albrow_2002_arXiv_astro_ph_0201256
+  url: https://arxiv.org/pdf/astro-ph/0201256.pdf
+  description: 'Albrow (2002) - A Short, Non-Planetary, Microlensing Anomaly: Observations
+    and Lightcurve Analysis of MACHO 99-BLG-47'
+- name: Honma_2002_arXiv_astro_ph_0201045
+  url: https://arxiv.org/pdf/astro-ph/0201045.pdf
+  description: Honma (2002) - Astrometric Microlensing of Distant Sources due to the
+    Stars in the Galaxy
+- name: Evans_2002_arXiv_astro_ph_0202042
+  url: https://arxiv.org/pdf/astro-ph/0202042.pdf
+  description: Evans (2002) - Microlensing Maps for the Milky Way Galaxy
+- name: Jaroszynski_2002_arXiv_astro_ph_0203476
+  url: https://arxiv.org/pdf/astro-ph/0203476.pdf
+  description: Jaroszynski (2002) - Binary Lenses in OGLE-II 1997-1999 Database. A
+    Preliminary Study
+- name: Bond_2001_arXiv_astro_ph_0111041
+  url: https://arxiv.org/pdf/astro-ph/0111041.pdf
+  description: Bond (2001) - Improving the Prospects for Detecting Extrasolar Planets
+    in Gravitational Microlensing in 2002
+- name: Gould_2001_arXiv_astro_ph_0108296
+  url: https://arxiv.org/pdf/astro-ph/0108296.pdf
+  description: Gould (2001) - Resolving Microlens Blends Using Image Subtraction
+- name: Gaudi_2001_arXiv_astro_ph_0104100
+  url: https://arxiv.org/pdf/astro-ph/0104100.pdf
+  description: 'Gaudi (2001) - Microlensing Constraints on the Frequency of Jupiter-Mass
+    Companions: Analysis of Five Years of PLANET Photometry'
+- name: Bozza_2001_arXiv_astro_ph_0111079
+  url: https://arxiv.org/pdf/astro-ph/0111079.pdf
+  description: Bozza (2001) - Microlensing by Compact Objects associated to Gas Clouds
+- name: Mao_2001_arXiv_astro_ph_0108312
+  url: https://arxiv.org/pdf/astro-ph/0108312.pdf
+  description: 'Mao (2001) - Optical Gravitational Lensing Experiment. OGLE-1999-BUL-32:
+    the Longest Ever Microlensing Event -- Evidence for a Stellar Mass Black Hole?'
+- name: Chaname_2001_arXiv_astro_ph_0102481
+  url: https://arxiv.org/pdf/astro-ph/0102481.pdf
+  description: Chaname (2001) - Microlensing by Stellar Black Holes Around Sgr A*
+- name: An_2001_arXiv_astro_ph_0110068
+  url: https://arxiv.org/pdf/astro-ph/0110068.pdf
+  description: An (2001) - Microlens Mass Measurement using Triple-Peak Events
+- name: Afonso_2001_arXiv_astro_ph_0106231
+  url: https://arxiv.org/pdf/astro-ph/0106231.pdf
+  description: Afonso (2001) - Photometric Constraints on Microlens Spectroscopy of
+    EROS-BLG-2000-5
+- name: Gaudi_2001_arXiv_astro_ph_0105240
+  url: https://arxiv.org/pdf/astro-ph/0105240.pdf
+  description: Gaudi (2001) - Microlensing and the Surface Brightness Profile of the
+    Afterglow Image of GRB 000301C
+- name: Bond_2001_arXiv_astro_ph_0102181
+  url: https://arxiv.org/pdf/astro-ph/0102181.pdf
+  description: Bond (2001) - Real-Time Difference Imaging Analysis of MOA Galactic
+    Bulge Observations During 2000
+- name: Baltz_1999_arXiv_astro_ph_9909509
+  url: https://arxiv.org/pdf/astro-ph/9909509.pdf
+  description: Baltz (1999) - Binary events and extragalactic planets in pixel microlensing
+- name: Delplancke_2001_arXiv_astro_ph_0108178
+  url: https://arxiv.org/pdf/astro-ph/0108178.pdf
+  description: Delplancke (2001) - Resolving gravitational microlensing events with
+    long-baseline optical interferometry. Prospects for the ESO Very Large Telescope
+    Interferometer
+- name: Albrow_2000_arXiv_astro_ph_0008078
+  url: https://arxiv.org/pdf/astro-ph/0008078.pdf
+  description: Albrow (2000) - Limits on the Abundance of Galactic Planets From Five
+    Years of Planet Observations
+- name: Gould_2001_arXiv_astro_ph_0103516
+  url: https://arxiv.org/pdf/astro-ph/0103516.pdf
+  description: Gould (2001) - Applications of Microlensing to Stellar Astrophysics
+- name: Auriere_2001_arXiv_astro_ph_0102080
+  url: https://arxiv.org/pdf/astro-ph/0102080.pdf
+  description: Auriere (2001) - A Short Timescale Candidate Microlensing Event in
+    the POINT-AGAPE Pixel Lensing Survey of M31
+- name: Alexander_2001_arXiv_astro_ph_0102055
+  url: https://arxiv.org/pdf/astro-ph/0102055.pdf
+  description: Alexander (2001) - Pinpointing the massive black hole in the Galactic
+    Center with gravitationally lensed stars
+- name: Alexander_2000_arXiv_astro_ph_0009404
+  url: https://arxiv.org/pdf/astro-ph/0009404.pdf
+  description: Alexander (2000) - Enhanced Microlensing by Stars Around the Black
+    Hole in the Galactic Center
+- name: Granot_2001_arXiv_astro_ph_0101234
+  url: https://arxiv.org/pdf/astro-ph/0101234.pdf
+  description: Granot (2001) - Chromatic Signatures in the Microlensing of GRB Afterglows
+- name: Albrow_2000_arXiv_astro_ph_0011380
+  url: https://arxiv.org/pdf/astro-ph/0011380.pdf
+  description: Albrow (2000) - H-alpha Equivalent Width Variations across the Face
+    of a Microlensed K Giant in the Galactic Bulge
+- name: Albrow_2000_arXiv_astro_ph_0004243
+  url: https://arxiv.org/pdf/astro-ph/0004243.pdf
+  description: 'Albrow (2000) - PLANET observations of microlensing event OGLE-1999-BUL-23:
+    limb darkening measurement of the source star'
+- name: Heyrovsky_1999_arXiv_astro_ph_9902273
+  url: https://arxiv.org/pdf/astro-ph/9902273.pdf
+  description: Heyrovsky (1999) - Probing Red Giant Atmospheres with Gravitational
+    Microlensing
+- name: Gould_2000_arXiv_astro_ph_0001421
+  url: https://arxiv.org/pdf/astro-ph/0001421.pdf
+  description: Gould (2000) - A Natural Formalism for Microlensing
+- name: Saha_2000_arXiv_astro_ph_0006432
+  url: https://arxiv.org/pdf/astro-ph/0006432.pdf
+  description: Saha (2000) - Lensing Degeneracies Revisited
+- name: Han_2000_arXiv_astro_ph_0001490
+  url: https://arxiv.org/pdf/astro-ph/0001490.pdf
+  description: Han (2000) - Detection of Stellar Spots from the Observations of Caustic-Crossing
+    Binary-Lens Gravitational Microlensing Events
+- name: Gould_2000_arXiv_astro_ph_0001193
+  url: https://arxiv.org/pdf/astro-ph/0001193.pdf
+  description: Gould (2000) - Astrometric Resolution of Severely Degenerate Binary
+    Microlensing Events
+- name: Han_1999_arXiv_astro_ph_9911375
+  url: https://arxiv.org/pdf/astro-ph/9911375.pdf
+  description: Han (1999) - Chromaticity of Gravitational Microlensing Events
+- name: Gould_1999_arXiv_astro_ph_9906472
+  url: https://arxiv.org/pdf/astro-ph/9906472.pdf
+  description: Gould (1999) - Measuring the Remnant Mass Function of the Galactic
+    Bulge
+- name: Albrow_1999_arXiv_astro_ph_9910307
+  url: https://arxiv.org/pdf/astro-ph/9910307.pdf
+  description: 'Albrow (1999) - Detection of Rotation in a Binary Microlens: PLANET
+    Photometry of MACHO 97-BLG-41'
+- name: Covone_1999_arXiv_astro_ph_9903285
+  url: https://arxiv.org/pdf/astro-ph/9903285.pdf
+  description: Covone (1999) - Detecting planets around stars in nearby galaxies
+- name: Rhie_1999_arXiv_astro_ph_9905151
+  url: https://arxiv.org/pdf/astro-ph/9905151.pdf
+  description: Rhie (1999) - On Planetary Companions to the MACHO-98-BLG-35 Microlens
+    Star
+- name: Maller_1999_arXiv_astro_ph_9910207
+  url: https://arxiv.org/pdf/astro-ph/9910207.pdf
+  description: Maller (1999) - Breaking the Disk/Halo Degeneracy with Gravitational
+    Lensing
+- name: Wyithe_1999_arXiv_astro_ph_9901339
+  url: https://arxiv.org/pdf/astro-ph/9901339.pdf
+  description: 'Wyithe (1999) - The distribution of microlensed light curve derivatives:
+    the relationship between stellar proper motions and transverse velocity'
+- name: Bozza_1999_arXiv_astro_ph_9910535
+  url: https://arxiv.org/pdf/astro-ph/9910535.pdf
+  description: Bozza (1999) - Caustics in special multiple lenses
+- name: Gaudi_1999_arXiv_astro_ph_9904339
+  url: https://arxiv.org/pdf/astro-ph/9904339.pdf
+  description: Gaudi (1999) - Detection Efficiencies of Microlensing Datasets to Stellar
+    and Planetary Companions
+- name: Han_1999_arXiv_astro_ph_9906225
+  url: https://arxiv.org/pdf/astro-ph/9906225.pdf
+  description: Han (1999) - Astrometric Properties of Gravitational Binary-Microlens
+    Events and Their Applications
+- name: Gould_1999_arXiv_astro_ph_9902374
+  url: https://arxiv.org/pdf/astro-ph/9902374.pdf
+  description: Gould (1999) - A New Argument Against An Intervening Stellar Population
+    Toward the LMC
+- name: Dominik_1999_arXiv_astro_ph_9903014
+  url: https://arxiv.org/pdf/astro-ph/9903014.pdf
+  description: Dominik (1999) - The binary gravitational lens and its extreme cases
+- name: Collaboration_1998_arXiv_astro_ph_9811479
+  url: https://arxiv.org/pdf/astro-ph/9811479.pdf
+  description: 'Collaboration (1998) - Limb-Darkening of a K Giant in the Galactic
+    Bulge: PLANET Photometry of MACHO 97-BLG-28'
+- name: Alcock_1999_arXiv_astro_ph_9903219
+  url: https://arxiv.org/pdf/astro-ph/9903219.pdf
+  description: Alcock (1999) - Difference Image Analysis of Galactic Microlensing
+    II. Microlensing Events
+- name: Safizadeh_1998_arXiv_astro_ph_9811233
+  url: https://arxiv.org/pdf/astro-ph/9811233.pdf
+  description: Safizadeh (1998) - Astrometric Microlensing as a Method of Discovering
+    and Characterizing Extra-Solar Planets
+- name: Lombardi_1999_arXiv_astro_ph_9906115
+  url: https://arxiv.org/pdf/astro-ph/9906115.pdf
+  description: Lombardi (1999) - A fast direct method of mass reconstruction for gravitational
+    lenses
+- name: Alcock_1999_arXiv_astro_ph_9903215
+  url: https://arxiv.org/pdf/astro-ph/9903215.pdf
+  description: Alcock (1999) - Difference Image Analysis of Galactic Microlensing
+    I. Data Analysis
+- name: Alexander_1998_arXiv_astro_ph_9811038
+  url: https://arxiv.org/pdf/astro-ph/9811038.pdf
+  description: Alexander (1998) - Near-Infrared Microlensing of Stars by the Super-Massive
+    Black Hole in the Galactic Center
+- name: Stefano_1998_arXiv_astro_ph_9808075
+  url: https://arxiv.org/pdf/astro-ph/9808075.pdf
+  description: 'Stefano (1998) - A New Channel for the Detection of Planetary Systems
+    Through Microlensing: I. Isolated Events Due to Planet Lenses'
+- name: Stefano_1998_arXiv_astro_ph_9810147
+  url: https://arxiv.org/pdf/astro-ph/9810147.pdf
+  description: 'Stefano (1998) - A New Channel for the Detection of Planetary Systems
+    Through Microlensing: II. Repeating Events'
+- name: Sackett_1998_arXiv_astro_ph_9811269
+  url: https://arxiv.org/pdf/astro-ph/9811269.pdf
+  description: Sackett (1998) - Searching for Unseen Planets via Occultation and Microlensing
+- name: Gondolo_1998_arXiv_astro_ph_9811027
+  url: https://arxiv.org/pdf/astro-ph/9811027.pdf
+  description: Gondolo (1998) - Optical depth evaluation in pixel microlensing
+- name: Peale_1998_arXiv_astro_ph_9806368
+  url: https://arxiv.org/pdf/astro-ph/9806368.pdf
+  description: Peale (1998) - On Microlensing Event Rates and Optical Depth toward
+    the Galactic Center
+- name: Collaboration_1998_arXiv_astro_ph_9807299
+  url: https://arxiv.org/pdf/astro-ph/9807299.pdf
+  description: 'Collaboration (1998) - The 1995 Pilot Campaign of PLANET: Searching
+    for Microlensing Anomalies through Precise, Rapid, Round-the-Clock Monitoring'
+- name: Sahu_1998_arXiv_astro_ph_9810053
+  url: https://arxiv.org/pdf/astro-ph/9810053.pdf
+  description: 'Sahu (1998) - Spectroscopy of MACHO 97-SMC-1: self-lensing within
+    the SMC'
+- name: Han_1998_arXiv_astro_ph_9804273
+  url: https://arxiv.org/pdf/astro-ph/9804273.pdf
+  description: Han (1998) - Where Are the Binary Source Gravitational Microlensing
+    Events? II
+- name: Mao_1998_arXiv_astro_ph_9804045
+  url: https://arxiv.org/pdf/astro-ph/9804045.pdf
+  description: Mao (1998) - Extended Source Effects in Astrometric Gravitational Microlensing
+- name: Gaudi_1998_arXiv_astro_ph_9803282
+  url: https://arxiv.org/pdf/astro-ph/9803282.pdf
+  description: Gaudi (1998) - Microlensing by Multiple Planets in High Magnification
+    Events
+- name: Griest_1997_arXiv_astro_ph_9710342
+  url: https://arxiv.org/pdf/astro-ph/9710342.pdf
+  description: Griest (1997) - The Use of High Magnification Microlensing Events in
+    Discovering Extra-solar Planets
+- name: Goldberg_1997_arXiv_astro_ph_9708172
+  url: https://arxiv.org/pdf/astro-ph/9708172.pdf
+  description: Goldberg (1997) - Using Astrometry to Deblend Microlensing Events
+- name: Graff_1997_arXiv_astro_ph_9704125
+  url: https://arxiv.org/pdf/astro-ph/9704125.pdf
+  description: Graff (1997) - MACHOs, White Dwarfs, and the Age of the Universe
+- name: Paczynski_1997_arXiv_astro_ph_9708155
+  url: https://arxiv.org/pdf/astro-ph/9708155.pdf
+  description: Paczynski (1997) - Gravitational Microlensing with the Space Interferometry
+    Mission
+- name: Goldberg_1997_arXiv_astro_ph_9712262
+  url: https://arxiv.org/pdf/astro-ph/9712262.pdf
+  description: Goldberg (1997) - Astrometric Shifts in the OGLE-1 Microlensing Events
+- name: Alcock_1997_arXiv_astro_ph_9702199
+  url: https://arxiv.org/pdf/astro-ph/9702199.pdf
+  description: 'Alcock (1997) - MACHO Alert 95-30 : First Real-Time Observation of
+    Extended Source Effects in Gravitational Microlensing'
+- name: Collaboration_1997_arXiv_astro_ph_9708190
+  url: https://arxiv.org/pdf/astro-ph/9708190.pdf
+  description: Collaboration (1997) - First detection of a gravitational microlensing
+    candidate towards the Small Magellanic Cloud
+- name: Kofman_1996_arXiv_astro_ph_9608138
+  url: https://arxiv.org/pdf/astro-ph/9608138.pdf
+  description: Kofman (1996) - Statistics of Gravitational Microlensing Magnification.
+    I. Two-Dimensional Lens Distribution
+- name: Heyrovsky_1997_arXiv_astro_ph_9702097
+  url: https://arxiv.org/pdf/astro-ph/9702097.pdf
+  description: Heyrovsky (1997) - Microlensing of an Elliptical Source by a Point
+    Mass
+- name: Han_1997_arXiv_astro_ph_9704212
+  url: https://arxiv.org/pdf/astro-ph/9704212.pdf
+  description: Han (1997) - Correction for Blending Problem in Gravitational Microlensing
+    Events by Using Hubble Space Telescope
+- name: Gaudi_1996_arXiv_astro_ph_9610123
+  url: https://arxiv.org/pdf/astro-ph/9610123.pdf
+  description: Gaudi (1996) - Planet Parameters in Microlensing Events
+- name: Bissantz_1996_arXiv_astro_ph_9612026
+  url: https://arxiv.org/pdf/astro-ph/9612026.pdf
+  description: Bissantz (1996) - Microlensing Optical Depth of the COBE Bulge
+- name: Gould_1996_arXiv_astro_ph_9611057
+  url: https://arxiv.org/pdf/astro-ph/9611057.pdf
+  description: Gould (1996) - Measuring the Rotation Speed of Giant Stars From Gravitational
+    Microlensing
+- name: Han_1996_arXiv_astro_ph_9608008
+  url: https://arxiv.org/pdf/astro-ph/9608008.pdf
+  description: Han (1996) - The Effects of Amplification Bias in Gravitational Microlensing
+    Experiments
+- name: Buchalter_1996_arXiv_astro_ph_9604144
+  url: https://arxiv.org/pdf/astro-ph/9604144.pdf
+  description: Buchalter (1996) - Parallax-Shifted Microlensing Events from Ground-Based
+    Observations of the Galactic Bulge
+- name: Gaudi_1996_arXiv_astro_ph_9606104
+  url: https://arxiv.org/pdf/astro-ph/9606104.pdf
+  description: Gaudi (1996) - Detection Rates for Close Binaries Via Microlensing
+- name: Han_1996_arXiv_astro_ph_9604031
+  url: https://arxiv.org/pdf/astro-ph/9604031.pdf
+  description: Han (1996) - Einstein Radii from Binary Lensing Events
+- name: Alard_1996_arXiv_astro_ph_9609165
+  url: https://arxiv.org/pdf/astro-ph/9609165.pdf
+  description: Alard (1996) - Lensing of unresolved stars towards the Galactic Bulge
+- name: Alcock_1995_arXiv_astro_ph_9512146
+  url: https://arxiv.org/pdf/astro-ph/9512146.pdf
+  description: 'Alcock (1995) - The MACHO Project: 45 Candidate Microlensing Events
+    from the First Year Galactic Bulge Data'
+- name: Gaudi_1996_arXiv_astro_ph_9601030
+  url: https://arxiv.org/pdf/astro-ph/9601030.pdf
+  description: Gaudi (1996) - Satellite Parallaxes of Lensing Events Towards the Galactic
+    Bulge
+- name: Peng_1996_arXiv_astro_ph_9608096
+  url: https://arxiv.org/pdf/astro-ph/9608096.pdf
+  description: Peng (1996) - A Study into the Feasibility of Obtaining Finite Source
+    Sizes From MACHO-type Microlensing Light Curves
+- name: Mao_1996_arXiv_astro_ph_9604002
+  url: https://arxiv.org/pdf/astro-ph/9604002.pdf
+  description: Mao (1996) - Mass Determination With Gravitational Microlensing
+- name: Tomaney_1996_arXiv_astro_ph_9610066
+  url: https://arxiv.org/pdf/astro-ph/9610066.pdf
+  description: Tomaney (1996) - Expanding the Realm of Microlensing Surveys with Difference
+    Image Photometry
+- name: Bennett_1996_arXiv_astro_ph_9603158
+  url: https://arxiv.org/pdf/astro-ph/9603158.pdf
+  description: Bennett (1996) - Detecting Earth-Mass Planets with Gravitational Microlensing
+- name: Gould_1995_arXiv_astro_ph_9509009
+  url: https://arxiv.org/pdf/astro-ph/9509009.pdf
+  description: Gould (1995) - Theory of Pixel Lensing
+- name: Miralda_Escude_1996_arXiv_astro_ph_9605138
+  url: https://arxiv.org/pdf/astro-ph/9605138.pdf
+  description: Miralda-Escude (1996) - Microlensing Events from Measurements of the
+    Deflection Angle
+- name: Paczynski_1996_arXiv_astro_ph_9606060
+  url: https://arxiv.org/pdf/astro-ph/9606060.pdf
+  description: Paczynski (1996) - The Masses of Nearby Dwarfs and Brown Dwarfs with
+    the HST
+- name: Paczynski_1996_arXiv_astro_ph_9604011
+  url: https://arxiv.org/pdf/astro-ph/9604011.pdf
+  description: Paczynski (1996) - Gravitational Microlensing in the Local Group
+- name: Walker_1995
+  url: https://doi.org/10.1086/176367
+  description: Walker (1995) - Microlensed Image Motions
+- name: Miyamoto_1995
+  url: https://doi.org/10.1086/117616
+  description: Miyamoto (1995) - Astrometry for Determining the MACHO Mass and Trajectory
+- name: Wambsganss_1995_arXiv_astro_ph_9503035
+  url: https://arxiv.org/pdf/astro-ph/9503035.pdf
+  description: 'Wambsganss (1995) - Gravitational Microlensing by Random Motion of
+    Stars: Analysis of Light Curves'
+- name: Han_1994_arXiv_astro_ph_9410052
+  url: https://arxiv.org/pdf/astro-ph/9410052.pdf
+  description: Han (1994) - Statistics Of Microlensing Optical Depth
+- name: Gould_1994_arXiv_astro_ph_9409065
+  url: https://arxiv.org/pdf/astro-ph/9409065.pdf
+  description: Gould (1994) - A New Macho Search Strategy
+- name: Gould_1994_arXiv_astro_ph_9409057
+  url: https://arxiv.org/pdf/astro-ph/9409057.pdf
+  description: Gould (1994) - Self-Lensing By Binaries
+- name: Paczynski_1995_arXiv_astro_ph_9504099
+  url: https://arxiv.org/pdf/astro-ph/9504099.pdf
+  description: Paczynski (1995) - The Masses of Nearby Dwarfs can be Determined with
+    Gravitational Microlensing
+- name: Gould_1994_arXiv_astro_ph_9406059
+  url: https://arxiv.org/pdf/astro-ph/9406059.pdf
+  description: Gould (1994) - Analytic Error Estimates
+- name: Wu_1993_arXiv_astro_ph_9312059
+  url: https://arxiv.org/pdf/astro-ph/9312059.pdf
+  description: Wu (1993) - Gravitational Microlensing by the MACHOs of the LMC
+- name: Witt_1994
+  url: https://doi.org/10.1086/174426
+  description: Witt (1994) - Can Lensed Stars Be Regarded as Pointlike for Microlensing
+    by MACHOs?
+- name: Paczynski_1994_arXiv_astro_ph_9407096
+  url: https://arxiv.org/pdf/astro-ph/9407096.pdf
+  description: Paczynski (1994) - Gravitational Microlensing by the Globular Cluster
+    Stars
+- name: Gould_1992
+  url: https://doi.org/10.1086/171700
+  description: Gould (1992) - Discovering Planetary Systems through Gravitational
+    Microlenses
+- name: Paczynski_1986
+  url: https://doi.org/10.1086/164140
+  description: Paczynski (1986) - Gravitational Microlensing by the Galactic Halo
+- name: Liebes_1964
+  url: https://doi.org/10.1103/PhysRev.133.B835
+  description: Liebes (1964) - Gravitational Lenses
 microlensing_reviews: []
 roman_mission:
 - description: Spergel et al. (2015) - Wide-Field InfrarRed Survey Telescope-Astrophysics

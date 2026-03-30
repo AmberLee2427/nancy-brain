@@ -38,13 +38,13 @@ fi
 conda activate "$ENV_PREFIX"
 
 echo "Installing nancy-brain..."
-pip install -e .
+pip install -e '.[ocr-gpu]'
 
-echo "Replacing CPU torch with CUDA build ($CUDA_TAG)..."
-pip install torch --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"
+echo "Replacing CPU torch + torchvision with CUDA build ($CUDA_TAG)..."
+pip install torch torchvision --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"
 
 echo ""
 echo "Verify:"
-python -c "import nancy_brain; import torch; print('nancy_brain OK'); print('torch:', torch.__version__)"
+python -c "import addict, easydict, einops, fitz, matplotlib, nancy_brain, torch, torchvision, transformers, tokenizers; from transformers.models.llama.modeling_llama import LlamaFlashAttention2; print('nancy_brain OK'); print('fitz OK'); print('torch:', torch.__version__, '| CUDA build:', torch.version.cuda); print('torchvision:', torchvision.__version__); print('transformers:', transformers.__version__, '| tokenizers:', tokenizers.__version__); print('LlamaFlashAttention2 OK:', LlamaFlashAttention2.__name__)"
 
 echo "Done."

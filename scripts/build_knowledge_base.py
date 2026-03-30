@@ -135,6 +135,10 @@ SUMMARY_SKIP_EXTENSIONS = {
 }
 
 
+def env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def is_excluded_pdf(path: str) -> bool:
     p = str(path)
     return any(token in p for token in EXCLUDE_PDF_SUBSTRINGS)
@@ -1398,11 +1402,17 @@ if __name__ == "__main__":
             # without writing the embeddings index. For parallel cluster
             # pre-warming; pair with --repo to process one repo per node.
             if summaries_only and summary_generator is not None:
+                if articles_config_path and os.path.exists(articles_config_path):
+                    emit_progress(30, stage="articles", detail="Downloading PDF articles")
+                    all_failures["articles"] = download_pdf_articles(
+                        articles_config_path, base_path, dry_run, category, force_update
+                    )
+                    emit_progress(50, stage="articles_done", detail="PDF articles downloaded")
                 logger.info(
                     "--summaries-only: warming summary cache for %s",
                     repo_filter or "all repos",
                 )
-                build_txtai_index(
+                all_failures["indexing"] = build_txtai_index(
                     config_path,
                     articles_config_path,
                     base_path,
@@ -1412,6 +1422,21 @@ if __name__ == "__main__":
                     summary_generator=summary_generator,
                     repo_filter=repo_filter,
                 )
+                print_pipeline_summary(all_failures, dry_run)
+                if env_truthy("NB_STRICT_SUMMARY_WARM"):
+                    indexing_failures = all_failures.get("indexing") or {}
+                    failed_texts = indexing_failures.get("failed_text_files") or []
+                    failed_pdfs = indexing_failures.get("failed_pdf_files") or []
+                    successful_texts = indexing_failures.get("successful_text_files", 0)
+                    successful_pdfs = indexing_failures.get("successful_pdf_files", 0)
+                    if failed_texts or failed_pdfs or (successful_texts + successful_pdfs) == 0:
+                        logger.error(
+                            "Strict summary warm failed: %s text failures, %s PDF failures, %s successful documents.",
+                            len(failed_texts),
+                            len(failed_pdfs),
+                            successful_texts + successful_pdfs,
+                        )
+                        sys.exit(1)
                 emit_progress(100, stage="done", detail="Summary cache warmed")
                 return
 

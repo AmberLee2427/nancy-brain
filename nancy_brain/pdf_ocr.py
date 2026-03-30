@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +25,13 @@ DEFAULT_IMAGE_SIZE = int(os.environ.get("NB_PDF_OCR_DEEPSEEK_IMAGE_SIZE", "640")
 DEFAULT_CROP_MODE = os.environ.get("NB_PDF_OCR_DEEPSEEK_CROP_MODE", "true").strip().lower() == "true"
 DEFAULT_BACKEND = os.environ.get("NB_PDF_OCR_BACKEND", "auto").strip().lower() or "auto"
 CACHE_VERSION = 1
+DEEPSEEK_RUNTIME_MODULES = {
+    "addict": "addict",
+    "easydict": "easydict",
+    "einops": "einops",
+    "matplotlib": "matplotlib",
+    "torchvision": "torchvision",
+}
 
 
 @dataclass(frozen=True)
@@ -93,12 +101,46 @@ class DeepSeekOCRBackend:
             )
 
         try:
+            import transformers
             from transformers import AutoModel, AutoTokenizer  # noqa: F401
         except Exception as exc:
             return PDFOCRBackendStatus(
                 name=self.name,
                 available=False,
                 reason=f"transformers unavailable: {exc}",
+                model=self.model_name,
+            )
+
+        try:
+            from transformers.models.llama.modeling_llama import LlamaFlashAttention2  # noqa: F401
+        except Exception as exc:
+            tokenizers_version = "unknown"
+            try:
+                import tokenizers
+
+                tokenizers_version = getattr(tokenizers, "__version__", "unknown")
+            except Exception:
+                pass
+            return PDFOCRBackendStatus(
+                name=self.name,
+                available=False,
+                reason=(
+                    "incompatible transformers stack for DeepSeek OCR "
+                    f"(transformers {getattr(transformers, '__version__', 'unknown')}, "
+                    f"tokenizers {tokenizers_version}): {exc}. "
+                    "DeepSeek OCR upstream is tested on transformers==4.46.3 and tokenizers==0.20.3."
+                ),
+                model=self.model_name,
+            )
+
+        missing_modules = [
+            package for module_name, package in DEEPSEEK_RUNTIME_MODULES.items() if find_spec(module_name) is None
+        ]
+        if missing_modules:
+            return PDFOCRBackendStatus(
+                name=self.name,
+                available=False,
+                reason="missing DeepSeek OCR runtime deps: " + ", ".join(missing_modules),
                 model=self.model_name,
             )
 

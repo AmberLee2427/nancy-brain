@@ -1,10 +1,13 @@
 """Tests for nancy_brain.pdf_ocr."""
 
+import importlib.util
+import types
 from pathlib import Path
 from unittest.mock import patch
 
 from nancy_brain.pdf_ocr import (
     PDFOCRBackendStatus,
+    DeepSeekOCRBackend,
     compute_pdf_content_hash,
     extract_pdf_markdown,
 )
@@ -107,3 +110,91 @@ def test_extract_pdf_markdown_uses_cache_without_live_backend(tmp_path):
     assert first.cached is False
     assert second.cached is True
     assert second.markdown == first.markdown
+
+
+def test_deepseek_status_reports_missing_runtime_dependencies(monkeypatch):
+    backend = DeepSeekOCRBackend()
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    original_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name):
+        if name == "torchvision":
+            return None
+        return original_find_spec(name)
+
+    monkeypatch.setattr("nancy_brain.pdf_ocr.find_spec", fake_find_spec)
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.__path__ = []
+    fake_transformers.AutoModel = object()
+    fake_transformers.AutoTokenizer = object()
+    fake_transformers_models = types.ModuleType("transformers.models")
+    fake_transformers_models.__path__ = []
+    fake_transformers_llama = types.ModuleType("transformers.models.llama")
+    fake_transformers_llama.__path__ = []
+    fake_transformers_llama_modeling = types.ModuleType("transformers.models.llama.modeling_llama")
+    fake_transformers_llama_modeling.LlamaFlashAttention2 = object()
+    with patch.dict(
+        "sys.modules",
+        {
+            "torch": FakeTorch(),
+            "transformers": fake_transformers,
+            "transformers.models": fake_transformers_models,
+            "transformers.models.llama": fake_transformers_llama,
+            "transformers.models.llama.modeling_llama": fake_transformers_llama_modeling,
+        },
+    ):
+        status = backend.status()
+
+    assert status.available is False
+    assert status.reason is not None
+    assert status.reason.startswith("missing DeepSeek OCR runtime deps: ")
+    assert "torchvision" in status.reason
+
+
+def test_deepseek_status_reports_transformers_incompatibility(monkeypatch):
+    backend = DeepSeekOCRBackend()
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.__version__ = "5.3.0"
+    fake_transformers.AutoModel = object()
+    fake_transformers.AutoTokenizer = object()
+
+    original_import = __import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tokenizers":
+            fake_tokenizers = types.ModuleType("tokenizers")
+            fake_tokenizers.__version__ = "0.22.0"
+            return fake_tokenizers
+        if name == "transformers.models.llama.modeling_llama":
+            raise ImportError("cannot import name 'LlamaFlashAttention2'")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("nancy_brain.pdf_ocr.find_spec", lambda name: object())
+    with (
+        patch.dict("sys.modules", {"torch": FakeTorch(), "transformers": fake_transformers}),
+        patch("builtins.__import__", side_effect=fake_import),
+    ):
+        status = backend.status()
+
+    assert status.available is False
+    assert status.reason is not None
+    assert "incompatible transformers stack for DeepSeek OCR" in status.reason
+    assert "transformers 5.3.0" in status.reason
+    assert "tokenizers 0.22.0" in status.reason

@@ -29,7 +29,11 @@ echo "=== Phase 2: building unified index ==="
 echo "Node: $(hostname)"
 date
 
-nancy-brain build --summaries
+BUILD_CMD=(nancy-brain build --summaries)
+if [[ -f config/articles.yml ]]; then
+    BUILD_CMD+=(--articles-config config/articles.yml)
+fi
+"${BUILD_CMD[@]}"
 
 echo "=== Index build complete ==="
 date

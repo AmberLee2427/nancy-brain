@@ -167,3 +167,5 @@ docs/_build/
 site/
 
 SLACK.md
+.DS_Store
+*.DS_Store
