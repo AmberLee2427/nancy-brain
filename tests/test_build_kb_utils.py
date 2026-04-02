@@ -190,6 +190,9 @@ def test_process_pdf_with_ocr_unavailable(tmp_path, monkeypatch):
         backend="none",
         cached=False,
         cache_key="abc123",
+        status="needs_ocr",
+        needs_ocr=True,
+        deferred=True,
         warning="CUDA unavailable",
     )
     with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result):
@@ -197,6 +200,7 @@ def test_process_pdf_with_ocr_unavailable(tmp_path, monkeypatch):
     assert content is None
     assert isinstance(success, bool)
     assert ocr_result.warning == "CUDA unavailable"
+    assert ocr_result.needs_ocr is True
 
 
 def test_process_pdf_with_ocr_success(tmp_path, monkeypatch):
@@ -216,7 +220,25 @@ def test_process_pdf_with_ocr_success(tmp_path, monkeypatch):
     assert success is True
     assert content is not None
     assert ocr_result.backend == "deepseek"
-    mock_extract.assert_called_once_with(pdf_path, cache_dir=cache_dir)
+    mock_extract.assert_called_once_with(pdf_path, cache_dir=cache_dir, preferred_backend=None)
+
+
+def test_process_pdf_with_ocr_cache_only_uses_skip_backend(tmp_path):
+    pdf_path = tmp_path / "test.pdf"
+    pdf_path.write_bytes(b"fake pdf content " * 50)
+    mocked_result = PDFOCRResult(
+        markdown="cached markdown " * 50,
+        backend="deepseek",
+        cached=True,
+        cache_key="abc123",
+        status="cached",
+    )
+    with patch.object(kb_module, "extract_pdf_markdown", return_value=mocked_result) as mock_extract:
+        content, ocr_result, success = process_pdf_with_ocr(pdf_path, use_cached_ocr_only=True)
+    assert success is True
+    assert content.startswith("cached markdown")
+    assert ocr_result.cached is True
+    mock_extract.assert_called_once_with(pdf_path, cache_dir=None, preferred_backend="skip")
 
 
 def test_process_pdf_with_ocr_content_too_short(tmp_path, monkeypatch):
@@ -744,6 +766,46 @@ def test_build_txtai_index_with_pdf_file(monkeypatch, tmp_path):
         )
     # Either failed to extract or succeeded
     assert isinstance(failures, dict)
+
+
+def test_build_txtai_index_treats_missing_ocr_as_failure_by_default(monkeypatch, tmp_path):
+    """Default builds should fail PDF indexing when OCR is unavailable."""
+    _install_embeddings(monkeypatch)
+    monkeypatch.setenv("USE_DUAL_EMBEDDING", "false")
+    monkeypatch.setattr(kb_module, "SKIP_PDFS", False)
+
+    config_path = tmp_path / "repositories.yml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        "science:\n  - name: pdf-repo\n    url: https://example.com/repo.git\n",
+        encoding="utf-8",
+    )
+    repo_dir = tmp_path / "raw" / "science" / "pdf-repo"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = repo_dir / "report.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4 " + b"x" * 10000)
+
+    mocked_result = PDFOCRResult(
+        markdown=None,
+        backend="none",
+        cached=False,
+        cache_key="abc123",
+        status="needs_ocr",
+        needs_ocr=True,
+        deferred=True,
+        warning="OCR unavailable",
+    )
+    with (
+        patch.object(kb_module, "collect_repo_files", return_value=([], [pdf_path])),
+        patch.object(kb_module, "process_pdf_with_ocr", return_value=(None, mocked_result, False)),
+    ):
+        failures = build_txtai_index(
+            str(config_path),
+            base_path=str(tmp_path / "raw"),
+            embeddings_path=str(tmp_path / "embeddings"),
+        )
+    assert failures["failed_pdf_files"]
+    assert not failures["deferred_pdf_files"]
 
 
 def test_build_txtai_index_with_pdf_success(monkeypatch, tmp_path):

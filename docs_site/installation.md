@@ -8,9 +8,19 @@
 
 ## Install from PyPI
 
+The default install is the **core runtime**. It is designed to run on CPU-only
+machines and does not require GPU OCR dependencies.
+
 ```bash
 pip install nancy-brain
 ```
+
+This is the recommended install for:
+
+- local development on laptops and desktops
+- MCP hosts
+- CPU-only servers
+- scoped rebuilds that consume cached OCR artifacts
 
 ## Verify Installation
 
@@ -18,6 +28,32 @@ pip install nancy-brain
 nancy-brain --version
 nancy-brain --help
 ```
+
+## Optional OCR Worker Runtime
+
+PDF OCR runs best as a separate worker env or container.
+
+### CPU OCR Worker
+
+```bash
+pip install "nancy-brain[ocr]"
+```
+
+### GPU OCR Worker
+
+```bash
+pip install "nancy-brain[ocr-gpu]"
+```
+
+Use a dedicated env or container for the OCR worker if you plan to run DeepSeek
+or Nougat. The OCR runtime is intentionally kept separate from the main
+`txtai`-based indexing env.
+
+Typical worker deployments:
+
+- separate conda env on the same machine
+- GPU cluster node
+- Apptainer/Singularity image on HPC
 
 ## Development Setup
 
@@ -28,13 +64,12 @@ If you want to contribute or run from source:
 git clone https://github.com/AmberLee2427/nancy-brain.git
 cd nancy-brain
 
-# Install in development mode with all optional dependencies
-pip install -e ".[dev,docs,pdf]"
+# Install the core development stack
+pip install -e ".[dev,docs]"
 
-# Or install specific sets of dependencies
+# Optional OCR worker envs should be installed separately
 pip install -e ".[dev]"      # Development tools only
 pip install -e ".[docs]"     # Documentation tools only  
-pip install -e ".[pdf]"      # PDF processing only
 
 # Run tests
 pytest
@@ -51,6 +86,11 @@ pytest
 **"CUDA out of memory"**
 - Use CPU-only mode: set `CUDA_VISIBLE_DEVICES=""`
 - Reduce batch size in configuration
+
+**"OCR worker dependency conflicts"**
+- Keep OCR in a separate env or container
+- Do not force the main `txtai` env to use the OCR worker's `transformers` stack
+- Build from cache on the main host with `nancy-brain build --use-cached-ocr-only`
 
 **"Git clone failed"**
 - Check internet connection

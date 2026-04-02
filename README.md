@@ -66,6 +66,9 @@ nancy-brain add-article <url> <name>  # Add PDF articles
 nancy-brain add-new-user <user> <pass>  # Create login credentials
 nancy-brain build                 # Build knowledge base
 nancy-brain build --repo <name>   # Build a single named repository only
+nancy-brain ocr setup             # Install/update the managed local OCR worker
+nancy-brain ocr status            # Inspect the managed local OCR worker
+nancy-brain ocr warm              # Warm cached OCR Markdown for PDFs
 nancy-brain search "query"        # Search knowledge base
 nancy-brain serve                 # Start HTTP API server
 nancy-brain ui                    # Launch web admin interface
@@ -306,27 +309,30 @@ journal_articles:
     url: https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF
     description: Paczynski (1986) – Gravitational microlensing
 ```
-2. Install OCR extras:
+2. Warm OCR artifacts on a worker node or dedicated OCR env:
 ```bash
-pip install -e ".[ocr]"
-# GPU / DeepSeek OCR path
-pip install -e ".[ocr-gpu]"
+nancy-brain ocr setup
+nancy-brain ocr warm --articles-config config/articles.yml
 ```
-3. Build with articles (explicit):
+3. Sync `knowledge_base/cache/pdf_ocr/` back to the machine that will host the MCP server.
+4. Build with articles on the main host:
 ```bash
-python scripts/build_knowledge_base.py --config config/repositories.yml --articles-config config/articles.yml
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
 ```
-4. Keep raw PDFs for inspection: add `--dirty`.
+5. Keep raw PDFs for inspection: add `--dirty`.
 
 Notes:
-- The build auto-selects DeepSeek OCR when CUDA is available and the model can be loaded.
+- The recommended package model is cache-first: OCR runs in a managed local worker runtime, not in the main indexing env.
+- `nancy-brain ocr setup` creates the shared worker under `~/.local/share/nancy-brain/ocr-worker` on Unix-like systems.
 - OCR markdown is cached per PDF content hash under `knowledge_base/cache/pdf_ocr`.
 - Cleanups remove raw PDFs unless `--dirty` supplied.
 - Article docs are indexed under `journal_articles/<category>/<name>`.
+- CPU-only MCP hosts can rebuild from cached OCR artifacts without GPU OCR dependencies.
 
 Key flags:
 - `--config` path to repositories YAML (was --repositories in older docs)
 - `--articles-config` optional PDF articles YAML
+- `--use-cached-ocr-only` build from existing OCR artifacts without invoking OCR locally
 - `--base-path` where raw repos/PDFs live (default knowledge_base/raw)
 - `--embeddings-path` output index directory
 - `--force-update` re-pull repos / re-download PDFs
@@ -338,7 +344,7 @@ This will:
 1. Clone / update listed repos under `knowledge_base/raw/<category>/<repo>`
 2. (Optionally) download PDFs into category directories
 3. Convert notebooks (*.ipynb -> *.nb.txt) if nb4llm available
-4. Extract and normalize text + (optionally) PDF text
+4. Read cached OCR Markdown for PDFs
 5. Build / update embeddings index at `knowledge_base/embeddings` (and `code_index` if dual embeddings enabled)
 
 Re-run when repositories or articles change.

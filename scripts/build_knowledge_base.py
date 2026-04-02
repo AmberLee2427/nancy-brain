@@ -197,12 +197,15 @@ PDF_REQUEST_HEADERS = {
 }
 
 
-def process_pdf_with_ocr(pdf_path, cache_dir=None):
+def process_pdf_with_ocr(pdf_path, cache_dir=None, use_cached_ocr_only: bool = False):
     logger = logging.getLogger(__name__)
-    ocr_result = extract_pdf_markdown(pdf_path, cache_dir=cache_dir)
+    preferred_backend = "skip" if use_cached_ocr_only else None
+    ocr_result = extract_pdf_markdown(pdf_path, cache_dir=cache_dir, preferred_backend=preferred_backend)
     content = (ocr_result.markdown or "").strip()
     if not content:
-        if ocr_result.warning:
+        if ocr_result.needs_ocr:
+            logger.info("PDF OCR deferred for %s: cache miss and OCR worker unavailable", pdf_path)
+        elif ocr_result.warning:
             logger.warning("PDF OCR failed for %s: %s", pdf_path, ocr_result.warning)
         return None, ocr_result, False
 
@@ -448,6 +451,7 @@ def build_txtai_index(
     category: str = None,
     summary_generator: Optional[SummaryGenerator] = None,
     repo_filter: Optional[str] = None,
+    use_cached_ocr_only: bool = False,
 ) -> dict:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
@@ -459,6 +463,7 @@ def build_txtai_index(
             "failed_text_files": [],
             "failed_pdf_files": [],
             "failed_notebook_conversions": [],
+            "deferred_pdf_files": [],
             "successful_text_files": 0,
             "successful_pdf_files": 0,
             "successful_notebook_conversions": 0,
@@ -489,6 +494,7 @@ def build_txtai_index(
             "failed_text_files": [],
             "failed_pdf_files": [],
             "failed_notebook_conversions": [],
+            "deferred_pdf_files": [],
             "successful_text_files": 0,
             "successful_pdf_files": 0,
             "successful_notebook_conversions": 0,
@@ -508,6 +514,7 @@ def build_txtai_index(
                 "failed_text_files": [],
                 "failed_pdf_files": [],
                 "failed_notebook_conversions": [],
+                "deferred_pdf_files": [],
                 "successful_text_files": 0,
                 "successful_pdf_files": 0,
                 "successful_notebook_conversions": 0,
@@ -533,6 +540,7 @@ def build_txtai_index(
                     "failed_text_files": [],
                     "failed_pdf_files": [],
                     "failed_notebook_conversions": [],
+                    "deferred_pdf_files": [],
                     "successful_text_files": 0,
                     "successful_pdf_files": 0,
                     "successful_notebook_conversions": 0,
@@ -610,6 +618,7 @@ def build_txtai_index(
         "failed_text_files": [],
         "failed_pdf_files": [],
         "failed_notebook_conversions": [],
+        "deferred_pdf_files": [],
         "successful_text_files": 0,
         "successful_pdf_files": 0,
         "successful_notebook_conversions": 0,
@@ -825,7 +834,11 @@ def build_txtai_index(
             for pdf_path in pdf_files:
                 try:
                     pdf_candidate_count += 1
-                    content, ocr_result, success = process_pdf_with_ocr(pdf_path, cache_dir=pdf_ocr_cache_dir)
+                    content, ocr_result, success = process_pdf_with_ocr(
+                        pdf_path,
+                        cache_dir=pdf_ocr_cache_dir,
+                        use_cached_ocr_only=use_cached_ocr_only,
+                    )
                     size = pdf_path.stat().st_size if pdf_path.exists() else 0
                     if success and content:
                         relative_path = pdf_path.relative_to(repo_dir)
@@ -917,6 +930,14 @@ def build_txtai_index(
                             "cache_key": ocr_result.cache_key,
                             "page_count": ocr_result.page_count,
                         }
+                    elif ocr_result.needs_ocr and use_cached_ocr_only:
+                        failures["deferred_pdf_files"].append(str(pdf_path))
+                        pdf_status[str(pdf_path)] = {
+                            "status": "needs_ocr",
+                            "size": size,
+                            "backend": ocr_result.backend,
+                            "reason": ocr_result.warning,
+                        }
                     else:
                         reason = ocr_result.warning or "No meaningful markdown extracted"
                         failures["failed_pdf_files"].append(f"{pdf_path}: {reason}")
@@ -945,7 +966,11 @@ def build_txtai_index(
                 continue
             try:
                 pdf_candidate_count += 1
-                content, ocr_result, success = process_pdf_with_ocr(pdf_file, cache_dir=pdf_ocr_cache_dir)
+                content, ocr_result, success = process_pdf_with_ocr(
+                    pdf_file,
+                    cache_dir=pdf_ocr_cache_dir,
+                    use_cached_ocr_only=use_cached_ocr_only,
+                )
                 if success and content:
                     doc_id = f"journal_articles/{cat}/{article_name}"
                     metadata = (
@@ -1034,6 +1059,13 @@ def build_txtai_index(
                         "cache_key": ocr_result.cache_key,
                         "page_count": ocr_result.page_count,
                     }
+                elif ocr_result.needs_ocr and use_cached_ocr_only:
+                    failures["deferred_pdf_files"].append(str(pdf_file))
+                    pdf_status[str(pdf_file)] = {
+                        "status": "needs_ocr",
+                        "backend": ocr_result.backend,
+                        "reason": ocr_result.warning,
+                    }
                 else:
                     reason = ocr_result.warning or "No meaningful markdown extracted"
                     failures["failed_pdf_files"].append(f"{pdf_file}: {reason}")
@@ -1059,10 +1091,22 @@ def build_txtai_index(
     if not documents:
         if not dry_run:
             if text_candidate_count or pdf_candidate_count:
-                failures["fatal_errors"].append(
-                    "No documents were indexed even though source files were discovered. "
-                    "Check for upstream processing failures (e.g., summarization errors) in the logs."
-                )
+                deferred_pdfs = failures.get("deferred_pdf_files") or []
+                if (
+                    use_cached_ocr_only
+                    and deferred_pdfs
+                    and not failures.get("failed_text_files")
+                    and not failures.get("failed_pdf_files")
+                ):
+                    logger.warning(
+                        "No documents were indexed because %s PDFs are deferred awaiting OCR cache or worker availability.",
+                        len(deferred_pdfs),
+                    )
+                else:
+                    failures["fatal_errors"].append(
+                        "No documents were indexed even though source files were discovered. "
+                        "Check for upstream processing failures (e.g., summarization errors) in the logs."
+                    )
             else:
                 failures["fatal_errors"].append(
                     "No documents were indexed because no eligible source files were found in the configured sources."
@@ -1279,6 +1323,15 @@ if __name__ == "__main__":
         action="store_false",
         help="Disable summary generation even if ENABLE_DOC_SUMMARIES is set",
     )
+    parser.add_argument(
+        "--use-cached-ocr-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Only use cached OCR Markdown for PDFs. Missing cache entries are marked as deferred "
+            "needs_ocr instead of trying live OCR."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -1333,6 +1386,8 @@ if __name__ == "__main__":
                     logger.info(f"  ⏭️  Skipped articles: {len(indexing_failures['skipped_articles'])}")
                 if indexing_failures.get("failed_pdf_files"):
                     logger.info(f"  ❌ Failed PDF files: {len(indexing_failures['failed_pdf_files'])}")
+                if indexing_failures.get("deferred_pdf_files"):
+                    logger.info(f"  ⏸️  Deferred PDF files (needs OCR): {len(indexing_failures['deferred_pdf_files'])}")
                 if indexing_failures.get("fatal_errors"):
                     for err in indexing_failures["fatal_errors"]:
                         logger.error(f"  🚫 Fatal: {err}")
@@ -1383,6 +1438,7 @@ if __name__ == "__main__":
             dirty: bool = False,
             summaries: bool = False,
             summaries_only: bool = False,
+            use_cached_ocr_only: bool = False,
         ) -> None:
             logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
             logger = logging.getLogger(__name__)
@@ -1421,6 +1477,7 @@ if __name__ == "__main__":
                     category=category,
                     summary_generator=summary_generator,
                     repo_filter=repo_filter,
+                    use_cached_ocr_only=use_cached_ocr_only,
                 )
                 print_pipeline_summary(all_failures, dry_run)
                 if env_truthy("NB_STRICT_SUMMARY_WARM"):
@@ -1455,6 +1512,7 @@ if __name__ == "__main__":
                 category,
                 summary_generator,
                 repo_filter,
+                use_cached_ocr_only=use_cached_ocr_only,
             )
             emit_progress(85, stage="indexing_done", detail="Indexing completed")
             if not dirty and not dry_run:
@@ -1490,4 +1548,5 @@ if __name__ == "__main__":
         dirty=args.dirty,
         summaries=args.summaries,
         summaries_only=args.summaries_only,
+        use_cached_ocr_only=args.use_cached_ocr_only,
     )

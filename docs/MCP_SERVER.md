@@ -61,9 +61,15 @@ Get Nancy Brain system status and health information.
 
 ### Prerequisites
 
-1. **Python Environment**: Ensure you have the `roman-slack-bot` conda environment set up
+1. **Python Environment**: Ensure you have a core `nancy-brain` environment set up
 2. **Knowledge Base**: Build the knowledge base with embeddings
 3. **Configuration**: Have a `repositories.yml` config file
+
+The MCP host does **not** need GPU OCR dependencies. The recommended workflow is:
+
+- warm OCR artifacts on a worker machine
+- sync `knowledge_base/cache/pdf_ocr/` back to the host
+- run `nancy-brain build --use-cached-ocr-only` on the serving machine
 
 ### Install MCP Dependencies
 

@@ -143,9 +143,14 @@ documentation:
     description: "Official Python Tutorial (PDF)"
 ```
 
-**PDF Processing Requirements:**
-- **Java** (for Apache Tika): `brew install openjdk`
-- **Fallback libraries**: `pip install PyPDF2 pdfplumber pymupdf`
+**Recommended PDF Processing Model:**
+- configure PDFs in `articles.yml`
+- install the managed local worker with `nancy-brain ocr setup`
+- warm OCR artifacts on a worker machine with `nancy-brain ocr warm`
+- build/search from cached Markdown on the main host
+
+The main `nancy-brain` runtime is cache-first and does not require Java or
+Apache Tika.
 
 ## Environment Variables
 
@@ -161,8 +166,10 @@ documentation:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JAVA_HOME` | Auto-detected | Java installation path |
-| `TIKA_SERVER_TIMEOUT` | `60` | Tika server timeout (seconds) |
+| `NB_PDF_OCR_CACHE_DIR` | `knowledge_base/cache/pdf_ocr` | Location of cached OCR Markdown artifacts |
+| `NB_OCR_MODE` | `auto` | OCR behavior: auto, external, or cache-only |
+| `NB_OCR_WORKER_CMD` | unset | Override command used to launch an OCR worker; default installs use the managed shared worker path |
+| `NB_PDF_OCR_BACKEND` | `auto` | Worker backend preference (auto, deepseek, nougat, skip) |
 | `SKIP_PDF_PROCESSING` | `false` | Skip PDF processing entirely |
 
 ### Development

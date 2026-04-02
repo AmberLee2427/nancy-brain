@@ -125,13 +125,19 @@
   - [ ] Model comparison and benchmarking
   - ✅ Automatic model selection
 - [ ] **PDF Processing: Replace Tika with OCR pipeline**
-  - [ ] Remove Tika-based pipeline (`pdf_utils.py`, `manage_pdf_articles.py`) — it's unreliable and I hate it
-  - [ ] **DeepSeek OCR** as primary backend (GPU, ~7B VLM): PDF pages → images → structured Markdown
-  - [ ] **Nougat** (`nougat-ocr`) as CPU fallback (~250M): same image→Markdown pipeline, no GPU required
-  - [ ] Install extras: `pip install nancy-brain[ocr]` (nougat + pymupdf) and `[ocr-gpu]` (pymupdf; needs CUDA torch)
-  - [ ] Auto-detect backend at build time: CUDA + DeepSeek available → use it; else nougat; else skip with warning
+  - [ ] Finalize cache-first architecture: OCR artifacts are the canonical PDF source for indexing
+  - [x] External OCR worker CLI: `nancy-brain ocr setup`, `ocr warm`, `ocr status`, `ocr worker`
+  - [ ] Worker/runtime isolation: separate conda env or container from the main `txtai` env
+  - [ ] Default worker mode: local subprocess worker on the same machine
+  - [ ] `pdf_ocr.py` refactor: cache-first lookup, optional subprocess invocation, structured `needs_ocr` result
+  - [ ] Build flags: `--use-cached-ocr-only`, `--allow-missing-ocr`, `--ocr-worker-cmd`
+  - [ ] **DeepSeek OCR** as worker backend (GPU, ~7B VLM): PDF pages → images → structured Markdown
+  - [ ] **Nougat** (`nougat-ocr`) as worker CPU fallback (~250M): same image→Markdown pipeline
+  - [ ] Packaging split: keep core install CPU-friendly; make OCR worker runtime optional
   - [ ] OCR output is Markdown → feeds into `MarkdownHeadingChunker` → same embedding space as everything else
   - [ ] Cache OCR Markdown output per-PDF (content-hash) so rebuilds don't re-process unchanged articles
+  - [ ] Smoke test: warm OCR on cluster, sync `knowledge_base/cache/pdf_ocr`, rebuild on NUC, restart MCP
+  - [ ] Remote-worker support for CPU-only hosts and scheduler-backed execution (future)
   - [ ] Citation link extraction (post-OCR, future)
 - ✅ **Article source import**
   - ✅ `nancy-brain import-bibtex -f references.bib` → populates `articles.yml`

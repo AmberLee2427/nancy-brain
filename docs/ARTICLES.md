@@ -1,191 +1,134 @@
 # Journal Article Management
 
-This directory contains tools for managing journal articles (PDFs) in Nancy's knowledge base. There are now **two approaches** for handling PDF articles:
+Journal articles are handled as **PDF sources plus cached OCR Markdown artifacts**.
+The main `nancy-brain` build consumes cached Markdown; OCR itself runs in an
+optional worker runtime.
 
-## 🆕 **Integrated Pipeline Approach** (Recommended)
+This split exists so that:
 
-The main knowledge base build pipeline now supports downloading PDFs from URLs and integrating them into the embeddings, just like repositories.
+- CPU-only hosts can still build and serve the knowledge base
+- `txtai` and the embedding stack do not have to share a Python env with GPU OCR
+- cluster pre-processing can warm OCR artifacts once and reuse them everywhere
 
-### Setup
+## Recommended Workflow
 
-1. **Configure PDF articles** in `config/articles.yml`:
-   ```yaml
-   journal_articles:
-     - name: "Paczynski_1986_ApJ_304_1"
-       url: "https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF"
-       description: "Paczynski (1986) - Gravitational microlensing by the galactic halo"
-   
-   microlensing_reviews:
-     - name: "Mao_2012_RAA_12_947"
-       url: "https://ui.adsabs.harvard.edu/link_gateway/2012RAA....12..947M/PUB_PDF"
-       description: "Mao (2012) - Introduction to gravitational microlensing"
-   ```
+### 1. Configure Article PDFs
 
-2. **Build the complete knowledge base** (repos + PDFs):
-   ```bash
-   # RECOMMENDED: Use the new build script with proper Java environment
-   ./build_with_java.sh
-   
-   # OR manually set up environment and run:
-   export JAVA_HOME="/opt/homebrew/opt/openjdk"
-   export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
-   export KMP_DUPLICATE_LIB_OK=TRUE
-   conda activate roman-slack-bot
-   
-   # Build everything (downloads repos and PDFs, creates embeddings, cleans up)
-   python scripts/build_knowledge_base.py --config config/repositories.yml --articles-config config/articles.yml
-   
-   # Build only PDF articles
-   python scripts/build_knowledge_base.py --category journal_articles
-   
-   # Keep raw files for inspection
-   python scripts/build_knowledge_base.py --dirty
-   ```
+Add article URLs to `config/articles.yml`:
 
-### Features
+```yaml
+journal_articles:
+  - name: "Paczynski_1986_ApJ_304_1"
+    url: "https://ui.adsabs.harvard.edu/link_gateway/1986ApJ...304....1P/PUB_PDF"
+    description: "Paczynski (1986) - Gravitational microlensing by the galactic halo"
 
-- ✅ **URL-based PDF downloads** - just like repositories, but for PDFs
-- ✅ **Automatic cleanup** - downloads, processes, and cleans up PDFs
-- ✅ **Integrated embeddings** - PDFs included in the same search index as code
-- ✅ **Metadata preservation** - title, description, and URL included in search results
-- ✅ **Categorized organization** - separate categories like `journal_articles`, `reviews`, etc.
-- ✅ **Robust PDF processing** - Multiple fallback methods when Tika fails
-- ✅ **Java environment auto-setup** - Automated via `build_with_java.sh`
-- ✅ **Troubleshooting tools** - Diagnostic notebook for debugging issues
-
-## 📄 **Standalone PDF Manager**
-
-For manual PDF management, there's also a dedicated tool:
-
-```bash
-# Download PDFs by category
-python scripts/manage_pdf_articles.py --category journal_articles
-
-# List all configured PDFs
-python scripts/manage_pdf_articles.py --list
-
-# Download all PDFs
-python scripts/manage_pdf_articles.py
-
-# Clean up orphaned PDFs
-python scripts/manage_pdf_articles.py --clean
+roman_mission:
+  - name: "Spergel_2015_arXiv_1503.03757"
+    url: "https://arxiv.org/pdf/1503.03757.pdf"
+    description: "Roman mission report"
 ```
 
-## 🔧 **Legacy Individual Article Manager**
+### 2. Warm OCR Artifacts on a Worker
 
-The original `manage_articles.py` script for manually adding individual PDFs:
+Run OCR in a dedicated worker env or container:
 
 ```bash
-# Add a single PDF
-python scripts/manage_articles.py add /path/to/paper.pdf
+nancy-brain ocr warm --articles-config config/articles.yml
+```
 
-# List existing articles  
+Typical worker setups:
+
+- GPU cluster node running DeepSeek OCR
+- CPU worker env running Nougat
+- Apptainer/Singularity image on HPC
+
+The worker writes Markdown cache artifacts under:
+
+`knowledge_base/cache/pdf_ocr/`
+
+### 3. Build on the Main Host
+
+Build the searchable KB from cached OCR artifacts:
+
+```bash
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
+```
+
+This is the recommended mode for:
+
+- CPU-only MCP hosts
+- scoped rebuilds on small machines
+- reproducible rebuilds after cluster preprocessing
+
+## Cache Contract
+
+Each PDF is keyed by content hash. A cache entry contains:
+
+- `content.md`: OCR Markdown
+- `metadata.json`: backend/model/cache metadata
+
+If a PDF changes, its content hash changes and the worker produces a new cache
+entry automatically.
+
+## Manual Article Imports
+
+The individual article manager is still useful for ad hoc local PDFs:
+
+```bash
+python scripts/manage_articles.py add /path/to/paper.pdf
 python scripts/manage_articles.py list
 ```
 
-## 🏗️ **Architecture**
+Manual imports still flow through the same OCR/cache boundary. Adding a PDF does
+not require the main build env to import DeepSeek or Nougat directly.
 
-### Integrated Pipeline Flow:
-1. **Download repos** → Clone git repositories  
-2. **Download PDFs** → Fetch PDFs from configured URLs
-3. **Extract text** → Use txtai Textractor + Apache Tika for PDF text extraction
-4. **Build embeddings** → Index both code and PDF content together
-5. **Cleanup** → Remove raw files, keep only embeddings
+## File Layout
 
-### File Organization:
-```
+```text
 knowledge_base/
-├── raw/                           # Temporary downloads (cleaned up)
-│   ├── journal_articles/          # PDF downloads by category
-│   │   ├── Paczynski_1986.pdf
-│   │   └── Mao_2012.pdf  
-│   └── microlensing_tools/        # Git repo clones
-│       ├── pyLIMA/
-│       └── MulensModel/
-└── embeddings/                    # Persistent search index
-    └── index/                     # txtai FAISS index
+├── raw/
+│   ├── journal_articles/          # Downloaded PDFs
+│   └── roman_mission/
+├── cache/
+│   └── pdf_ocr/
+│       └── <content-hash>/
+│           ├── content.md
+│           └── metadata.json
+└── embeddings/
+    ├── index/
+    └── code_index/
 ```
 
-## 🔧 **Setup Requirements**
+## Operational Notes
+
+- The main build env does not require Java or Apache Tika.
+- OCR availability is optional for the build if cached Markdown is already present.
+- Missing OCR artifacts can be deferred and warmed later on a worker node.
+- Publisher URLs may still fail or return HTML; arXiv links are the most reliable.
+
+## Common Patterns
+
+### Cluster preprocess, local build
 
 ```bash
-# Ensure dependencies
-conda activate roman-slack-bot
-pip install "txtai[pipeline]"
+# On cluster / worker
+nancy-brain ocr warm --articles-config config/articles.yml
 
-# macOS users: handle OpenMP conflicts
-export KMP_DUPLICATE_LIB_OK=TRUE
+# Sync OCR cache back to the MCP host
+rsync -av knowledge_base/cache/pdf_ocr/ nuc:/path/to/project/knowledge_base/cache/pdf_ocr/
 
-# CRITICAL: Java required for PDF processing
-# Install Java if not already installed:
-brew install openjdk  # macOS
-# sudo apt-get install openjdk-11-jdk  # Ubuntu/Debian
-
-# Set up Java environment (REQUIRED for Tika PDF processing)
-export JAVA_HOME="/opt/homebrew/opt/openjdk"
-export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
-
-# Verify Java is working:
-java -version
+# On the MCP host
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
 ```
 
-## ⚠️ **Known Issues & Solutions**
+### Scoped update on a CPU host
 
-1. **~~Tika Server Issues~~**: ✅ **FIXED** - Previous startup problems with Apache Tika server for PDF processing have been resolved
-   - **Solution**: Use `./build_with_java.sh` which properly sets up Java environment
-   - **Root Cause**: Java PATH configuration issues have been addressed
-
-2. **PDF URL Reliability**: Some publisher PDFs require authentication or have changing URLs
-   - Use stable URLs like arXiv: `https://arxiv.org/pdf/1234.5678.pdf`
-   - ADS gateway URLs may have redirect limits or access restrictions
-
-3. **Java Environment**: If you encounter "Unable to locate a Java Runtime" errors
-   - Install Java: `brew install openjdk` (macOS) 
-   - Set environment: `export JAVA_HOME="/opt/homebrew/opt/openjdk"`
-   - Use the provided `build_with_java.sh` script for automatic setup
-
-## 🎯 **Usage Patterns**
-
-### For Development/Testing:
 ```bash
-# RECOMMENDED: Use the new build script with Java environment setup
-./build_with_java.sh
-
-# Test the pipeline with dry run
-python scripts/build_knowledge_base.py --dry-run
-
-# Download specific category only  
-python scripts/build_knowledge_base.py --category roman_mission
-
-# Keep files for debugging
-python scripts/build_knowledge_base.py --dirty
-
-# If you need to troubleshoot, use the diagnostic notebook:
-jupyter notebook knowledge_base_troubleshooting.ipynb
+nancy-brain build --repo MulensModel --use-cached-ocr-only
 ```
 
-### For Production:
+### Force OCR refresh for changed PDFs
+
 ```bash
-# RECOMMENDED: Full rebuild with Java environment setup
-./build_with_java.sh
-
-# Full rebuild (everything) - manual approach
-export JAVA_HOME="/opt/homebrew/opt/openjdk"
-export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
-python scripts/build_knowledge_base.py --force-update
-
-# Regular update (only new content)
-python scripts/build_knowledge_base.py
-```
-
-### For PDF Management:
-```bash
-# Quick PDF status check
-python scripts/manage_pdf_articles.py --list
-
-# Add individual PDF
-python scripts/manage_articles.py add /path/to/new_paper.pdf
-
-# Troubleshoot any issues
-jupyter notebook docs/knowledge_base_troubleshooting.ipynb
+nancy-brain ocr warm --articles-config config/articles.yml --force-update
 ```

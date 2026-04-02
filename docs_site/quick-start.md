@@ -136,10 +136,14 @@ research_papers:
     description: "Transformer architecture paper"
 ```
 
-Build with articles:
+Warm OCR artifacts, then build from cache:
 ```bash
-nancy-brain build --articles-config config/articles.yml
+nancy-brain ocr setup
+nancy-brain ocr warm --articles-config config/articles.yml
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
 ```
+
+This is the recommended workflow for CPU-only hosts and MCP servers.
 
 ### Custom Search Weights
 
@@ -166,5 +170,5 @@ For contributing or advanced usage:
 ```bash
 git clone https://github.com/AmberLee2427/nancy-brain.git
 cd nancy-brain
-pip install -e ".[dev,docs,pdf]"
+pip install -e ".[dev,docs]"
 ```

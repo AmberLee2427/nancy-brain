@@ -24,7 +24,8 @@ key_papers:
 
 # Build knowledge base
 nancy-brain build
-nancy-brain build --articles-config config/articles.yml
+nancy-brain ocr warm --articles-config config/articles.yml
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
 
 # Start searching
 nancy-brain ui  # Web interface
@@ -168,10 +169,26 @@ Create research logs tracking your queries and findings:
 ```bash
 # Incremental updates
 nancy-brain build --config config/core-tools.yml
-nancy-brain build --articles-config config/papers.yml
+nancy-brain build --articles-config config/papers.yml --use-cached-ocr-only
+
+# Scoped rebuild on a CPU host
+nancy-brain build --repo astropy --use-cached-ocr-only
 
 # Monitor size
 du -sh knowledge_base/embeddings/
+```
+
+### Cluster OCR, Local MCP Build
+
+```bash
+# On the cluster or OCR worker
+nancy-brain ocr warm --articles-config config/articles.yml
+
+# Sync cache artifacts back
+rsync -av knowledge_base/cache/pdf_ocr/ my-nuc:/path/to/project/knowledge_base/cache/pdf_ocr/
+
+# On the MCP host
+nancy-brain build --articles-config config/articles.yml --use-cached-ocr-only
 ```
 
 ### Team Sharing
@@ -202,7 +219,7 @@ nancy-brain explore --max-depth 2
 
 1. **Expand**: Add domain-specific repositories and papers
 2. **Customize**: Edit `config/weights.yaml` for file type priorities  
-3. **Automate**: Script regular updates with `--force-update`
+3. **Automate**: Script OCR warm jobs on a worker and cached rebuilds on the MCP host
 4. **Integrate**: Use MCP server or HTTP API for deeper tool integration
 
 See [MCP Integration](../integrations/vscode-mcp.md), [HTTP API](../integrations/http-api.md), and [Advanced Configuration](../configuration.md) for more details.

@@ -1,5 +1,6 @@
 """Extended CLI tests to improve coverage of nancy_brain/cli.py."""
 
+import json
 import sys
 import types
 import pytest
@@ -9,6 +10,7 @@ from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
 from nancy_brain.cli import cli, _print_import_summary
+from nancy_brain.pdf_ocr import PDFOCRResult
 import click
 
 # ---------------------------------------------------------------------------
@@ -156,6 +158,18 @@ def test_build_with_summaries_only():
         assert "--summaries-only" in cmd
 
 
+def test_build_with_cached_ocr_only():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        _write_repos_config(Path("config/repositories.yml"))
+        with patch("nancy_brain.cli.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = runner.invoke(cli, ["build", "--use-cached-ocr-only"])
+        cmd = mock_run.call_args[0][0]
+        assert "--use-cached-ocr-only" in cmd
+    assert result.exit_code == 0
+
+
 def test_build_with_batch_size():
     runner = CliRunner()
     with runner.isolated_filesystem():
@@ -242,6 +256,264 @@ def test_build_with_dirty_flag():
             result = runner.invoke(cli, ["build", "--dirty"])
         cmd = mock_run.call_args[0][0]
         assert "--dirty" in cmd
+
+
+# ---------------------------------------------------------------------------
+# ocr warm command
+# ---------------------------------------------------------------------------
+
+
+def test_ocr_warm_command_scaffold():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        fake_result = types.SimpleNamespace(
+            status="cached",
+            cached=True,
+            needs_ocr=False,
+            warning=None,
+        )
+        with patch("nancy_brain.pdf_ocr.warm_pdf_ocr_cache", return_value=[fake_result]) as mock_warm:
+            result = runner.invoke(cli, ["ocr", "warm", str(pdf_path)])
+        assert result.exit_code == 0
+        assert "PDFs scanned: 1" in result.output
+        mock_warm.assert_called_once()
+
+
+def test_ocr_warm_command_with_articles_config_downloads_articles():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        articles_path = Path("config/articles.yml")
+        _write_articles_config(articles_path)
+        fake_result = types.SimpleNamespace(
+            status="generated",
+            cached=False,
+            needs_ocr=False,
+            warning=None,
+        )
+        with (
+            patch("scripts.build_knowledge_base.download_pdf_articles") as mock_download,
+            patch("nancy_brain.pdf_ocr.warm_pdf_ocr_cache", return_value=[fake_result]) as mock_warm,
+        ):
+            result = runner.invoke(cli, ["ocr", "warm", "--articles-config", str(articles_path)])
+        assert result.exit_code == 0
+        mock_download.assert_called_once()
+        mock_warm.assert_called_once()
+
+
+def test_ocr_warm_command_exits_nonzero_when_everything_is_deferred():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        fake_result = types.SimpleNamespace(
+            status="needs_ocr",
+            cached=False,
+            needs_ocr=True,
+            warning="OCR unavailable",
+        )
+        with patch("nancy_brain.pdf_ocr.warm_pdf_ocr_cache", return_value=[fake_result]):
+            result = runner.invoke(cli, ["ocr", "warm", str(pdf_path)])
+        assert result.exit_code != 0
+        assert "No OCR cache entries were generated or reused" in result.output
+
+
+def test_ocr_setup_command_reports_managed_worker_install():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        summary = types.SimpleNamespace(
+            root=Path("/tmp/nancy-worker"),
+            python=Path("/tmp/nancy-worker/venv/bin/python"),
+            command=["/tmp/nancy-worker/bin/nancy-brain"],
+            code_root=Path("/tmp/site-packages"),
+            torch_index_url="https://download.pytorch.org/whl/cu124",
+            flash_attn=False,
+            verification={"available": True, "reason": None},
+        )
+        with patch("nancy_brain.ocr_worker_runtime.install_local_ocr_worker", return_value=summary) as mock_install:
+            result = runner.invoke(cli, ["ocr", "setup"])
+        assert result.exit_code == 0
+        assert "Managed worker root" in result.output
+        assert "DeepSeek available: yes" in result.output
+        mock_install.assert_called_once()
+
+
+def test_ocr_setup_command_exits_nonzero_when_verification_fails():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        summary = types.SimpleNamespace(
+            root=Path("/tmp/nancy-worker"),
+            python=Path("/tmp/nancy-worker/venv/bin/python"),
+            command=["/tmp/nancy-worker/bin/nancy-brain"],
+            code_root=Path("/tmp/site-packages"),
+            torch_index_url=None,
+            flash_attn=False,
+            verification={"available": False, "reason": "CUDA unavailable"},
+        )
+        with patch("nancy_brain.ocr_worker_runtime.install_local_ocr_worker", return_value=summary):
+            result = runner.invoke(cli, ["ocr", "setup"])
+        assert result.exit_code != 0
+        assert "CUDA unavailable" in result.output
+
+
+def test_ocr_status_command_reports_worker_installation():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with patch(
+            "nancy_brain.ocr_worker_runtime.inspect_local_ocr_worker",
+            return_value={
+                "root": Path("/tmp/nancy-worker"),
+                "python": Path("/tmp/nancy-worker/venv/bin/python"),
+                "command": ["/tmp/nancy-worker/bin/nancy-brain"],
+                "metadata": {
+                    "installed_at": "2026-04-01T00:00:00+00:00",
+                    "code_root": "/tmp/site-packages",
+                    "torch_index_url": "https://download.pytorch.org/whl/cu124",
+                },
+                "installed": True,
+                "verification": {"available": True, "reason": None},
+            },
+        ):
+            result = runner.invoke(cli, ["ocr", "status", "--verify"])
+        assert result.exit_code == 0
+        assert "Installed: yes" in result.output
+        assert "DeepSeek available: yes" in result.output
+
+
+def test_ocr_worker_command_emits_machine_record_for_generated_pdf():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        fake_result = PDFOCRResult(
+            markdown="# title\n\ncontent",
+            backend="deepseek",
+            cached=False,
+            cache_key="abc123",
+            status="generated",
+            model="deepseek-ai/DeepSeek-OCR",
+            page_count=4,
+        )
+        with patch("nancy_brain.pdf_ocr.extract_pdf_markdown", return_value=fake_result) as mock_extract:
+            result = runner.invoke(cli, ["ocr", "worker", str(pdf_path), "--cache-dir", "knowledge_base/cache/pdf_ocr"])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert Path(payload["pdf_path"]).is_absolute()
+        assert Path(payload["cache_dir"]).is_absolute()
+        assert Path(payload["cache_entry_dir"]).is_absolute()
+        assert Path(payload["content_path"]).is_absolute()
+        assert Path(payload["metadata_path"]).is_absolute()
+        assert payload["status"] == "generated"
+        assert payload["cached"] is False
+        assert payload["content_path"].endswith("abc123/content.md")
+        assert payload["metadata_path"].endswith("abc123/metadata.json")
+        assert "markdown" not in payload
+        mock_extract.assert_called_once()
+
+
+def test_ocr_worker_command_emits_machine_record_for_error_result():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        fake_result = PDFOCRResult(
+            markdown=None,
+            backend="deepseek",
+            cached=False,
+            cache_key="abc123",
+            status="error",
+            model="deepseek-ai/DeepSeek-OCR",
+            warning="OCR produced empty markdown",
+        )
+        with patch("nancy_brain.pdf_ocr.extract_pdf_markdown", return_value=fake_result):
+            result = runner.invoke(cli, ["ocr", "worker", str(pdf_path), "--cache-dir", "knowledge_base/cache/pdf_ocr"])
+        assert result.exit_code != 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "error"
+        assert Path(payload["pdf_path"]).is_absolute()
+        assert Path(payload["cache_entry_dir"]).is_absolute()
+        assert payload["cache_key"] == "abc123"
+        assert payload["warning"] == "OCR produced empty markdown"
+        assert payload["needs_ocr"] is False
+        assert payload["deferred"] is False
+        assert set(
+            [
+                "pdf_path",
+                "cache_dir",
+                "cache_key",
+                "cache_entry_dir",
+                "content_path",
+                "metadata_path",
+                "status",
+                "cached",
+                "needs_ocr",
+                "deferred",
+                "model",
+                "page_count",
+                "warning",
+            ]
+        ).issubset(payload.keys())
+
+
+def test_ocr_worker_command_emits_needs_ocr_record():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        fake_result = PDFOCRResult(
+            markdown=None,
+            backend="none",
+            cached=False,
+            cache_key="abc123",
+            status="needs_ocr",
+            needs_ocr=True,
+            deferred=True,
+            warning="OCR backend unavailable",
+        )
+        with patch("nancy_brain.pdf_ocr.extract_pdf_markdown", return_value=fake_result):
+            result = runner.invoke(cli, ["ocr", "worker", str(pdf_path)])
+        assert result.exit_code == 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "needs_ocr"
+        assert payload["needs_ocr"] is True
+        assert payload["deferred"] is True
+        assert payload["warning"] == "OCR backend unavailable"
+
+
+def test_ocr_worker_command_emits_error_record_on_exception():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        pdf_path = Path("paper.pdf")
+        pdf_path.write_bytes(b"%PDF-1.4 fake")
+        with patch("nancy_brain.pdf_ocr.extract_pdf_markdown", side_effect=RuntimeError("boom")):
+            result = runner.invoke(cli, ["ocr", "worker", str(pdf_path)])
+        assert result.exit_code != 0
+        payload = json.loads(result.output)
+        assert payload["status"] == "error"
+        assert payload["warning"] == "boom"
+        assert Path(payload["pdf_path"]).is_absolute()
+        assert payload["cache_key"] is None
+        assert payload["cache_entry_dir"] is None
+        assert payload["content_path"] is None
+        assert payload["metadata_path"] is None
+        assert set(
+            [
+                "pdf_path",
+                "cache_dir",
+                "cache_key",
+                "cache_entry_dir",
+                "content_path",
+                "metadata_path",
+                "status",
+                "cached",
+                "needs_ocr",
+                "deferred",
+                "model",
+                "page_count",
+                "warning",
+            ]
+        ).issubset(payload.keys())
 
 
 # ---------------------------------------------------------------------------

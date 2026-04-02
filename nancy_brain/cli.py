@@ -2,6 +2,7 @@
 """Nancy Brain CLI interface."""
 
 import click
+import json
 import os
 import sys
 import subprocess
@@ -123,6 +124,12 @@ def init(project_name):
     default=False,
     help="Warm the summary cache per-repo then exit without building the index. Pair with --repo for one-node-per-repo cluster jobs.",
 )
+@click.option(
+    "--use-cached-ocr-only",
+    is_flag=True,
+    default=False,
+    help="Only use cached OCR Markdown for PDFs. Missing cache entries are deferred as needs_ocr.",
+)
 def build(
     config,
     articles_config,
@@ -136,6 +143,7 @@ def build(
     category,
     repo,
     summaries_only,
+    use_cached_ocr_only,
 ):
     """Build the knowledge base from configured repositories.
 
@@ -212,6 +220,8 @@ def build(
         cmd.extend(["--repo", repo])
     if summaries_only:
         cmd.append("--summaries-only")
+    if use_cached_ocr_only:
+        cmd.append("--use-cached-ocr-only")
 
     # If dry-run requested, still run the underlying script with --dry-run so that
     # repository cloning/downloading/indexing intentions and validation summaries
@@ -243,6 +253,223 @@ def build(
         else:
             click.echo(click.style(err_msg, fg="red"))
         sys.exit(e.returncode)
+
+
+@cli.group()
+def ocr():
+    """OCR utilities and cache warmers."""
+    pass
+
+
+@ocr.command("warm")
+@click.argument("paths", nargs=-1, type=click.Path(path_type=Path))
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="OCR cache directory (defaults to the package cache path).",
+)
+@click.option(
+    "--backend",
+    default=None,
+    help="Preferred OCR backend (for example deepseek, skip, or none).",
+)
+@click.option(
+    "--articles-config",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Optional articles.yml to download before warming OCR cache.",
+)
+@click.option(
+    "--base-path",
+    type=click.Path(path_type=Path),
+    default=Path("knowledge_base/raw"),
+    show_default=True,
+    help="Base path for downloaded PDFs and scan roots.",
+)
+@click.option(
+    "--recursive/--no-recursive",
+    default=True,
+    help="Recurse into directories when scanning for PDFs.",
+)
+def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
+    """Warm OCR cache entries for PDFs."""
+    from nancy_brain.pdf_ocr import warm_pdf_ocr_cache
+
+    scan_paths = list(paths)
+    if articles_config:
+        from scripts.build_knowledge_base import download_pdf_articles
+
+        download_pdf_articles(str(articles_config), base_path=str(base_path))
+        scan_paths.append(base_path)
+    if not scan_paths:
+        scan_paths = [base_path]
+    results = warm_pdf_ocr_cache(scan_paths, cache_dir=cache_dir, preferred_backend=backend, recursive=recursive)
+
+    generated = sum(1 for result in results if result.status == "generated")
+    cached = sum(1 for result in results if result.cached)
+    deferred = sum(1 for result in results if result.needs_ocr)
+    failed = sum(1 for result in results if result.status == "error")
+
+    click.echo(f"PDFs scanned: {len(results)}")
+    click.echo(f"Cached hits: {cached}")
+    click.echo(f"Generated: {generated}")
+    click.echo(f"Deferred (needs OCR): {deferred}")
+    click.echo(f"Failed: {failed}")
+
+    for result in results:
+        if result.needs_ocr and result.warning:
+            click.echo(f"  - needs_ocr: {result.warning}")
+        elif result.status == "error" and result.warning:
+            click.echo(f"  - error: {result.warning}")
+
+    if failed or ((generated + cached) == 0 and deferred > 0):
+        if failed == 0:
+            click.echo("No OCR cache entries were generated or reused; all PDFs were deferred for OCR.")
+        sys.exit(1)
+
+
+@ocr.command("setup")
+@click.option(
+    "--shared-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override the managed shared worker install root.",
+)
+@click.option(
+    "--python",
+    "python_executable",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Python executable used to create the worker venv (defaults to the current interpreter).",
+)
+@click.option(
+    "--torch-index-url",
+    default=None,
+    help="Optional PyTorch wheel index URL for the isolated worker runtime.",
+)
+@click.option(
+    "--flash-attn/--no-flash-attn",
+    default=False,
+    help="Attempt to install flash-attn into the worker runtime.",
+)
+@click.option(
+    "--recreate",
+    is_flag=True,
+    default=False,
+    help="Recreate the worker virtualenv from scratch before installing packages.",
+)
+@click.option(
+    "--verify/--no-verify",
+    default=True,
+    help="Verify the installed worker runtime after setup.",
+)
+def ocr_setup(shared_root, python_executable, torch_index_url, flash_attn, recreate, verify):
+    """Install or update the managed local OCR worker runtime."""
+
+    from nancy_brain.ocr_worker_runtime import install_local_ocr_worker
+
+    try:
+        summary = install_local_ocr_worker(
+            root=shared_root,
+            python_executable=python_executable,
+            torch_index_url=torch_index_url,
+            flash_attn=flash_attn,
+            recreate=recreate,
+            verify=verify,
+        )
+    except subprocess.CalledProcessError as exc:
+        click.echo(f"❌ OCR worker setup failed while running: {' '.join(str(part) for part in exc.cmd)}")
+        sys.exit(exc.returncode or 1)
+    except Exception as exc:
+        click.echo(f"❌ OCR worker setup failed: {exc}")
+        sys.exit(1)
+
+    click.echo(f"Managed worker root: {summary.root}")
+    click.echo(f"Worker python: {summary.python}")
+    click.echo(f"Worker command: {' '.join(summary.command)}")
+    click.echo(f"Code root: {summary.code_root}")
+    if summary.torch_index_url:
+        click.echo(f"Torch index URL: {summary.torch_index_url}")
+    click.echo(f"FlashAttention install requested: {'yes' if summary.flash_attn else 'no'}")
+    if summary.verification is not None:
+        available = bool(summary.verification.get("available"))
+        reason = summary.verification.get("reason")
+        click.echo(f"DeepSeek available: {'yes' if available else 'no'}")
+        if reason:
+            click.echo(f"DeepSeek status: {reason}")
+        if not available:
+            click.echo(
+                "Run `nancy-brain build --use-cached-ocr-only` on CPU-only hosts, or rerun setup with a compatible CUDA torch index."
+            )
+            sys.exit(1)
+
+
+@ocr.command("status")
+@click.option(
+    "--shared-root",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Override the managed shared worker install root.",
+)
+@click.option(
+    "--verify/--no-verify",
+    default=False,
+    help="Verify the worker runtime imports instead of only reporting files on disk.",
+)
+def ocr_status(shared_root, verify):
+    """Inspect the managed local OCR worker runtime."""
+
+    from nancy_brain.ocr_worker_runtime import inspect_local_ocr_worker
+
+    info = inspect_local_ocr_worker(root=shared_root, verify=verify)
+    click.echo(f"Managed worker root: {info['root']}")
+    click.echo(f"Worker python: {info['python']}")
+    click.echo(f"Installed: {'yes' if info['installed'] else 'no'}")
+    if info["command"]:
+        click.echo(f"Worker command: {' '.join(info['command'])}")
+    if info["metadata"]:
+        metadata = info["metadata"]
+        if metadata.get("installed_at"):
+            click.echo(f"Installed at: {metadata['installed_at']}")
+        if metadata.get("code_root"):
+            click.echo(f"Code root: {metadata['code_root']}")
+        if metadata.get("torch_index_url"):
+            click.echo(f"Torch index URL: {metadata['torch_index_url']}")
+    if info["verification"] is not None:
+        verification = info["verification"]
+        click.echo(f"DeepSeek available: {'yes' if verification.get('available') else 'no'}")
+        if verification.get("reason"):
+            click.echo(f"DeepSeek status: {verification['reason']}")
+
+
+@ocr.command("worker")
+@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="OCR cache directory (defaults to the package cache path).",
+)
+@click.option(
+    "--backend",
+    default=None,
+    help="Preferred OCR backend (for example deepseek, skip, or none).",
+)
+def ocr_worker(pdf_path, cache_dir, backend):
+    """Process one PDF and emit a JSON worker record.
+
+    The worker owns only the OCR markdown cache contract:
+    it may read or write `knowledge_base/cache/pdf_ocr`, but it does not
+    touch embeddings or summary caches.
+    """
+
+    from nancy_brain.ocr_worker_entry import execute_worker
+
+    payload, exit_code = execute_worker(pdf_path, cache_dir=cache_dir, backend=backend)
+    click.echo(json.dumps(payload, sort_keys=True))
+    if exit_code:
+        sys.exit(exit_code)
 
 
 @cli.command("import-env")
