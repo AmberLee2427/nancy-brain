@@ -28,6 +28,7 @@ DEEPSEEK_WORKER_REQUIREMENTS = [
     f"transformers=={WORKER_TRANSFORMERS_VERSION}",
     f"tokenizers=={WORKER_TOKENIZERS_VERSION}",
     "addict>=2.4.0",
+    "bitsandbytes>=0.43.0",
     "easydict>=1.13",
     "einops>=0.8.0",
     "matplotlib>=3.8.0",

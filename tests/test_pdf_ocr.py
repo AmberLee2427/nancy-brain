@@ -544,6 +544,110 @@ def test_deepseek_status_reports_missing_runtime_dependencies(monkeypatch):
     assert "torchvision" in status.reason
 
 
+def test_resolve_deepseek_quantization_mode_auto_uses_4bit_for_small_gpu(monkeypatch):
+    monkeypatch.delenv("NB_PDF_OCR_QUANTIZE", raising=False)
+    monkeypatch.delenv("NB_QUANTIZE", raising=False)
+    monkeypatch.delenv("NB_PDF_OCR_AUTO_4BIT_MAX_GIB", raising=False)
+    monkeypatch.delenv("NB_PDF_OCR_AUTO_8BIT_MAX_GIB", raising=False)
+
+    class FakeProps:
+        total_memory = 12 * 1024**3
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+        @staticmethod
+        def current_device():
+            return 0
+
+        @staticmethod
+        def get_device_properties(index):
+            assert index == 0
+            return FakeProps()
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    assert pdf_ocr._resolve_deepseek_quantization_mode(FakeTorch()) == "4bit"
+
+
+def test_resolve_deepseek_quantization_mode_honors_explicit_override(monkeypatch):
+    monkeypatch.setenv("NB_PDF_OCR_QUANTIZE", "8bit")
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    assert pdf_ocr._resolve_deepseek_quantization_mode(FakeTorch()) == "8bit"
+
+
+def test_deepseek_status_reports_missing_bitsandbytes_when_quantized(monkeypatch):
+    backend = DeepSeekOCRBackend()
+
+    class FakeCuda:
+        @staticmethod
+        def is_available():
+            return True
+
+        @staticmethod
+        def current_device():
+            return 0
+
+        @staticmethod
+        def get_device_properties(index):
+            return types.SimpleNamespace(total_memory=12 * 1024**3)
+
+    class FakeTorch:
+        cuda = FakeCuda()
+
+    monkeypatch.delenv("NB_PDF_OCR_QUANTIZE", raising=False)
+    monkeypatch.delenv("NB_QUANTIZE", raising=False)
+
+    original_find_spec = importlib.util.find_spec
+
+    def fake_find_spec(name):
+        if name == "bitsandbytes":
+            return None
+        return (
+            object()
+            if name in {"torchvision", "addict", "easydict", "einops", "matplotlib"}
+            else original_find_spec(name)
+        )
+
+    monkeypatch.setattr("nancy_brain.pdf_ocr.find_spec", fake_find_spec)
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.__version__ = "4.46.3"
+    fake_transformers.__path__ = []
+    fake_transformers.AutoModel = object()
+    fake_transformers.AutoTokenizer = object()
+    fake_transformers_models = types.ModuleType("transformers.models")
+    fake_transformers_models.__path__ = []
+    fake_transformers_llama = types.ModuleType("transformers.models.llama")
+    fake_transformers_llama.__path__ = []
+    fake_transformers_llama_modeling = types.ModuleType("transformers.models.llama.modeling_llama")
+    fake_transformers_llama_modeling.LlamaFlashAttention2 = object()
+    with patch.dict(
+        "sys.modules",
+        {
+            "torch": FakeTorch(),
+            "transformers": fake_transformers,
+            "transformers.models": fake_transformers_models,
+            "transformers.models.llama": fake_transformers_llama,
+            "transformers.models.llama.modeling_llama": fake_transformers_llama_modeling,
+        },
+    ):
+        status = backend.status()
+
+    assert status.available is False
+    assert status.reason == "missing DeepSeek OCR quantization runtime dep: bitsandbytes (4bit)"
+
+
 def test_deepseek_status_reports_transformers_incompatibility(monkeypatch):
     backend = DeepSeekOCRBackend()
 

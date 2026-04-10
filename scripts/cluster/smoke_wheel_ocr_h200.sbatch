@@ -54,6 +54,7 @@ export HF_HOME="${SLURM_TMPDIR:-/tmp}/hf"
 export TMPDIR="${SLURM_TMPDIR:-/tmp}"
 export PIP_CACHE_DIR="${SLURM_TMPDIR:-/tmp}/pip-cache"
 export KMP_DUPLICATE_LIB_OK="TRUE"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 mkdir -p "$HF_HOME" "$TMPDIR" "$PIP_CACHE_DIR"
 
 echo "=== Smoke env ==="

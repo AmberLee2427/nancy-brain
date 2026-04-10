@@ -38,6 +38,78 @@ DEEPSEEK_RUNTIME_MODULES = {
 PROJECT_OCR_WORKER_CONFIG_FILENAMES = ("ocr_worker.toml", "ocr-worker.toml")
 
 
+def _normalize_quantization_mode(value: Optional[str]) -> Optional[str]:
+    raw = (value or "").strip().lower()
+    if raw in {"", "none", "off", "false", "fp16", "full", "16bit"}:
+        return None
+    if raw in {"4", "4bit", "int4", "nf4"}:
+        return "4bit"
+    if raw in {"8", "8bit", "int8"}:
+        return "8bit"
+    if raw == "auto":
+        return "auto"
+    return raw
+
+
+def _quantization_threshold_gib(env_name: str, default: float) -> float:
+    raw = os.environ.get(env_name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except Exception:
+        return default
+
+
+def _configured_deepseek_quantization_mode() -> Optional[str]:
+    explicit = os.environ.get("NB_PDF_OCR_QUANTIZE", "")
+    if explicit.strip():
+        return _normalize_quantization_mode(explicit)
+    shared = os.environ.get("NB_QUANTIZE", "")
+    if shared.strip():
+        return _normalize_quantization_mode(shared)
+    return "auto"
+
+
+def _resolve_deepseek_quantization_mode(torch_module) -> Optional[str]:
+    configured = _configured_deepseek_quantization_mode()
+    if configured != "auto":
+        return configured
+
+    cuda = getattr(torch_module, "cuda", None)
+    if cuda is None or not getattr(cuda, "is_available", lambda: False)():
+        return None
+
+    try:
+        current_device = getattr(cuda, "current_device", lambda: 0)()
+        props = cuda.get_device_properties(current_device)
+        total_memory_gib = props.total_memory / float(1024**3)
+    except Exception:
+        return None
+
+    four_bit_max = _quantization_threshold_gib("NB_PDF_OCR_AUTO_4BIT_MAX_GIB", 16.0)
+    eight_bit_max = _quantization_threshold_gib("NB_PDF_OCR_AUTO_8BIT_MAX_GIB", 24.0)
+    if total_memory_gib <= four_bit_max:
+        return "4bit"
+    if total_memory_gib <= eight_bit_max:
+        return "8bit"
+    return None
+
+
+def _deepseek_attention_kwargs_candidates(quantization_mode: Optional[str]) -> list[dict]:
+    attn_impl = os.environ.get("NB_PDF_OCR_ATTN_IMPLEMENTATION")
+    if attn_impl is not None:
+        attn_impl = attn_impl.strip()
+        if attn_impl:
+            return [{"_attn_implementation": attn_impl}, {}]
+        return [{}]
+
+    if quantization_mode:
+        return [{}]
+
+    return [{"_attn_implementation": "flash_attention_2"}, {}]
+
+
 @dataclass(frozen=True)
 class PDFOCRBackendStatus:
     """Availability status for an OCR backend."""
@@ -234,9 +306,25 @@ class DeepSeekOCRBackend:
                 model=self.model_name,
             )
 
+        quantization_mode = _resolve_deepseek_quantization_mode(torch)
+        if quantization_mode and find_spec("bitsandbytes") is None:
+            return PDFOCRBackendStatus(
+                name=self.name,
+                available=False,
+                reason=f"missing DeepSeek OCR quantization runtime dep: bitsandbytes ({quantization_mode})",
+                model=self.model_name,
+            )
+
         return PDFOCRBackendStatus(name=self.name, available=True, model=self.model_name)
 
     def signature(self) -> dict:
+        quantization_mode = None
+        try:
+            import torch
+
+            quantization_mode = _resolve_deepseek_quantization_mode(torch)
+        except Exception:
+            quantization_mode = _configured_deepseek_quantization_mode()
         return {
             "backend": self.name,
             "model": self.model_name,
@@ -245,6 +333,7 @@ class DeepSeekOCRBackend:
             "base_size": self.base_size,
             "image_size": self.image_size,
             "crop_mode": self.crop_mode,
+            "quantize": quantization_mode or "none",
             "cache_version": CACHE_VERSION,
         }
 
@@ -261,26 +350,48 @@ class DeepSeekOCRBackend:
 
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
 
-        model_kwargs_candidates = []
-        attn_impl = os.environ.get("NB_PDF_OCR_ATTN_IMPLEMENTATION", "flash_attention_2").strip()
-        if attn_impl:
-            model_kwargs_candidates.append({"_attn_implementation": attn_impl})
-        model_kwargs_candidates.append({})
+        quantization_mode = _resolve_deepseek_quantization_mode(torch)
+        model_kwargs_candidates = _deepseek_attention_kwargs_candidates(quantization_mode)
 
         load_errors: list[str] = []
         for extra_kwargs in model_kwargs_candidates:
             try:
-                model = AutoModel.from_pretrained(
-                    self.model_name,
-                    trust_remote_code=True,
-                    use_safetensors=True,
-                    **extra_kwargs,
-                )
                 dtype = torch.bfloat16 if getattr(torch.cuda, "is_bf16_supported", lambda: False)() else torch.float16
-                self._model = model.eval().cuda().to(dtype)
+                common_kwargs = {
+                    "trust_remote_code": True,
+                    "use_safetensors": True,
+                    **extra_kwargs,
+                }
+                if quantization_mode in {"4bit", "8bit"}:
+                    from transformers import BitsAndBytesConfig
+
+                    if quantization_mode == "4bit":
+                        quantization_config = BitsAndBytesConfig(
+                            load_in_4bit=True,
+                            bnb_4bit_compute_dtype=dtype,
+                            bnb_4bit_quant_type="nf4",
+                        )
+                    else:
+                        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+                    model = AutoModel.from_pretrained(
+                        self.model_name,
+                        quantization_config=quantization_config,
+                        device_map="auto",
+                        low_cpu_mem_usage=True,
+                        **common_kwargs,
+                    )
+                    self._model = model.eval()
+                else:
+                    model = AutoModel.from_pretrained(
+                        self.model_name,
+                        **common_kwargs,
+                    )
+                    self._model = model.eval().cuda().to(dtype)
                 return
             except Exception as exc:
                 label = extra_kwargs.get("_attn_implementation", "default")
+                if quantization_mode:
+                    label = f"{quantization_mode}/{label}"
                 load_errors.append(f"{label}: {exc}")
 
         raise RuntimeError("failed to load DeepSeek OCR model: " + " | ".join(load_errors))
