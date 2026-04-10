@@ -56,6 +56,7 @@ def test_verify_local_ocr_worker_reports_backend_status(tmp_path, monkeypatch):
         assert "PYTHONPATH" in env
         assert str(root / "code") in env["PYTHONPATH"]
         assert cwd == str(root)
+        assert "ensure_loaded" in cmd[2]
         return subprocess.CompletedProcess(
             cmd,
             0,
@@ -76,6 +77,36 @@ def test_verify_local_ocr_worker_reports_backend_status(tmp_path, monkeypatch):
 
     assert status["available"] is True
     assert status["name"] == "deepseek"
+
+
+def test_verify_local_ocr_worker_reports_model_load_failure(tmp_path, monkeypatch):
+    root = tmp_path / "ocr-worker"
+    python_path = root / "venv" / "bin" / "python"
+    python_path.parent.mkdir(parents=True, exist_ok=True)
+    python_path.write_text("", encoding="utf-8")
+    python_path.chmod(0o755)
+
+    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=json.dumps(
+                {
+                    "name": "deepseek",
+                    "available": False,
+                    "reason": "CUDA out of memory",
+                    "model": "deepseek-ai/DeepSeek-OCR",
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("nancy_brain.ocr_worker_runtime.subprocess.run", fake_run)
+
+    status = verify_local_ocr_worker(root)
+
+    assert status["available"] is False
+    assert status["reason"] == "CUDA out of memory"
 
 
 def test_install_local_ocr_worker_falls_back_to_unpinned_torch_when_default_pin_missing(tmp_path, monkeypatch):

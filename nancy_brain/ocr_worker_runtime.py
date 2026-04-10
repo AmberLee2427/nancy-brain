@@ -254,7 +254,7 @@ def verify_local_ocr_worker(
     code_root: Optional[Path | str] = None,
     backend: str = "deepseek",
 ) -> dict:
-    """Verify that the managed worker can import the OCR backend stack."""
+    """Verify that the managed worker can import and load the OCR backend."""
 
     install_root = default_shared_worker_root(root)
     worker_python = worker_python_path(install_root)
@@ -262,14 +262,22 @@ def verify_local_ocr_worker(
     env = _worker_env(runtime_code_root)
     script = (
         "import json; "
-        "from nancy_brain.pdf_ocr import get_pdf_ocr_backend_status; "
+        "from nancy_brain.pdf_ocr import DeepSeekOCRBackend, get_pdf_ocr_backend_status; "
         f"status = get_pdf_ocr_backend_status({backend!r}); "
-        "print(json.dumps({"
+        "payload = {"
         "'name': status.name, "
         "'available': status.available, "
         "'reason': status.reason, "
         "'model': status.model"
-        "}, sort_keys=True))"
+        "}; "
+        f"if payload['available'] and {backend!r} == 'deepseek': "
+        "\n"
+        "    try:\n"
+        "        DeepSeekOCRBackend().ensure_loaded()\n"
+        "    except Exception as exc:\n"
+        "        payload['available'] = False\n"
+        "        payload['reason'] = str(exc)\n"
+        "print(json.dumps(payload, sort_keys=True))"
     )
     try:
         completed = subprocess.run(
