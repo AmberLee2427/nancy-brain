@@ -2,18 +2,32 @@
 
 __version__ = "0.2.1"
 
-from .cli import cli
-
-# Re-export main components for easy importing
-try:
-    import sys
-    from pathlib import Path
-
-    # Add parent directory to path to import rag_core
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from rag_core.service import RAGService
-except ImportError:
-    # Graceful fallback if dependencies aren't installed
-    RAGService = None
-
 __all__ = ["cli", "RAGService", "__version__"]
+
+
+def __getattr__(name):
+    """Lazily expose heavyweight package attributes.
+
+    Importing `nancy_brain` should stay cheap so isolated OCR worker runtimes
+    can import `nancy_brain.pdf_ocr` without also needing CLI or full RAG deps.
+    """
+
+    if name == "cli":
+        from .cli import cli
+
+        return cli
+
+    if name == "RAGService":
+        try:
+            import sys
+            from pathlib import Path
+
+            # Add parent directory to path to import rag_core
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            from rag_core.service import RAGService
+
+            return RAGService
+        except ImportError:
+            return None
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

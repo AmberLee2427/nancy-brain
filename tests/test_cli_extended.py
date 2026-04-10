@@ -286,6 +286,9 @@ def test_ocr_warm_command_with_articles_config_downloads_articles():
     with runner.isolated_filesystem():
         articles_path = Path("config/articles.yml")
         _write_articles_config(articles_path)
+        article_pdf = Path("knowledge_base/raw/papers/paper1.pdf")
+        article_pdf.parent.mkdir(parents=True, exist_ok=True)
+        article_pdf.write_bytes(b"%PDF-1.4 fake")
         fake_result = types.SimpleNamespace(
             status="generated",
             cached=False,
@@ -300,6 +303,20 @@ def test_ocr_warm_command_with_articles_config_downloads_articles():
         assert result.exit_code == 0
         mock_download.assert_called_once()
         mock_warm.assert_called_once()
+        warm_paths = mock_warm.call_args.args[0]
+        assert warm_paths == [article_pdf.resolve()]
+
+
+def test_ocr_warm_command_with_articles_config_exits_when_no_article_pdfs_exist():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        articles_path = Path("config/articles.yml")
+        _write_articles_config(articles_path)
+        with patch("scripts.build_knowledge_base.download_pdf_articles") as mock_download:
+            result = runner.invoke(cli, ["ocr", "warm", "--articles-config", str(articles_path)])
+        assert result.exit_code != 0
+        assert "No article PDFs found" in result.output
+        mock_download.assert_called_once()
 
 
 def test_ocr_warm_command_exits_nonzero_when_everything_is_deferred():
@@ -328,15 +345,20 @@ def test_ocr_setup_command_reports_managed_worker_install():
             command=["/tmp/nancy-worker/bin/nancy-brain"],
             code_root=Path("/tmp/site-packages"),
             torch_index_url="https://download.pytorch.org/whl/cu124",
+            torch_version="2.10.0+cu124",
+            torchvision_version="0.25.0+cu124",
+            torch_fallback_used=True,
             flash_attn=False,
             verification={"available": True, "reason": None},
         )
         with patch("nancy_brain.ocr_worker_runtime.install_local_ocr_worker", return_value=summary) as mock_install:
-            result = runner.invoke(cli, ["ocr", "setup"])
+            result = runner.invoke(cli, ["ocr", "setup", "--torch-version", "2.10.0"])
         assert result.exit_code == 0
         assert "Managed worker root" in result.output
         assert "DeepSeek available: yes" in result.output
+        assert "Torch fallback used: yes" in result.output
         mock_install.assert_called_once()
+        assert mock_install.call_args.kwargs["torch_version"] == "2.10.0"
 
 
 def test_ocr_setup_command_exits_nonzero_when_verification_fails():
@@ -348,6 +370,9 @@ def test_ocr_setup_command_exits_nonzero_when_verification_fails():
             command=["/tmp/nancy-worker/bin/nancy-brain"],
             code_root=Path("/tmp/site-packages"),
             torch_index_url=None,
+            torch_version="2.10.0+cu128",
+            torchvision_version="0.25.0+cu128",
+            torch_fallback_used=False,
             flash_attn=False,
             verification={"available": False, "reason": "CUDA unavailable"},
         )

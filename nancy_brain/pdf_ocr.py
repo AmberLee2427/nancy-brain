@@ -818,7 +818,10 @@ def _run_worker_subprocess(
             )
         return None
 
-    invocation = [*command, "ocr", "worker", str(pdf_path), "--cache-dir", str(cache_root)]
+    pdf_path_abs = pdf_path.resolve(strict=False)
+    cache_root_abs = cache_root.resolve(strict=False)
+
+    invocation = [*command, "ocr", "worker", str(pdf_path_abs), "--cache-dir", str(cache_root_abs)]
     backend_name = (preferred_backend or DEFAULT_BACKEND).strip().lower()
     if backend_name not in {"", "auto", "skip", "none"}:
         invocation.extend(["--backend", backend_name])
@@ -828,7 +831,14 @@ def _run_worker_subprocess(
     env["NB_OCR_WORKER_CMD"] = ""
 
     try:
-        completed = subprocess.run(invocation, check=False, capture_output=True, text=True, env=env)
+        completed = subprocess.run(
+            invocation,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(cache_root_abs),
+        )
     except Exception as exc:
         return PDFOCRResult(
             markdown=None,

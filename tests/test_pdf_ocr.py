@@ -155,15 +155,18 @@ def test_extract_pdf_markdown_invokes_worker_subprocess_on_cache_miss(tmp_path):
     pdf_path.write_bytes(b"%PDF-worker-generate")
     cache_dir = tmp_path / "cache"
     cache_key = compute_pdf_content_hash(pdf_path)
+    pdf_path_abs = pdf_path.resolve()
+    cache_dir_abs = cache_dir.resolve()
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None):
+    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
         assert check is False
         assert capture_output is True
         assert text is True
         assert cmd[:3] == ["nancy-brain", "ocr", "worker"]
-        assert cmd[3] == str(pdf_path)
-        assert cmd[4:6] == ["--cache-dir", str(cache_dir)]
+        assert cmd[3] == str(pdf_path_abs)
+        assert cmd[4:6] == ["--cache-dir", str(cache_dir_abs)]
         assert env is not None
+        assert cwd == str(cache_dir_abs)
         assert env.get("NB_IN_OCR_WORKER") == "1"
         assert env.get("NB_OCR_WORKER_CMD") == ""
         cache_entry = cache_dir / cache_key
@@ -205,14 +208,18 @@ def test_extract_pdf_markdown_uses_worker_command_from_environment(tmp_path, mon
     pdf_path.write_bytes(b"%PDF-worker-env")
     cache_dir = tmp_path / "cache"
     cache_key = compute_pdf_content_hash(pdf_path)
+    pdf_path_abs = pdf_path.resolve()
+    cache_dir_abs = cache_dir.resolve()
 
     monkeypatch.setenv("NB_OCR_WORKER_CMD", "python -m nancy_brain.cli ocr worker")
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None):
+    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
         assert cmd[:3] == ["python", "-m", "nancy_brain.cli"]
         assert cmd[3:5] == ["ocr", "worker"]
-        assert cmd[5] == str(pdf_path)
+        assert cmd[5] == str(pdf_path_abs)
         assert env is not None
+        assert cmd[6:8] == ["--cache-dir", str(cache_dir_abs)]
+        assert cwd == str(cache_dir_abs)
         assert env.get("NB_IN_OCR_WORKER") == "1"
         assert env.get("NB_OCR_WORKER_CMD") == ""
         cache_entry = cache_dir / cache_key
@@ -338,9 +345,14 @@ def test_extract_pdf_markdown_finds_project_worker_config_outside_cwd(tmp_path, 
     monkeypatch.chdir(outside_root)
     cache_dir = tmp_path / "cache"
     cache_key = compute_pdf_content_hash(pdf_path)
+    pdf_path_abs = pdf_path.resolve()
+    cache_dir_abs = cache_dir.resolve()
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None):
+    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
         assert cmd[:3] == ["project-nancy", "ocr", "worker"]
+        assert cmd[3] == str(pdf_path_abs)
+        assert cmd[4:6] == ["--cache-dir", str(cache_dir_abs)]
+        assert cwd == str(cache_dir_abs)
         cache_entry = cache_dir / cache_key
         cache_entry.mkdir(parents=True, exist_ok=True)
         (cache_entry / "content.md").write_text("# Project Title\n\nBody.", encoding="utf-8")
@@ -369,6 +381,37 @@ def test_extract_pdf_markdown_finds_project_worker_config_outside_cwd(tmp_path, 
 
     assert result.status == "generated"
     assert result.markdown == "# Project Title\n\nBody."
+    mock_run.assert_called_once()
+
+
+def test_extract_pdf_markdown_passes_absolute_paths_to_worker_when_called_from_project_cwd(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    pdf_path = project_root / "knowledge_base" / "raw" / "journal_articles" / "paper.pdf"
+    cache_dir = project_root / "knowledge_base" / "cache" / "pdf_ocr"
+    pdf_path.parent.mkdir(parents=True)
+    pdf_path.write_bytes(b"%PDF-relative-worker")
+    monkeypatch.chdir(project_root)
+
+    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+        assert cmd[:3] == ["nancy-brain", "ocr", "worker"]
+        assert cmd[3] == str(pdf_path.resolve())
+        assert cmd[4:6] == ["--cache-dir", str(cache_dir.resolve())]
+        assert cwd == str(cache_dir.resolve())
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout=json.dumps({"warning": "worker boom"}),
+            stderr="",
+        )
+
+    with (
+        patch("nancy_brain.pdf_ocr._select_backend", return_value=None),
+        patch("nancy_brain.pdf_ocr.subprocess.run", side_effect=fake_run) as mock_run,
+    ):
+        result = extract_pdf_markdown(pdf_path.relative_to(project_root), cache_dir=cache_dir, worker_cmd="nancy-brain")
+
+    assert result.status == "error"
+    assert result.warning == "worker boom"
     mock_run.assert_called_once()
 
 

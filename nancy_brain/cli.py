@@ -301,8 +301,12 @@ def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
         from scripts.build_knowledge_base import download_pdf_articles
 
         download_pdf_articles(str(articles_config), base_path=str(base_path))
-        scan_paths.append(base_path)
+        article_paths = _existing_article_pdf_paths(articles_config, base_path)
+        scan_paths.extend(article_paths)
     if not scan_paths:
+        if articles_config:
+            click.echo(f"No article PDFs found under {base_path} for config {articles_config}")
+            sys.exit(1)
         scan_paths = [base_path]
     results = warm_pdf_ocr_cache(scan_paths, cache_dir=cache_dir, preferred_backend=backend, recursive=recursive)
 
@@ -329,6 +333,30 @@ def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
         sys.exit(1)
 
 
+def _existing_article_pdf_paths(articles_config: Path, base_path: Path) -> list[Path]:
+    """Return existing article PDFs declared in the provided articles config."""
+
+    with open(articles_config, "r", encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+
+    seen: set[Path] = set()
+    article_paths: list[Path] = []
+    for category, articles in config.items():
+        if not isinstance(articles, list):
+            continue
+        for article in articles:
+            if not isinstance(article, dict):
+                continue
+            article_name = str(article.get("name", "")).strip()
+            if not article_name:
+                continue
+            pdf_path = (base_path / category / f"{article_name}.pdf").resolve(strict=False)
+            if pdf_path.exists() and pdf_path not in seen:
+                article_paths.append(pdf_path)
+                seen.add(pdf_path)
+    return article_paths
+
+
 @ocr.command("setup")
 @click.option(
     "--shared-root",
@@ -349,6 +377,16 @@ def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
     help="Optional PyTorch wheel index URL for the isolated worker runtime.",
 )
 @click.option(
+    "--torch-version",
+    default=None,
+    help="Optional torch version override for the worker runtime.",
+)
+@click.option(
+    "--torchvision-version",
+    default=None,
+    help="Optional torchvision version override for the worker runtime.",
+)
+@click.option(
     "--flash-attn/--no-flash-attn",
     default=False,
     help="Attempt to install flash-attn into the worker runtime.",
@@ -364,7 +402,16 @@ def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
     default=True,
     help="Verify the installed worker runtime after setup.",
 )
-def ocr_setup(shared_root, python_executable, torch_index_url, flash_attn, recreate, verify):
+def ocr_setup(
+    shared_root,
+    python_executable,
+    torch_index_url,
+    torch_version,
+    torchvision_version,
+    flash_attn,
+    recreate,
+    verify,
+):
     """Install or update the managed local OCR worker runtime."""
 
     from nancy_brain.ocr_worker_runtime import install_local_ocr_worker
@@ -374,6 +421,8 @@ def ocr_setup(shared_root, python_executable, torch_index_url, flash_attn, recre
             root=shared_root,
             python_executable=python_executable,
             torch_index_url=torch_index_url,
+            torch_version=torch_version,
+            torchvision_version=torchvision_version,
             flash_attn=flash_attn,
             recreate=recreate,
             verify=verify,
@@ -391,6 +440,12 @@ def ocr_setup(shared_root, python_executable, torch_index_url, flash_attn, recre
     click.echo(f"Code root: {summary.code_root}")
     if summary.torch_index_url:
         click.echo(f"Torch index URL: {summary.torch_index_url}")
+    if summary.torch_version:
+        click.echo(f"Worker torch: {summary.torch_version}")
+    if summary.torchvision_version:
+        click.echo(f"Worker torchvision: {summary.torchvision_version}")
+    if summary.torch_fallback_used:
+        click.echo("Torch fallback used: yes")
     click.echo(f"FlashAttention install requested: {'yes' if summary.flash_attn else 'no'}")
     if summary.verification is not None:
         available = bool(summary.verification.get("available"))

@@ -46,13 +46,16 @@ class OCRWorkerInstallSummary:
     backend: str
     torch_index_url: Optional[str]
     flash_attn: bool
+    torch_version: Optional[str] = None
+    torchvision_version: Optional[str] = None
+    torch_fallback_used: bool = False
     verification: Optional[dict] = None
 
 
 def package_code_root() -> Path:
-    """Return the import root that contains the `nancy_brain` package."""
+    """Return the source directory for the `nancy_brain` package."""
 
-    return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent
 
 
 def windows_shared_worker_base() -> Path:
@@ -153,6 +156,8 @@ def install_local_ocr_worker(
     backend: str = "deepseek",
     recreate: bool = False,
     torch_index_url: Optional[str] = None,
+    torch_version: Optional[str] = None,
+    torchvision_version: Optional[str] = None,
     flash_attn: bool = False,
     verify: bool = True,
 ) -> OCRWorkerInstallSummary:
@@ -174,11 +179,17 @@ def install_local_ocr_worker(
 
     resolved_torch_index = torch_index_url or detect_torch_index_url()
     if backend == "deepseek":
-        _install_deepseek_runtime(worker_python, resolved_torch_index, flash_attn)
+        runtime_info = _install_deepseek_runtime(
+            worker_python,
+            resolved_torch_index,
+            flash_attn,
+            torch_version=torch_version,
+            torchvision_version=torchvision_version,
+        )
     else:
         raise ValueError(f"unsupported OCR worker backend: {backend}")
 
-    code_root = package_code_root()
+    code_root = _install_worker_package_code(install_root)
     _write_worker_launchers(install_root, code_root=code_root, worker_python=worker_python)
     verification = verify_local_ocr_worker(install_root, code_root=code_root, backend=backend) if verify else None
 
@@ -190,6 +201,9 @@ def install_local_ocr_worker(
         "command": worker_launcher_command(install_root),
         "torch_index_url": resolved_torch_index,
         "flash_attn": flash_attn,
+        "torch_version": runtime_info["torch_version"],
+        "torchvision_version": runtime_info["torchvision_version"],
+        "torch_fallback_used": runtime_info["torch_fallback_used"],
         "verification": verification,
     }
     metadata_path = worker_metadata_path(install_root)
@@ -204,6 +218,9 @@ def install_local_ocr_worker(
         backend=backend,
         torch_index_url=resolved_torch_index,
         flash_attn=flash_attn,
+        torch_version=runtime_info["torch_version"],
+        torchvision_version=runtime_info["torchvision_version"],
+        torch_fallback_used=runtime_info["torch_fallback_used"],
         verification=verification,
     )
 
@@ -241,7 +258,7 @@ def verify_local_ocr_worker(
 
     install_root = default_shared_worker_root(root)
     worker_python = worker_python_path(install_root)
-    runtime_code_root = Path(code_root).resolve() if code_root is not None else package_code_root()
+    runtime_code_root = Path(code_root).resolve() if code_root is not None else _worker_code_root(install_root)
     env = _worker_env(runtime_code_root)
     script = (
         "import json; "
@@ -261,6 +278,7 @@ def verify_local_ocr_worker(
             capture_output=True,
             text=True,
             env=env,
+            cwd=str(install_root),
         )
     except Exception as exc:
         return {
@@ -286,12 +304,33 @@ def verify_local_ocr_worker(
     return payload
 
 
-def _install_deepseek_runtime(worker_python: Path, torch_index_url: Optional[str], flash_attn: bool) -> None:
+def _install_deepseek_runtime(
+    worker_python: Path,
+    torch_index_url: Optional[str],
+    flash_attn: bool,
+    *,
+    torch_version: Optional[str] = None,
+    torchvision_version: Optional[str] = None,
+) -> dict:
+    requested_torch_version = (torch_version or "").strip() or WORKER_TORCH_VERSION
+    requested_torchvision_version = (torchvision_version or "").strip() or WORKER_TORCHVISION_VERSION
     torch_requirements = [
-        f"torch=={WORKER_TORCH_VERSION}",
-        f"torchvision=={WORKER_TORCHVISION_VERSION}",
+        f"torch=={requested_torch_version}",
+        f"torchvision=={requested_torchvision_version}",
     ]
-    _pip_install(worker_python, torch_requirements, index_url=torch_index_url)
+
+    fallback_used = False
+    try:
+        _pip_install(worker_python, torch_requirements, index_url=torch_index_url)
+    except subprocess.CalledProcessError:
+        # The DeepSeek-tested torch pin is not available on every CUDA wheel index.
+        # When we are using the default pinned pair, fall back to the newest
+        # available torch/torchvision on that index and let verification decide.
+        if torch_version is not None or torchvision_version is not None:
+            raise
+        _pip_install(worker_python, ["torch", "torchvision"], index_url=torch_index_url)
+        fallback_used = True
+
     _pip_install(worker_python, DEEPSEEK_WORKER_REQUIREMENTS)
     if flash_attn:
         _pip_install(
@@ -299,6 +338,39 @@ def _install_deepseek_runtime(worker_python: Path, torch_index_url: Optional[str
             [f"flash-attn=={WORKER_FLASH_ATTN_VERSION}"],
             extra_args=["--no-build-isolation"],
         )
+    installed_versions = _detect_installed_torch_versions(worker_python)
+    installed_versions["torch_fallback_used"] = fallback_used
+    return installed_versions
+
+
+def _detect_installed_torch_versions(worker_python: Path) -> dict:
+    cmd = [
+        str(worker_python),
+        "-c",
+        (
+            "import json, torch; "
+            "import torchvision; "
+            "print(json.dumps({'torch_version': torch.__version__, 'torchvision_version': torchvision.__version__}, sort_keys=True))"
+        ),
+    ]
+    completed = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    stdout = completed.stdout.strip()
+    if completed.returncode != 0 or not stdout:
+        return {
+            "torch_version": None,
+            "torchvision_version": None,
+        }
+    try:
+        payload = json.loads(stdout)
+    except Exception:
+        return {
+            "torch_version": None,
+            "torchvision_version": None,
+        }
+    return {
+        "torch_version": payload.get("torch_version"),
+        "torchvision_version": payload.get("torchvision_version"),
+    }
 
 
 def _pip_install(
@@ -335,6 +407,28 @@ def _write_worker_launchers(install_root: Path, *, code_root: Path, worker_pytho
         launcher_path.chmod(0o755)
 
 
+def _worker_code_root(install_root: Path) -> Path:
+    return install_root / "code"
+
+
+def _install_worker_package_code(install_root: Path) -> Path:
+    """Copy only the `nancy_brain` package into the worker root.
+
+    We intentionally avoid pointing the worker at the main environment's entire
+    site-packages directory. The worker should import the current `nancy_brain`
+    code, but it must resolve OCR runtime deps from its own isolated venv.
+    """
+
+    source_package_dir = package_code_root()
+    code_root = _worker_code_root(install_root)
+    target_package_dir = code_root / "nancy_brain"
+    if target_package_dir.exists():
+        shutil.rmtree(target_package_dir)
+    code_root.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_package_dir, target_package_dir)
+    return code_root
+
+
 def _worker_env(code_root: Path) -> dict[str, str]:
     env = os.environ.copy()
     existing = env.get("PYTHONPATH", "").strip()
@@ -343,8 +437,10 @@ def _worker_env(code_root: Path) -> dict[str, str]:
 
 
 def _unix_launcher_contents(*, code_root: Path, worker_python: Path) -> str:
+    install_root = code_root.parent
     return (
         "#!/usr/bin/env sh\n"
+        f'cd "{install_root}"\n'
         f'PYTHONPATH="{code_root}${{PYTHONPATH:+:${{PYTHONPATH}}}}"\n'
         "export PYTHONPATH\n"
         f'exec "{worker_python}" -m nancy_brain.ocr_worker_entry "$@"\n'
@@ -352,8 +448,10 @@ def _unix_launcher_contents(*, code_root: Path, worker_python: Path) -> str:
 
 
 def _windows_launcher_contents(*, code_root: Path, worker_python: Path) -> str:
+    install_root = code_root.parent
     return (
         "@echo off\r\n"
+        f'cd /d "{install_root}"\r\n'
         f'set "PYTHONPATH={code_root};%PYTHONPATH%"\r\n'
         f'"{worker_python}" -m nancy_brain.ocr_worker_entry %*\r\n'
     )
