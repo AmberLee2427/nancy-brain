@@ -1,8 +1,10 @@
 """Tests for nancy_brain.pdf_ocr."""
 
+import contextlib
 import importlib.util
 import json
 import subprocess
+import sys
 import types
 from pathlib import Path
 from unittest.mock import patch
@@ -158,9 +160,9 @@ def test_extract_pdf_markdown_invokes_worker_subprocess_on_cache_miss(tmp_path):
     pdf_path_abs = pdf_path.resolve()
     cache_dir_abs = cache_dir.resolve()
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+    def fake_run(cmd, check=False, stdout=None, text=False, env=None, cwd=None):
         assert check is False
-        assert capture_output is True
+        assert stdout is subprocess.PIPE
         assert text is True
         assert cmd[:3] == ["nancy-brain", "ocr", "worker"]
         assert cmd[3] == str(pdf_path_abs)
@@ -213,7 +215,8 @@ def test_extract_pdf_markdown_uses_worker_command_from_environment(tmp_path, mon
 
     monkeypatch.setenv("NB_OCR_WORKER_CMD", "python -m nancy_brain.cli ocr worker")
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+    def fake_run(cmd, check=False, stdout=None, text=False, env=None, cwd=None):
+        assert stdout is subprocess.PIPE
         assert cmd[:3] == ["python", "-m", "nancy_brain.cli"]
         assert cmd[3:5] == ["ocr", "worker"]
         assert cmd[5] == str(pdf_path_abs)
@@ -348,7 +351,8 @@ def test_extract_pdf_markdown_finds_project_worker_config_outside_cwd(tmp_path, 
     pdf_path_abs = pdf_path.resolve()
     cache_dir_abs = cache_dir.resolve()
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+    def fake_run(cmd, check=False, stdout=None, text=False, env=None, cwd=None):
+        assert stdout is subprocess.PIPE
         assert cmd[:3] == ["project-nancy", "ocr", "worker"]
         assert cmd[3] == str(pdf_path_abs)
         assert cmd[4:6] == ["--cache-dir", str(cache_dir_abs)]
@@ -392,7 +396,8 @@ def test_extract_pdf_markdown_passes_absolute_paths_to_worker_when_called_from_p
     pdf_path.write_bytes(b"%PDF-relative-worker")
     monkeypatch.chdir(project_root)
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, env=None, cwd=None):
+    def fake_run(cmd, check=False, stdout=None, text=False, env=None, cwd=None):
+        assert stdout is subprocess.PIPE
         assert cmd[:3] == ["nancy-brain", "ocr", "worker"]
         assert cmd[3] == str(pdf_path.resolve())
         assert cmd[4:6] == ["--cache-dir", str(cache_dir.resolve())]
@@ -495,6 +500,161 @@ def test_extract_pdf_markdown_worker_failure_returns_error(tmp_path):
     assert result.status == "error"
     assert result.markdown is None
     assert result.warning == "worker boom"
+
+
+def test_warm_pdf_ocr_cache_batches_worker_invocation_for_multiple_pdfs(tmp_path):
+    first_pdf = tmp_path / "first.pdf"
+    second_pdf = tmp_path / "second.pdf"
+    first_pdf.write_bytes(b"%PDF-first-worker-batch")
+    second_pdf.write_bytes(b"%PDF-second-worker-batch")
+    cache_dir = tmp_path / "cache"
+    first_key = compute_pdf_content_hash(first_pdf)
+    second_key = compute_pdf_content_hash(second_pdf)
+    first_abs = first_pdf.resolve()
+    second_abs = second_pdf.resolve()
+    cache_dir_abs = cache_dir.resolve()
+
+    def fake_run(cmd, check=False, stdout=None, text=False, env=None, cwd=None):
+        assert check is False
+        assert stdout is subprocess.PIPE
+        assert text is True
+        assert cmd[:3] == ["nancy-brain", "ocr", "worker"]
+        assert cmd[3:5] == [str(first_abs), str(second_abs)]
+        assert cmd[5:7] == ["--cache-dir", str(cache_dir_abs)]
+        assert env is not None
+        assert cwd == str(cache_dir_abs)
+        assert env.get("NB_IN_OCR_WORKER") == "1"
+        assert env.get("NB_OCR_WORKER_CMD") == ""
+
+        for cache_key, title in ((first_key, "First"), (second_key, "Second")):
+            cache_entry = cache_dir / cache_key
+            cache_entry.mkdir(parents=True, exist_ok=True)
+            (cache_entry / "content.md").write_text(f"# {title} Title\n\nBody.", encoding="utf-8")
+            (cache_entry / "metadata.json").write_text(
+                json.dumps(
+                    {
+                        "pdf_sha256": cache_key,
+                        "backend": "deepseek",
+                        "status": "generated",
+                        "model": "deepseek-ai/DeepSeek-OCR",
+                        "page_count": 1,
+                        "signature": {"cache_version": 1},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+        stdout = "\n".join(
+            [
+                json.dumps({"pdf_path": str(first_abs), "backend": "deepseek", "status": "generated"}),
+                json.dumps({"pdf_path": str(second_abs), "backend": "deepseek", "status": "generated"}),
+            ]
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+
+    with (
+        patch("nancy_brain.pdf_ocr._select_backend", return_value=None),
+        patch("nancy_brain.pdf_ocr.subprocess.run", side_effect=fake_run) as mock_run,
+    ):
+        results = pdf_ocr.warm_pdf_ocr_cache([first_pdf, second_pdf], cache_dir=cache_dir, worker_cmd="nancy-brain")
+
+    assert [result.status for result in results] == ["generated", "generated"]
+    assert [result.markdown for result in results] == ["# First Title\n\nBody.", "# Second Title\n\nBody."]
+    mock_run.assert_called_once()
+
+
+def test_extract_pdf_markdown_logs_cache_write_progress(tmp_path, caplog):
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-log-test")
+    cache_dir = tmp_path / "cache"
+    fake_backend = FakeDeepSeekBackend()
+
+    with (
+        patch("nancy_brain.pdf_ocr._select_backend", return_value=fake_backend),
+        patch("nancy_brain.pdf_ocr.render_pdf_to_images", return_value=[tmp_path / "page-0001.png"]),
+        caplog.at_level("INFO", logger="nancy_brain.pdf_ocr"),
+    ):
+        result = extract_pdf_markdown(pdf_path, cache_dir=cache_dir)
+
+    assert result.status == "generated"
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("OCR start:" in message for message in messages)
+    assert any("Rendered PDF pages:" in message for message in messages)
+    assert any("Wrote OCR cache entry:" in message for message in messages)
+    assert any("OCR complete:" in message for message in messages)
+
+
+def test_deepseek_backend_strips_trailing_whitespace_from_prompt():
+    backend = DeepSeekOCRBackend(prompt="<image>\n<|grounding|>Convert the document to markdown. ")
+
+    assert backend.prompt == "<image>\n<|grounding|>Convert the document to markdown."
+
+
+def test_deepseek_ocr_images_passes_eval_mode_true(tmp_path):
+    backend = DeepSeekOCRBackend()
+    backend._tokenizer = object()
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = []
+
+        def infer(self, tokenizer, **kwargs):
+            self.calls.append((tokenizer, kwargs))
+            return "markdown output"
+
+    fake_model = FakeModel()
+    backend._model = fake_model
+
+    fake_torch = types.SimpleNamespace(inference_mode=contextlib.nullcontext)
+    with patch.dict(sys.modules, {"torch": fake_torch}):
+        result = backend.ocr_images([tmp_path / "page-0001.png"])
+
+    assert result == "## Page 1\n\nmarkdown output"
+    assert len(fake_model.calls) == 1
+    _, kwargs = fake_model.calls[0]
+    assert kwargs["eval_mode"] is True
+    assert kwargs["prompt"] == "<image>\n<|grounding|>Convert the document to markdown."
+
+
+def test_deepseek_ocr_images_retries_without_eval_mode_when_unsupported(tmp_path):
+    backend = DeepSeekOCRBackend()
+    backend._tokenizer = object()
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = 0
+
+        def infer(self, tokenizer, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise TypeError("infer() got an unexpected keyword argument 'eval_mode'")
+            assert "eval_mode" not in kwargs
+            return "markdown output"
+
+    backend._model = FakeModel()
+
+    fake_torch = types.SimpleNamespace(inference_mode=contextlib.nullcontext)
+    with patch.dict(sys.modules, {"torch": fake_torch}):
+        result = backend.ocr_images([tmp_path / "page-0001.png"])
+
+    assert result == "## Page 1\n\nmarkdown output"
+
+
+def test_default_pdf_ocr_cache_dir_prefers_cwd_project_root(tmp_path, monkeypatch):
+    project_root = tmp_path / "Nancy"
+    cache_dir = project_root / "knowledge_base" / "cache" / "pdf_ocr"
+    cache_dir.mkdir(parents=True)
+    monkeypatch.chdir(cache_dir)
+
+    assert pdf_ocr.default_pdf_ocr_cache_dir() == cache_dir
+
+
+def test_default_pdf_ocr_cache_dir_falls_back_to_cwd_not_site_packages(tmp_path, monkeypatch):
+    working_dir = tmp_path / "random-working-dir"
+    working_dir.mkdir()
+    monkeypatch.chdir(working_dir)
+
+    assert pdf_ocr.default_pdf_ocr_cache_dir() == working_dir / "knowledge_base" / "cache" / "pdf_ocr"
 
 
 def test_deepseek_status_reports_missing_runtime_dependencies(monkeypatch):

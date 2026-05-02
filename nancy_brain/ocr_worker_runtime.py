@@ -261,24 +261,25 @@ def verify_local_ocr_worker(
     worker_python = worker_python_path(install_root)
     runtime_code_root = Path(code_root).resolve() if code_root is not None else _worker_code_root(install_root)
     env = _worker_env(runtime_code_root)
-    script = (
-        "import json; "
-        "from nancy_brain.pdf_ocr import DeepSeekOCRBackend, get_pdf_ocr_backend_status; "
-        f"status = get_pdf_ocr_backend_status({backend!r}); "
-        "payload = {"
-        "'name': status.name, "
-        "'available': status.available, "
-        "'reason': status.reason, "
-        "'model': status.model"
-        "}; "
-        f"if payload['available'] and {backend!r} == 'deepseek': "
-        "\n"
-        "    try:\n"
-        "        DeepSeekOCRBackend().ensure_loaded()\n"
-        "    except Exception as exc:\n"
-        "        payload['available'] = False\n"
-        "        payload['reason'] = str(exc)\n"
-        "print(json.dumps(payload, sort_keys=True))"
+    script = "\n".join(
+        [
+            "import json",
+            "from nancy_brain.pdf_ocr import DeepSeekOCRBackend, get_pdf_ocr_backend_status",
+            f"status = get_pdf_ocr_backend_status({backend!r})",
+            "payload = {",
+            "    'name': status.name,",
+            "    'available': status.available,",
+            "    'reason': status.reason,",
+            "    'model': status.model,",
+            "}",
+            f"if payload['available'] and {backend!r} == 'deepseek':",
+            "    try:",
+            "        DeepSeekOCRBackend().ensure_loaded()",
+            "    except Exception as exc:",
+            "        payload['available'] = False",
+            "        payload['reason'] = str(exc)",
+            "print(json.dumps(payload, sort_keys=True))",
+        ]
     )
     try:
         completed = subprocess.run(

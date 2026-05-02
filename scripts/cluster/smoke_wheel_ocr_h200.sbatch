@@ -7,7 +7,7 @@
 
 #SBATCH --job-name=nb-ocr-h200
 #SBATCH --partition=batch-gpu-new
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
@@ -19,7 +19,6 @@ set -euo pipefail
 
 PROJECT_ROOT="$HOME/project_amber/Nancy"
 ARTICLES_CONFIG="$PROJECT_ROOT/config/articles.yml"
-WHEEL_PATH="$HOME/project_amber/nancy_brain-0.2.1-py3-none-any.whl"
 ENV_PREFIX="$HOME/envs/nancy-brain-smoke"
 TORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
 OCR_WARM_ARTICLES="1"
@@ -28,8 +27,11 @@ RECREATE_ENV="0"
 cd "$PROJECT_ROOT"
 mkdir -p logs
 
-if [[ ! -f "$WHEEL_PATH" ]]; then
-    echo "Wheel not found: $WHEEL_PATH"
+mapfile -t WHEEL_CANDIDATES < <(ls -1t "$HOME"/project_amber/nancy_brain-*.whl 2>/dev/null || true)
+WHEEL_PATH="${WHEEL_CANDIDATES[0]:-}"
+
+if [[ -z "$WHEEL_PATH" || ! -f "$WHEEL_PATH" ]]; then
+    echo "Wheel not found under $HOME/project_amber/nancy_brain-*.whl"
     exit 2
 fi
 
@@ -55,6 +57,7 @@ export TMPDIR="${SLURM_TMPDIR:-/tmp}"
 export PIP_CACHE_DIR="${SLURM_TMPDIR:-/tmp}/pip-cache"
 export KMP_DUPLICATE_LIB_OK="TRUE"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export NB_PDF_OCR_CACHE_DIR="$PROJECT_ROOT/knowledge_base/cache/pdf_ocr"
 mkdir -p "$HF_HOME" "$TMPDIR" "$PIP_CACHE_DIR"
 
 echo "=== Smoke env ==="

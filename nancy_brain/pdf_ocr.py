@@ -9,6 +9,7 @@ import os
 import shlex
 import subprocess
 import tempfile
+import time
 import tomllib
 from dataclasses import dataclass
 from importlib.util import find_spec
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DEEPSEEK_MODEL = os.environ.get("NB_PDF_OCR_DEEPSEEK_MODEL", "deepseek-ai/DeepSeek-OCR")
 DEFAULT_DEEPSEEK_PROMPT = os.environ.get(
     "NB_PDF_OCR_DEEPSEEK_PROMPT",
-    "<image>\n<|grounding|>Convert the document to markdown. ",
+    "<image>\n<|grounding|>Convert the document to markdown.",
 )
 DEFAULT_RENDER_SCALE = float(os.environ.get("NB_PDF_OCR_RENDER_SCALE", "2.0"))
 DEFAULT_BASE_SIZE = int(os.environ.get("NB_PDF_OCR_DEEPSEEK_BASE_SIZE", "1024"))
@@ -235,7 +236,7 @@ class DeepSeekOCRBackend:
         crop_mode: bool = DEFAULT_CROP_MODE,
     ) -> None:
         self.model_name = model_name
-        self.prompt = prompt
+        self.prompt = prompt.rstrip()
         self.render_scale = render_scale
         self.base_size = base_size
         self.image_size = image_size
@@ -348,10 +349,17 @@ class DeepSeekOCRBackend:
         import torch
         from transformers import AutoModel, AutoTokenizer
 
+        logger.info("Loading DeepSeek OCR tokenizer: model=%s", self.model_name)
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
 
         quantization_mode = _resolve_deepseek_quantization_mode(torch)
         model_kwargs_candidates = _deepseek_attention_kwargs_candidates(quantization_mode)
+        logger.info(
+            "Loading DeepSeek OCR model: model=%s quantize=%s candidates=%s",
+            self.model_name,
+            quantization_mode or "none",
+            len(model_kwargs_candidates),
+        )
 
         load_errors: list[str] = []
         for extra_kwargs in model_kwargs_candidates:
@@ -362,6 +370,13 @@ class DeepSeekOCRBackend:
                     "use_safetensors": True,
                     **extra_kwargs,
                 }
+                attn_label = extra_kwargs.get("_attn_implementation", "default")
+                logger.info(
+                    "Attempting DeepSeek OCR load: model=%s quantize=%s attention=%s",
+                    self.model_name,
+                    quantization_mode or "none",
+                    attn_label,
+                )
                 if quantization_mode in {"4bit", "8bit"}:
                     from transformers import BitsAndBytesConfig
 
@@ -387,11 +402,20 @@ class DeepSeekOCRBackend:
                         **common_kwargs,
                     )
                     self._model = model.eval().cuda().to(dtype)
+                logger.info(
+                    "Loaded DeepSeek OCR model: model=%s quantize=%s attention=%s",
+                    self.model_name,
+                    quantization_mode or "none",
+                    attn_label,
+                )
                 return
             except Exception as exc:
                 label = extra_kwargs.get("_attn_implementation", "default")
                 if quantization_mode:
                     label = f"{quantization_mode}/{label}"
+                logger.warning(
+                    "DeepSeek OCR load attempt failed: model=%s variant=%s error=%s", self.model_name, label, exc
+                )
                 load_errors.append(f"{label}: {exc}")
 
         raise RuntimeError("failed to load DeepSeek OCR model: " + " | ".join(load_errors))
@@ -402,24 +426,52 @@ class DeepSeekOCRBackend:
         import torch
 
         page_outputs: list[str] = []
+        total_pages = len(image_paths)
         for page_num, image_path in enumerate(image_paths, start=1):
+            page_start = time.monotonic()
+            logger.info(
+                "DeepSeek OCR page start: model=%s page=%s/%s image=%s",
+                self.model_name,
+                page_num,
+                total_pages,
+                image_path,
+            )
             with tempfile.TemporaryDirectory(prefix="nancy-deepseek-page-") as temp_dir:
                 output_dir = Path(temp_dir)
                 with torch.inference_mode():
-                    result = self._model.infer(
-                        self._tokenizer,
-                        prompt=self.prompt,
-                        image_file=str(image_path),
-                        output_path=str(output_dir),
-                        base_size=self.base_size,
-                        image_size=self.image_size,
-                        crop_mode=self.crop_mode,
-                        save_results=True,
-                        test_compress=False,
-                    )
+                    infer_kwargs = {
+                        "prompt": self.prompt,
+                        "image_file": str(image_path),
+                        "output_path": str(output_dir),
+                        "base_size": self.base_size,
+                        "image_size": self.image_size,
+                        "crop_mode": self.crop_mode,
+                        "save_results": True,
+                        "test_compress": False,
+                        "eval_mode": True,
+                    }
+                    try:
+                        result = self._model.infer(self._tokenizer, **infer_kwargs)
+                    except TypeError as exc:
+                        if "eval_mode" not in str(exc):
+                            raise
+                        logger.warning(
+                            "DeepSeek OCR infer() does not accept eval_mode; retrying without it: model=%s",
+                            self.model_name,
+                        )
+                        infer_kwargs.pop("eval_mode", None)
+                        result = self._model.infer(self._tokenizer, **infer_kwargs)
                 page_markdown = _coerce_deepseek_output(result, output_dir)
                 if page_markdown:
                     page_outputs.append(f"## Page {page_num}\n\n{page_markdown.strip()}")
+                    logger.info(
+                        "DeepSeek OCR page complete: model=%s page=%s/%s seconds=%.2f chars=%s",
+                        self.model_name,
+                        page_num,
+                        total_pages,
+                        time.monotonic() - page_start,
+                        len(page_markdown.strip()),
+                    )
                 else:
                     logger.warning("DeepSeek OCR returned no markdown for page %s (%s)", page_num, image_path)
 
@@ -434,8 +486,21 @@ def default_pdf_ocr_cache_dir(project_root: Optional[Path] = None) -> Path:
     if env_override:
         return Path(env_override)
     if project_root is None:
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = _discover_pdf_ocr_project_root()
     return project_root / "knowledge_base" / "cache" / "pdf_ocr"
+
+
+def _discover_pdf_ocr_project_root() -> Path:
+    cwd = Path.cwd().resolve()
+    for candidate in [cwd, *cwd.parents]:
+        if (candidate / "knowledge_base").is_dir():
+            return candidate
+        if candidate.name == "knowledge_base":
+            return candidate.parent
+    for candidate in [cwd, *cwd.parents]:
+        if (candidate / "pyproject.toml").exists() or (candidate / ".git").exists():
+            return candidate
+    return cwd
 
 
 def compute_pdf_content_hash(pdf_path: Path | str) -> str:
@@ -477,6 +542,7 @@ def extract_pdf_markdown(
     allow_worker_spawn: bool = True,
 ) -> PDFOCRResult:
     pdf_path = Path(pdf_path)
+    resolved_pdf_path = pdf_path.resolve(strict=False)
     cache_root = Path(cache_dir) if cache_dir is not None else default_pdf_ocr_cache_dir()
     cache_root.mkdir(parents=True, exist_ok=True)
 
@@ -486,8 +552,10 @@ def extract_pdf_markdown(
     if backend is None:
         cached_result = _load_cached_result(cache_entry_dir, cache_key, preferred_backend=preferred_backend)
         if cached_result is not None:
+            logger.info("OCR cache hit: pdf=%s cache_key=%s", resolved_pdf_path, cache_key)
             return cached_result
         if allow_worker_spawn and not _backend_is_cache_only(preferred_backend):
+            logger.info("OCR cache miss, delegating to worker: pdf=%s cache_key=%s", resolved_pdf_path, cache_key)
             worker_result = _run_worker_subprocess(
                 pdf_path,
                 cache_root=cache_root,
@@ -498,6 +566,12 @@ def extract_pdf_markdown(
             if worker_result is not None:
                 return worker_result
         status = get_pdf_ocr_backend_status(preferred_backend)
+        logger.warning(
+            "OCR unavailable for PDF: pdf=%s backend=%s reason=%s",
+            resolved_pdf_path,
+            status.name,
+            status.reason or "unknown",
+        )
         return PDFOCRResult(
             markdown=None,
             backend=status.name,
@@ -517,17 +591,23 @@ def extract_pdf_markdown(
         signature=backend.signature(),
     )
     if cached_result is not None:
+        logger.info("OCR cache hit: pdf=%s cache_key=%s", resolved_pdf_path, cache_key)
         return cached_result
 
+    logger.info("OCR start: pdf=%s backend=%s cache_key=%s", resolved_pdf_path, backend.name, cache_key)
+    extraction_start = time.monotonic()
     try:
         with tempfile.TemporaryDirectory(prefix="nancy-pdf-pages-") as temp_dir:
+            logger.info("Rendering PDF for OCR: pdf=%s scale=%.2f", resolved_pdf_path, backend.render_scale)
             image_paths = render_pdf_to_images(
                 pdf_path,
                 output_dir=Path(temp_dir),
                 scale=backend.render_scale,
             )
+            logger.info("Rendered PDF pages: pdf=%s pages=%s", resolved_pdf_path, len(image_paths))
             markdown = backend.ocr_images(image_paths)
     except Exception as exc:
+        logger.exception("OCR failed for PDF: pdf=%s", resolved_pdf_path)
         return PDFOCRResult(
             markdown=None,
             backend=backend.name,
@@ -560,6 +640,13 @@ def extract_pdf_markdown(
         page_count=len(image_paths),
     )
     _write_cache_entry(cache_entry_dir, cache_key, backend.signature(), result)
+    logger.info(
+        "OCR complete: pdf=%s pages=%s cache_key=%s seconds=%.2f",
+        resolved_pdf_path,
+        len(image_paths),
+        cache_key,
+        time.monotonic() - extraction_start,
+    )
     return result
 
 
@@ -575,12 +662,14 @@ def render_pdf_to_images(pdf_path: Path | str, *, output_dir: Path, scale: float
 
     output_dir.mkdir(parents=True, exist_ok=True)
     image_paths: list[Path] = []
+    logger.info("Rendering PDF pages to images: pdf=%s output_dir=%s scale=%.2f", pdf_path, output_dir, scale)
     with fitz.open(str(pdf_path)) as document:
         for page_index, page in enumerate(document, start=1):
             pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
             image_path = output_dir / f"page-{page_index:04d}.png"
             pixmap.save(str(image_path))
             image_paths.append(image_path)
+    logger.info("Rendered PDF page images: pdf=%s pages=%s", pdf_path, len(image_paths))
     return image_paths
 
 
@@ -665,6 +754,13 @@ def _write_cache_entry(cache_entry_dir: Path, cache_key: str, signature: dict, r
 
     temp_markdown_path.replace(markdown_path)
     temp_metadata_path.replace(metadata_path)
+    logger.info(
+        "Wrote OCR cache entry: entry=%s cache_key=%s status=%s pages=%s",
+        cache_entry_dir,
+        cache_key,
+        result.status,
+        result.page_count,
+    )
 
 
 def _coerce_deepseek_output(result, output_dir: Path) -> Optional[str]:
@@ -728,6 +824,17 @@ def warm_pdf_ocr_cache(
         elif path.is_file() and path.suffix.lower() == ".pdf":
             pdf_paths.append(path)
 
+    logger.info("OCR warm scan complete: input_items=%s pdfs=%s recursive=%s", len(paths), len(pdf_paths), recursive)
+
+    backend = _select_backend(preferred_backend)
+    if backend is None and allow_worker_spawn and not _backend_is_cache_only(preferred_backend):
+        return _warm_pdf_ocr_cache_via_worker_batch(
+            pdf_paths,
+            cache_dir=cache_dir,
+            preferred_backend=preferred_backend,
+            worker_cmd=worker_cmd,
+        )
+
     results: list[PDFOCRResult] = []
     for pdf_path in pdf_paths:
         results.append(
@@ -740,6 +847,70 @@ def warm_pdf_ocr_cache(
             )
         )
     return results
+
+
+def _warm_pdf_ocr_cache_via_worker_batch(
+    pdf_paths: list[Path],
+    *,
+    cache_dir: Optional[Path | str] = None,
+    preferred_backend: Optional[str] = None,
+    worker_cmd: Optional[str | list[str]] = None,
+) -> list[PDFOCRResult]:
+    cache_root = Path(cache_dir) if cache_dir is not None else default_pdf_ocr_cache_dir()
+    cache_root.mkdir(parents=True, exist_ok=True)
+
+    results_by_path: dict[Path, PDFOCRResult] = {}
+    cache_keys_by_path: dict[Path, str] = {}
+    worker_batch: list[Path] = []
+
+    for pdf_path in pdf_paths:
+        resolved_path = pdf_path.resolve(strict=False)
+        cache_key = compute_pdf_content_hash(resolved_path)
+        cache_keys_by_path[resolved_path] = cache_key
+        cache_entry_dir = cache_root / cache_key
+        cached_result = _load_cached_result(cache_entry_dir, cache_key, preferred_backend=preferred_backend)
+        if cached_result is not None:
+            results_by_path[resolved_path] = cached_result
+        else:
+            worker_batch.append(resolved_path)
+
+    logger.info(
+        "OCR warm batch prepared: total=%s cached=%s worker_batch=%s cache_dir=%s",
+        len(pdf_paths),
+        len(results_by_path),
+        len(worker_batch),
+        cache_root,
+    )
+
+    if worker_batch:
+        worker_results = _run_worker_batch_subprocess(
+            worker_batch,
+            cache_root=cache_root,
+            cache_keys_by_path=cache_keys_by_path,
+            preferred_backend=preferred_backend,
+            worker_cmd=worker_cmd,
+        )
+        results_by_path.update(worker_results)
+
+    ordered_results: list[PDFOCRResult] = []
+    for pdf_path in pdf_paths:
+        resolved_path = pdf_path.resolve(strict=False)
+        result = results_by_path.get(resolved_path)
+        if result is None:
+            ordered_results.append(
+                PDFOCRResult(
+                    markdown=None,
+                    backend="worker",
+                    cached=False,
+                    cache_key=cache_keys_by_path.get(resolved_path, ""),
+                    status="error",
+                    warning="OCR warm did not return a result for this PDF",
+                )
+            )
+        else:
+            ordered_results.append(result)
+
+    return ordered_results
 
 
 def _backend_is_cache_only(preferred_backend: Optional[str]) -> bool:
@@ -897,6 +1068,103 @@ def _parse_worker_payload(stdout: str) -> Optional[dict]:
         return None
 
 
+def _parse_worker_payload_stream(stdout: str) -> list[dict]:
+    payloads: list[dict] = []
+    for line in stdout.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            return []
+        if isinstance(payload, dict):
+            payloads.append(payload)
+        else:
+            return []
+    return payloads
+
+
+def _result_from_worker_payload(
+    payload: Optional[dict],
+    *,
+    pdf_path: Path,
+    cache_root: Path,
+    cache_key: str,
+    preferred_backend: Optional[str],
+    fallback_warning: Optional[str] = None,
+) -> PDFOCRResult:
+    if not payload:
+        return PDFOCRResult(
+            markdown=None,
+            backend="worker",
+            cached=False,
+            cache_key=cache_key,
+            status="error",
+            warning=fallback_warning or "OCR worker did not return a JSON payload",
+        )
+
+    status = str(payload.get("status", "error"))
+    warning = payload.get("warning")
+    backend_name = str(payload.get("backend") or "worker")
+    model = payload.get("model")
+    page_count = int(payload.get("page_count") or 0)
+    cache_entry_dir = cache_root / cache_key
+
+    if status == "needs_ocr":
+        return PDFOCRResult(
+            markdown=None,
+            backend=backend_name,
+            cached=False,
+            cache_key=cache_key,
+            status="needs_ocr",
+            needs_ocr=True,
+            deferred=True,
+            model=model,
+            page_count=page_count,
+            warning=warning or fallback_warning,
+        )
+
+    if status == "error":
+        return PDFOCRResult(
+            markdown=None,
+            backend=backend_name,
+            cached=False,
+            cache_key=cache_key,
+            status="error",
+            model=model,
+            page_count=page_count,
+            warning=warning or fallback_warning or "OCR worker reported an error",
+        )
+
+    cached_result = _load_cached_result(cache_entry_dir, cache_key, preferred_backend=preferred_backend)
+    if cached_result is None:
+        return PDFOCRResult(
+            markdown=None,
+            backend=backend_name,
+            cached=False,
+            cache_key=cache_key,
+            status="error",
+            model=model,
+            page_count=page_count,
+            warning=fallback_warning or "OCR worker completed successfully but cache entry was not written",
+        )
+
+    if status == "cached":
+        return cached_result
+
+    return PDFOCRResult(
+        markdown=cached_result.markdown,
+        backend=backend_name,
+        cached=False,
+        cache_key=cache_key,
+        status="generated",
+        model=model or cached_result.model,
+        page_count=page_count or cached_result.page_count,
+        warning=warning,
+    )
+
+
 def _run_worker_subprocess(
     pdf_path: Path,
     *,
@@ -941,11 +1209,13 @@ def _run_worker_subprocess(
     env["NB_IN_OCR_WORKER"] = "1"
     env["NB_OCR_WORKER_CMD"] = ""
 
+    logger.info("Launching OCR worker: pdf=%s command=%s", pdf_path_abs, shlex.join(invocation))
+    worker_start = time.monotonic()
     try:
         completed = subprocess.run(
             invocation,
             check=False,
-            capture_output=True,
+            stdout=subprocess.PIPE,
             text=True,
             env=env,
             cwd=str(cache_root_abs),
@@ -960,95 +1230,142 @@ def _run_worker_subprocess(
             warning=f"failed to launch OCR worker: {exc}",
         )
 
-    payload = _parse_worker_payload(completed.stdout)
-    if completed.returncode != 0:
-        warning = None
-        if payload is not None:
-            warning = payload.get("warning")
-        if not warning:
-            warning = (
-                completed.stderr.strip()
-                or completed.stdout.strip()
-                or f"OCR worker exited with code {completed.returncode}"
-            )
-        return PDFOCRResult(
-            markdown=None,
-            backend=(payload or {}).get("backend", "worker"),
-            cached=False,
-            cache_key=cache_key,
-            status="error",
-            warning=warning,
-        )
-
-    if not payload:
-        return PDFOCRResult(
-            markdown=None,
-            backend="worker",
-            cached=False,
-            cache_key=cache_key,
-            status="error",
-            warning="OCR worker did not return a JSON payload",
-        )
-
-    status = str(payload.get("status", "error"))
-    warning = payload.get("warning")
-    backend_name = str(payload.get("backend") or "worker")
-    model = payload.get("model")
-    page_count = int(payload.get("page_count") or 0)
-    cache_entry_dir = cache_root / cache_key
-
-    if status == "needs_ocr":
-        return PDFOCRResult(
-            markdown=None,
-            backend=backend_name,
-            cached=False,
-            cache_key=cache_key,
-            status="needs_ocr",
-            needs_ocr=True,
-            deferred=True,
-            model=model,
-            page_count=page_count,
-            warning=warning,
-        )
-
-    if status == "error":
-        return PDFOCRResult(
-            markdown=None,
-            backend=backend_name,
-            cached=False,
-            cache_key=cache_key,
-            status="error",
-            model=model,
-            page_count=page_count,
-            warning=warning or "OCR worker reported an error",
-        )
-
-    cached_result = _load_cached_result(cache_entry_dir, cache_key, preferred_backend=preferred_backend)
-    if cached_result is None:
-        return PDFOCRResult(
-            markdown=None,
-            backend=backend_name,
-            cached=False,
-            cache_key=cache_key,
-            status="error",
-            model=model,
-            page_count=page_count,
-            warning="OCR worker completed successfully but cache entry was not written",
-        )
-
-    if status == "cached":
-        return cached_result
-
-    return PDFOCRResult(
-        markdown=cached_result.markdown,
-        backend=backend_name,
-        cached=False,
-        cache_key=cache_key,
-        status="generated",
-        model=model or cached_result.model,
-        page_count=page_count or cached_result.page_count,
-        warning=warning,
+    logger.info(
+        "OCR worker finished: pdf=%s returncode=%s seconds=%.2f",
+        pdf_path_abs,
+        completed.returncode,
+        time.monotonic() - worker_start,
     )
+    payload = _parse_worker_payload(completed.stdout)
+    warning = None
+    if completed.returncode != 0 and payload is not None:
+        warning = payload.get("warning")
+    if completed.returncode != 0 and not warning:
+        warning = (
+            (completed.stderr or "").strip()
+            or (completed.stdout or "").strip()
+            or f"OCR worker exited with code {completed.returncode}"
+        )
+    return _result_from_worker_payload(
+        payload,
+        pdf_path=pdf_path_abs,
+        cache_root=cache_root,
+        cache_key=cache_key,
+        preferred_backend=preferred_backend,
+        fallback_warning=warning,
+    )
+
+
+def _run_worker_batch_subprocess(
+    pdf_paths: list[Path],
+    *,
+    cache_root: Path,
+    cache_keys_by_path: dict[Path, str],
+    preferred_backend: Optional[str],
+    worker_cmd: Optional[str | list[str]] = None,
+) -> dict[Path, PDFOCRResult]:
+    if not pdf_paths:
+        return {}
+
+    try:
+        command, resolution_warning = _resolve_worker_command_with_warning(worker_cmd, project_path=pdf_paths[0])
+    except ValueError as exc:
+        return {
+            pdf_path: PDFOCRResult(
+                markdown=None,
+                backend="worker",
+                cached=False,
+                cache_key=cache_keys_by_path[pdf_path],
+                status="error",
+                warning=str(exc),
+            )
+            for pdf_path in pdf_paths
+        }
+
+    if not command:
+        if resolution_warning:
+            return {
+                pdf_path: PDFOCRResult(
+                    markdown=None,
+                    backend="worker",
+                    cached=False,
+                    cache_key=cache_keys_by_path[pdf_path],
+                    status="error",
+                    warning=resolution_warning,
+                )
+                for pdf_path in pdf_paths
+            }
+        return {}
+
+    cache_root_abs = cache_root.resolve(strict=False)
+    pdf_path_args = [str(pdf_path.resolve(strict=False)) for pdf_path in pdf_paths]
+    invocation = [*command, "ocr", "worker", *pdf_path_args, "--cache-dir", str(cache_root_abs)]
+    backend_name = (preferred_backend or DEFAULT_BACKEND).strip().lower()
+    if backend_name not in {"", "auto", "skip", "none"}:
+        invocation.extend(["--backend", backend_name])
+
+    env = os.environ.copy()
+    env["NB_IN_OCR_WORKER"] = "1"
+    env["NB_OCR_WORKER_CMD"] = ""
+
+    logger.info("Launching OCR worker batch: pdfs=%s command=%s", len(pdf_paths), shlex.join(invocation))
+    worker_start = time.monotonic()
+    try:
+        completed = subprocess.run(
+            invocation,
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+            env=env,
+            cwd=str(cache_root_abs),
+        )
+    except Exception as exc:
+        return {
+            pdf_path: PDFOCRResult(
+                markdown=None,
+                backend="worker",
+                cached=False,
+                cache_key=cache_keys_by_path[pdf_path],
+                status="error",
+                warning=f"failed to launch OCR worker: {exc}",
+            )
+            for pdf_path in pdf_paths
+        }
+
+    logger.info(
+        "OCR worker batch finished: pdfs=%s returncode=%s seconds=%.2f",
+        len(pdf_paths),
+        completed.returncode,
+        time.monotonic() - worker_start,
+    )
+    payloads = _parse_worker_payload_stream(completed.stdout)
+    payloads_by_path: dict[Path, dict] = {}
+    for payload in payloads:
+        payload_path = payload.get("pdf_path")
+        if not payload_path:
+            continue
+        payloads_by_path[Path(payload_path).resolve(strict=False)] = payload
+
+    fallback_warning = None
+    if completed.returncode != 0:
+        fallback_warning = (
+            (completed.stderr or "").strip()
+            or (completed.stdout or "").strip()
+            or f"OCR worker exited with code {completed.returncode}"
+        )
+
+    results: dict[Path, PDFOCRResult] = {}
+    for pdf_path in pdf_paths:
+        resolved_path = pdf_path.resolve(strict=False)
+        results[resolved_path] = _result_from_worker_payload(
+            payloads_by_path.get(resolved_path),
+            pdf_path=resolved_path,
+            cache_root=cache_root,
+            cache_key=cache_keys_by_path[resolved_path],
+            preferred_backend=preferred_backend,
+            fallback_warning=fallback_warning,
+        )
+    return results
 
 
 __all__ = [

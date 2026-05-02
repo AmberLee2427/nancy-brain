@@ -3,6 +3,7 @@
 
 import click
 import json
+import logging
 import os
 import sys
 import subprocess
@@ -49,6 +50,16 @@ except ImportError:
 def cli():
     """Nancy Brain - Turn GitHub repos into AI-searchable knowledge bases."""
     pass
+
+
+def _configure_cli_logging() -> None:
+    """Ensure OCR commands emit INFO logs to stderr for batch-job observability."""
+
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    else:
+        root_logger.setLevel(logging.INFO)
 
 
 @cli.command()
@@ -296,6 +307,8 @@ def ocr_warm(paths, cache_dir, backend, articles_config, base_path, recursive):
     """Warm OCR cache entries for PDFs."""
     from nancy_brain.pdf_ocr import warm_pdf_ocr_cache
 
+    _configure_cli_logging()
+
     scan_paths = list(paths)
     if articles_config:
         from scripts.build_knowledge_base import download_pdf_articles
@@ -499,7 +512,7 @@ def ocr_status(shared_root, verify):
 
 
 @ocr.command("worker")
-@click.argument("pdf_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("pdf_paths", nargs=-1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(
     "--cache-dir",
     type=click.Path(path_type=Path),
@@ -511,18 +524,24 @@ def ocr_status(shared_root, verify):
     default=None,
     help="Preferred OCR backend (for example deepseek, skip, or none).",
 )
-def ocr_worker(pdf_path, cache_dir, backend):
-    """Process one PDF and emit a JSON worker record.
+def ocr_worker(pdf_paths, cache_dir, backend):
+    """Process one or more PDFs and emit JSON worker records.
 
     The worker owns only the OCR markdown cache contract:
     it may read or write `knowledge_base/cache/pdf_ocr`, but it does not
     touch embeddings or summary caches.
     """
 
-    from nancy_brain.ocr_worker_entry import execute_worker
+    from nancy_brain.ocr_worker_entry import execute_worker_batch
 
-    payload, exit_code = execute_worker(pdf_path, cache_dir=cache_dir, backend=backend)
-    click.echo(json.dumps(payload, sort_keys=True))
+    _configure_cli_logging()
+
+    if not pdf_paths:
+        raise click.UsageError("At least one pdf_path is required.")
+
+    payloads, exit_code = execute_worker_batch(list(pdf_paths), cache_dir=cache_dir, backend=backend)
+    for payload in payloads:
+        click.echo(json.dumps(payload, sort_keys=True))
     if exit_code:
         sys.exit(exit_code)
 

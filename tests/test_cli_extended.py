@@ -541,6 +541,65 @@ def test_ocr_worker_command_emits_error_record_on_exception():
         ).issubset(payload.keys())
 
 
+def test_ocr_worker_command_emits_ndjson_for_multiple_pdfs():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        first_pdf = Path("first.pdf")
+        second_pdf = Path("second.pdf")
+        first_pdf.write_bytes(b"%PDF-1.4 first")
+        second_pdf.write_bytes(b"%PDF-1.4 second")
+        fake_payloads = [
+            {
+                "pdf_path": str(first_pdf.resolve()),
+                "cache_dir": str((Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr").resolve()),
+                "cache_key": "first",
+                "cache_entry_dir": str((Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "first").resolve()),
+                "content_path": str(
+                    (Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "first" / "content.md").resolve()
+                ),
+                "metadata_path": str(
+                    (Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "first" / "metadata.json").resolve()
+                ),
+                "backend": "deepseek",
+                "status": "generated",
+                "cached": False,
+                "needs_ocr": False,
+                "deferred": False,
+                "model": "deepseek-ai/DeepSeek-OCR",
+                "page_count": 1,
+                "warning": None,
+            },
+            {
+                "pdf_path": str(second_pdf.resolve()),
+                "cache_dir": str((Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr").resolve()),
+                "cache_key": "second",
+                "cache_entry_dir": str((Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "second").resolve()),
+                "content_path": str(
+                    (Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "second" / "content.md").resolve()
+                ),
+                "metadata_path": str(
+                    (Path.cwd() / "knowledge_base" / "cache" / "pdf_ocr" / "second" / "metadata.json").resolve()
+                ),
+                "backend": "deepseek",
+                "status": "generated",
+                "cached": False,
+                "needs_ocr": False,
+                "deferred": False,
+                "model": "deepseek-ai/DeepSeek-OCR",
+                "page_count": 2,
+                "warning": None,
+            },
+        ]
+        with patch("nancy_brain.ocr_worker_entry.execute_worker_batch", return_value=(fake_payloads, 0)):
+            result = runner.invoke(cli, ["ocr", "worker", str(first_pdf), str(second_pdf)])
+
+        assert result.exit_code == 0
+        lines = [line for line in result.output.splitlines() if line.strip()]
+        assert len(lines) == 2
+        payloads = [json.loads(line) for line in lines]
+        assert [payload["cache_key"] for payload in payloads] == ["first", "second"]
+
+
 # ---------------------------------------------------------------------------
 # import-env command
 # ---------------------------------------------------------------------------

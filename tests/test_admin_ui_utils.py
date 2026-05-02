@@ -144,16 +144,29 @@ def test_save_articles_config_creates_file(tmp_path, admin_ui_module):
 
 
 def test_run_build_command_no_articles(tmp_path, admin_ui_module):
-    with patch("subprocess.run") as mock_run:
+    project_root = tmp_path / "Nancy"
+    (project_root / "config").mkdir(parents=True)
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("nancy_brain.admin_ui._discover_project_root", return_value=project_root),
+    ):
         mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
         result = admin_ui_module.run_build_command(force_update=False, articles=False)
     cmd = mock_run.call_args[0][0]
+    kwargs = mock_run.call_args.kwargs
     assert "--force-update" not in cmd
     assert "--articles-config" not in cmd
+    assert str(project_root / "config" / "repositories.yml") in cmd
+    assert str(project_root / "knowledge_base" / "embeddings") in cmd
+    assert kwargs["cwd"] == project_root
 
 
 def test_run_build_command_force_update(tmp_path, admin_ui_module):
-    with patch("subprocess.run") as mock_run:
+    project_root = tmp_path / "Nancy"
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("nancy_brain.admin_ui._discover_project_root", return_value=project_root),
+    ):
         mock_run.return_value = MagicMock(returncode=0)
         result = admin_ui_module.run_build_command(force_update=True)
     cmd = mock_run.call_args[0][0]
@@ -162,12 +175,24 @@ def test_run_build_command_force_update(tmp_path, admin_ui_module):
 
 def test_run_build_command_with_articles_no_file(tmp_path, admin_ui_module):
     """When articles=True but articles.yml doesn't exist, skip the flag."""
-    with patch("subprocess.run") as mock_run:
+    project_root = tmp_path / "Nancy"
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("nancy_brain.admin_ui._discover_project_root", return_value=project_root),
+    ):
         mock_run.return_value = MagicMock(returncode=0)
         with patch("nancy_brain.admin_ui.Path.exists", return_value=False):
             result = admin_ui_module.run_build_command(articles=True)
     cmd = mock_run.call_args[0][0]
     assert "--articles-config" not in cmd
+
+
+def test_project_path_uses_discovered_project_root(tmp_path, admin_ui_module):
+    project_root = tmp_path / "Nancy"
+    with patch("nancy_brain.admin_ui._discover_project_root", return_value=project_root):
+        assert (
+            admin_ui_module._project_path("knowledge_base/embeddings") == project_root / "knowledge_base" / "embeddings"
+        )
 
 
 # ---------------------------------------------------------------------------

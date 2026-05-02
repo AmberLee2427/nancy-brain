@@ -32,6 +32,54 @@ except Exception:
 from nancy_brain.weights_persistence import load_model_weights, save_model_weights, set_model_weight
 
 
+def _discover_project_root() -> Path:
+    """Find the Nancy project root without defaulting to the installed package path."""
+
+    env_root = os.environ.get("NB_PROJECT_ROOT", "").strip()
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+
+    cwd = Path.cwd().resolve()
+    for candidate in [cwd, *cwd.parents]:
+        if (candidate / "knowledge_base").is_dir():
+            return candidate
+        if (candidate / "config").is_dir():
+            return candidate
+        if (candidate / "pyproject.toml").exists() or (candidate / ".git").exists():
+            return candidate
+    return cwd
+
+
+def _project_path(path: str | Path) -> Path:
+    path = Path(path)
+    if path.is_absolute():
+        return path
+    return _discover_project_root() / path
+
+
+def _build_command(force_update: bool = False, articles: bool = False) -> tuple[list[str], Path]:
+    """Build the canonical knowledge-base build command for the current project root."""
+
+    project_root = _discover_project_root()
+    cmd = [
+        sys.executable,
+        str(package_root / "scripts" / "build_knowledge_base.py"),
+        "--config",
+        str(project_root / "config" / "repositories.yml"),
+        "--embeddings-path",
+        str(project_root / "knowledge_base" / "embeddings"),
+    ]
+
+    articles_config = project_root / "config" / "articles.yml"
+    if articles and articles_config.exists():
+        cmd.extend(["--articles-config", str(articles_config)])
+
+    if force_update:
+        cmd.append("--force-update")
+
+    return cmd, project_root
+
+
 def _init_session_state_safe():
     """Initialize Streamlit session state keys when running under Streamlit.
 
@@ -80,7 +128,7 @@ def show_error(message: str, exc: Exception = None, hint: str = None):
 def load_config(config_path: str = "config/repositories.yml"):
     """Load repository configuration."""
     try:
-        with open(config_path, "r") as f:
+        with open(_project_path(config_path), "r") as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         return {}
@@ -89,7 +137,7 @@ def load_config(config_path: str = "config/repositories.yml"):
 def load_articles_config(config_path: str = "config/articles.yml"):
     """Load articles configuration."""
     try:
-        with open(config_path, "r") as f:
+        with open(_project_path(config_path), "r") as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         return {}
@@ -98,8 +146,9 @@ def load_articles_config(config_path: str = "config/articles.yml"):
 def save_config(config: dict, config_path: str = "config/repositories.yml"):
     """Save repository configuration."""
     try:
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        with open(config_path, "w") as f:
+        config_path_abs = _project_path(config_path)
+        os.makedirs(os.path.dirname(config_path_abs), exist_ok=True)
+        with open(config_path_abs, "w") as f:
             yaml.dump(config, f, default_flow_style=False)
     except Exception as e:
         raise RuntimeError(f"Failed to save repositories config to {config_path}: {e}") from e
@@ -108,8 +157,9 @@ def save_config(config: dict, config_path: str = "config/repositories.yml"):
 def save_articles_config(config: dict, config_path: str = "config/articles.yml"):
     """Save articles configuration."""
     try:
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        with open(config_path, "w") as f:
+        config_path_abs = _project_path(config_path)
+        os.makedirs(os.path.dirname(config_path_abs), exist_ok=True)
+        with open(config_path_abs, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
     except Exception as e:
         raise RuntimeError(f"Failed to save articles config to {config_path}: {e}") from e
@@ -117,22 +167,8 @@ def save_articles_config(config: dict, config_path: str = "config/articles.yml")
 
 def run_build_command(force_update: bool = False, articles: bool = False):
     """Run the knowledge base build command."""
-    cmd = [
-        sys.executable,
-        str(package_root / "scripts" / "build_knowledge_base.py"),
-        "--config",
-        "config/repositories.yml",
-        "--embeddings-path",
-        "knowledge_base/embeddings",
-    ]
-
-    if articles and Path("config/articles.yml").exists():
-        cmd.extend(["--articles-config", "config/articles.yml"])
-
-    if force_update:
-        cmd.append("--force-update")
-
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=package_root)
+    cmd, project_root = _build_command(force_update=force_update, articles=articles)
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=project_root)
 
 
 def run_ui():
@@ -206,9 +242,9 @@ def run_ui():
             try:
                 # Use a dedicated model_weights file for thumbs persistence
                 st.session_state.rag_service = RAGService(
-                    embeddings_path=Path("knowledge_base/embeddings"),
-                    config_path=Path("config/repositories.yml"),
-                    weights_path=Path("config/model_weights.yaml"),
+                    embeddings_path=_project_path("knowledge_base/embeddings"),
+                    config_path=_project_path("config/repositories.yml"),
+                    weights_path=_project_path("config/model_weights.yaml"),
                 )
             except Exception as e:
                 # Don't crash the UI; show an error and leave rag_service as None
@@ -856,18 +892,7 @@ def run_ui():
             st.info("Starting build — streaming output below. This may take several minutes.")
 
             # Build command (same as run_build_command)
-            cmd = [
-                sys.executable,
-                str(package_root / "scripts" / "build_knowledge_base.py"),
-                "--config",
-                "config/repositories.yml",
-                "--embeddings-path",
-                "knowledge_base/embeddings",
-            ]
-            if include_articles and Path("config/articles.yml").exists():
-                cmd.extend(["--articles-config", "config/articles.yml"])
-            if force_update:
-                cmd.append("--force-update")
+            cmd, project_root = _build_command(force_update=force_update, articles=include_articles)
 
             # Run subprocess and stream stdout to the UI with a progress bar
             process = subprocess.Popen(
@@ -875,7 +900,7 @@ def run_ui():
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                cwd=package_root,
+                cwd=project_root,
             )
 
             log_box = st.empty()
@@ -949,10 +974,10 @@ def run_ui():
         st.header("📊 System Status")
 
         # Check if embeddings exist
-        embeddings_path = Path("knowledge_base/embeddings")
-        config_path = Path("config/repositories.yml")
-        articles_path = Path("config/articles.yml")
-        weights_path = Path("config/weights.yaml")
+        embeddings_path = _project_path("knowledge_base/embeddings")
+        config_path = _project_path("config/repositories.yml")
+        articles_path = _project_path("config/articles.yml")
+        weights_path = _project_path("config/weights.yaml")
 
         col1, col2, col3 = st.columns(3)
 
