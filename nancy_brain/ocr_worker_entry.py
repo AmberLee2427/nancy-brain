@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -75,10 +76,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.print_help(sys.stderr)
         return 2
 
-    payloads, exit_code = execute_worker_batch(args.pdf_paths, cache_dir=args.cache_dir, backend=args.backend)
-    for payload in payloads:
+    exit_code = 0
+    for pdf_path in args.pdf_paths:
+        # Upstream OCR models print diagnostics to stdout. Keep stdout reserved
+        # for NDJSON and publish each result before starting the next PDF.
+        with contextlib.redirect_stdout(sys.stderr):
+            payload, item_exit_code = execute_worker(
+                pdf_path,
+                cache_dir=args.cache_dir,
+                backend=args.backend,
+            )
         sys.stdout.write(json.dumps(payload, sort_keys=True))
         sys.stdout.write("\n")
+        sys.stdout.flush()
+        exit_code = max(exit_code, item_exit_code)
     return exit_code
 
 

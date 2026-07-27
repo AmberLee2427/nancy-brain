@@ -402,6 +402,7 @@ class DeepSeekOCRBackend:
                         **common_kwargs,
                     )
                     self._model = model.eval().cuda().to(dtype)
+                _prepare_deepseek_generation_defaults(self._model, self._tokenizer)
                 logger.info(
                     "Loaded DeepSeek OCR model: model=%s quantize=%s attention=%s",
                     self.model_name,
@@ -479,6 +480,70 @@ class DeepSeekOCRBackend:
 
 
 _DEEPSEEK_BACKEND = DeepSeekOCRBackend()
+
+
+def _token_id(tokenizer, attr_name: str) -> Optional[int]:
+    token_id = getattr(tokenizer, attr_name, None)
+    if token_id is not None:
+        return token_id
+
+    token_attr = attr_name.replace("_id", "")
+    token = getattr(tokenizer, token_attr, None)
+    if token is None:
+        return None
+
+    converter = getattr(tokenizer, "convert_tokens_to_ids", None)
+    if converter is None:
+        return None
+
+    try:
+        converted = converter(token)
+    except Exception:
+        return None
+    if not isinstance(converted, int):
+        return None
+    return converted if converted >= 0 else None
+
+
+def _prepare_deepseek_generation_defaults(model, tokenizer) -> None:
+    """Patch DeepSeek-OCR generation defaults omitted by upstream infer()."""
+
+    pad_token_id = _token_id(tokenizer, "pad_token_id")
+    eos_token_id = _token_id(tokenizer, "eos_token_id")
+
+    for config_attr in ("config", "generation_config"):
+        config = getattr(model, config_attr, None)
+        if config is None:
+            continue
+        if pad_token_id is not None and getattr(config, "pad_token_id", None) is None:
+            setattr(config, "pad_token_id", pad_token_id)
+        if eos_token_id is not None and getattr(config, "eos_token_id", None) is None:
+            setattr(config, "eos_token_id", eos_token_id)
+
+    if getattr(model, "_nancy_generation_defaults_patched", False):
+        return
+
+    original_generate = getattr(model, "generate", None)
+    if original_generate is None:
+        return
+
+    def generate_with_defaults(*args, **kwargs):
+        if kwargs.get("attention_mask") is None:
+            input_ids = kwargs.get("input_ids")
+            if input_ids is None and args:
+                input_ids = args[0]
+            if input_ids is not None and hasattr(input_ids, "new_ones"):
+                kwargs["attention_mask"] = input_ids.new_ones(input_ids.shape)
+
+        if kwargs.get("pad_token_id") is None and pad_token_id is not None:
+            kwargs["pad_token_id"] = pad_token_id
+        if kwargs.get("eos_token_id") is None and eos_token_id is not None:
+            kwargs["eos_token_id"] = eos_token_id
+
+        return original_generate(*args, **kwargs)
+
+    model.generate = generate_with_defaults
+    model._nancy_generation_defaults_patched = True
 
 
 def default_pdf_ocr_cache_dir(project_root: Optional[Path] = None) -> Path:
@@ -1070,6 +1135,7 @@ def _parse_worker_payload(stdout: str) -> Optional[dict]:
 
 def _parse_worker_payload_stream(stdout: str) -> list[dict]:
     payloads: list[dict] = []
+    ignored_lines = 0
     for line in stdout.splitlines():
         text = line.strip()
         if not text:
@@ -1077,11 +1143,18 @@ def _parse_worker_payload_stream(stdout: str) -> list[dict]:
         try:
             payload = json.loads(text)
         except Exception:
-            return []
+            ignored_lines += 1
+            continue
         if isinstance(payload, dict):
             payloads.append(payload)
         else:
-            return []
+            ignored_lines += 1
+    if ignored_lines:
+        logger.warning(
+            "Ignored non-NDJSON OCR worker stdout: lines=%s valid_payloads=%s",
+            ignored_lines,
+            len(payloads),
+        )
     return payloads
 
 

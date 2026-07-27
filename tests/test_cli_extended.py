@@ -600,6 +600,45 @@ def test_ocr_worker_command_emits_ndjson_for_multiple_pdfs():
         assert [payload["cache_key"] for payload in payloads] == ["first", "second"]
 
 
+def test_lightweight_worker_main_redirects_diagnostics_and_streams_ndjson(tmp_path, capsys):
+    from nancy_brain import ocr_worker_entry
+
+    first_pdf = tmp_path / "first.pdf"
+    second_pdf = tmp_path / "second.pdf"
+    first_pdf.write_bytes(b"%PDF-first")
+    second_pdf.write_bytes(b"%PDF-second")
+    calls = []
+
+    def fake_execute(pdf_path, *, cache_dir=None, backend=None):
+        calls.append(Path(pdf_path))
+        print(f"model diagnostic for {Path(pdf_path).name}")
+        return (
+            {
+                "pdf_path": str(Path(pdf_path).resolve()),
+                "status": "generated",
+            },
+            0,
+        )
+
+    with patch("nancy_brain.ocr_worker_entry.execute_worker", side_effect=fake_execute):
+        exit_code = ocr_worker_entry.main(
+            [
+                "ocr",
+                "worker",
+                str(first_pdf),
+                str(second_pdf),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    payloads = [json.loads(line) for line in captured.out.splitlines()]
+    assert exit_code == 0
+    assert calls == [first_pdf, second_pdf]
+    assert [Path(payload["pdf_path"]) for payload in payloads] == [first_pdf.resolve(), second_pdf.resolve()]
+    assert "model diagnostic for first.pdf" in captured.err
+    assert "model diagnostic for second.pdf" in captured.err
+
+
 # ---------------------------------------------------------------------------
 # import-env command
 # ---------------------------------------------------------------------------

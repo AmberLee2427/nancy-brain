@@ -563,6 +563,22 @@ def test_warm_pdf_ocr_cache_batches_worker_invocation_for_multiple_pdfs(tmp_path
     mock_run.assert_called_once()
 
 
+def test_parse_worker_payload_stream_ignores_model_stdout_diagnostics():
+    first = {"pdf_path": "/tmp/first.pdf", "status": "generated"}
+    second = {"pdf_path": "/tmp/second.pdf", "status": "error"}
+    stdout = "\n".join(
+        [
+            "=====================",
+            "BASE: torch.Size([1, 256, 1280])",
+            json.dumps(first),
+            "directly resize",
+            json.dumps(second),
+        ]
+    )
+
+    assert pdf_ocr._parse_worker_payload_stream(stdout) == [first, second]
+
+
 def test_extract_pdf_markdown_logs_cache_write_progress(tmp_path, caplog):
     pdf_path = tmp_path / "paper.pdf"
     pdf_path.write_bytes(b"%PDF-log-test")
@@ -638,6 +654,52 @@ def test_deepseek_ocr_images_retries_without_eval_mode_when_unsupported(tmp_path
         result = backend.ocr_images([tmp_path / "page-0001.png"])
 
     assert result == "## Page 1\n\nmarkdown output"
+
+
+def test_prepare_deepseek_generation_defaults_sets_config_ids():
+    tokenizer = types.SimpleNamespace(pad_token_id=7, eos_token_id=9)
+    model = types.SimpleNamespace(
+        config=types.SimpleNamespace(pad_token_id=None, eos_token_id=None),
+        generation_config=types.SimpleNamespace(pad_token_id=None, eos_token_id=None),
+        generate=lambda *args, **kwargs: kwargs,
+    )
+
+    pdf_ocr._prepare_deepseek_generation_defaults(model, tokenizer)
+
+    assert model.config.pad_token_id == 7
+    assert model.config.eos_token_id == 9
+    assert model.generation_config.pad_token_id == 7
+    assert model.generation_config.eos_token_id == 9
+
+
+def test_prepare_deepseek_generation_defaults_wraps_generate_with_attention_mask():
+    class FakeInputIds:
+        shape = (1, 3)
+
+        def new_ones(self, shape):
+            return ("ones", shape)
+
+    calls = []
+
+    def fake_generate(*args, **kwargs):
+        calls.append((args, kwargs))
+        return "generated"
+
+    tokenizer = types.SimpleNamespace(pad_token_id=7, eos_token_id=9)
+    model = types.SimpleNamespace(
+        config=types.SimpleNamespace(pad_token_id=None, eos_token_id=None),
+        generation_config=types.SimpleNamespace(pad_token_id=None, eos_token_id=None),
+        generate=fake_generate,
+    )
+
+    pdf_ocr._prepare_deepseek_generation_defaults(model, tokenizer)
+    result = model.generate(FakeInputIds(), eos_token_id=9)
+
+    assert result == "generated"
+    _, kwargs = calls[0]
+    assert kwargs["attention_mask"] == ("ones", (1, 3))
+    assert kwargs["pad_token_id"] == 7
+    assert kwargs["eos_token_id"] == 9
 
 
 def test_default_pdf_ocr_cache_dir_prefers_cwd_project_root(tmp_path, monkeypatch):
