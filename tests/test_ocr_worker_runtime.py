@@ -4,6 +4,7 @@ import importlib
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from nancy_brain.ocr_worker_runtime import (
@@ -154,7 +155,8 @@ def test_package_root_import_does_not_eagerly_import_cli(monkeypatch):
     original_cli_module = sys.modules.pop("nancy_brain.cli", None)
     try:
         package = importlib.import_module("nancy_brain")
-        assert package.__version__ == "0.2.1"
+        project = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+        assert package.__version__ == project["project"]["version"]
         assert "nancy_brain.cli" not in sys.modules
     finally:
         sys.modules.pop("nancy_brain", None)
