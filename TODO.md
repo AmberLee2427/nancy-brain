@@ -159,6 +159,10 @@
 - [ ] **Fix retrieve to use indexed content instead of raw files**
   - `retrieve` should serve passages from the embeddings/indexed store (what search returns), not depend on raw files existing on disk
   - Ensure GitHub URLs and line ranges are derived from indexed metadata
+- [ ] **Produce a runtime-only KB bundle**
+  - Keep raw repositories and rebuild caches on a larger build host
+  - Transfer only embeddings, summaries, weights, manifests, and required configuration to constrained runtime hosts
+  - Validate SEARCH, TREE, RETRIEVE, and WEIGHT with `knowledge_base/raw` absent
 - [ ] **Improve logging**
   - Structured logging with levels
   - Better error messages
@@ -244,10 +248,10 @@
 ### v0.5.0 (Beta testing for user readiness - current)
 - [x] Working NancyGPT (although prox mox is downn RN for some reason)
 - [x] Adoption instruction for NancyBrain (with actual, live MCP server address) and link to the NancyGPT in the NancyBot Slack home page. 
-- [x] Debug issues Nancy is experiencing with the NancyBrain MCP.
-  - Retrieve
-  - Tree
-  - Search
+- [-] Debug issues Nancy is experiencing with the NancyBrain MCP.
+  - [ ] Retrieve: basic aliases work; remove the remaining raw-file dependency
+  - [x] Tree: enumerate the txtai index directly with normalized paths and relative depth
+  - [ ] Search: evaluate relevance after the complete KB and summaries are installed
 - [x] Debug any issues NancyGPT is having with NancyBrain Actions
 - [x] Finish summary generation for remaining files (~30K files on Unity; use existing cache)
 - [x] `--repo` CLI option for parallel per-repo builds across cluster nodes
@@ -278,12 +282,12 @@
 - [-] **Nancy-Brain UI does update summaries**
    - **Description:** exact circumstsances for failure are unknown, but the bug was noted after migrating to docker builds and local model summaries. We suspect a permision issue with the subprocess.
    - I think this is fine now. We are building local summaries on a faster machine and transfering them for the initial build.
-- [ ] **`explore_document_tree` returns only "unknown" entries.**
-    - **Description:** The `explore_document_tree` tool is not working correctly. It should display the file and directory structure of the knowledge base, but instead it only shows "unknown" for all entries. This makes it impossible to browse the knowledge base.
+- [x] **`explore_document_tree` returns only "unknown" entries.**
+    - **Resolution:** TREE now enumerates source-document IDs from the txtai SQLite index, accepts short or `knowledge_base/raw/`-prefixed paths, measures depth relative to the requested directory, and does not require raw files.
 - [ ] **`retrieve_document_passage` fails to find documents from search results.**
     - **Description:** The `retrieve_document_passage` tool consistently fails with a "Document not found" error when using a `doc_id` provided by the `search_knowledge_base` tool. This is a critical bug that breaks the core search and retrieval functionality. The `retrieve` function should be able to fetch the document content from the `txtai` index, as the server is not supposed to rely on the `raw` files.
-- ✅ **Search relevance needs improvement.**
-    - **Description:** The `search_knowledge_base` tool returns results with mixed relevance and low scores. While some results are good, others seem unrelated to the query. The search algorithm and/or the underlying embeddings should be investigated to improve the quality of the search results.
+- [ ] **Search relevance needs evaluation after the full KB swap.**
+    - **Description:** Current smoke tests return mixed relevance, but they are running against the small/stale index. Re-run known-answer queries after the complete KB and summaries are installed before changing embeddings or ranking.
 - ✅ **`get_system_status` shows incorrect version information.**
     - ✅ **Description:** The `get_system_status` tool reports the version as `dev-0.1.0`, which is incorrect. The version information should be populated correctly from the build process to allow for proper version tracking.
 - [x] **`get_system_status` shows "unknown" for build info.**
