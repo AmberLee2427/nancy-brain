@@ -15,6 +15,7 @@ SUMMARY_ENV = {
     "CUSTOM_URL": "",
     "CUSTOM_MODEL": "",
     "CUSTOM_SUMMARY_MODEL": "",
+    "NB_SUMMARY_CACHE_FALLBACK_MODELS": "",
 }
 
 # ---------------------------------------------------------------------------
@@ -193,6 +194,72 @@ def test_summarize_ignores_corrupt_cache(generator_with_key):
     assert result is not None
     assert result.cached is False
     assert result.summary == "Fresh summary"
+
+
+def test_custom_summary_uses_fallback_model_cache(summary_cache_dir):
+    content = "Content summarized by the primary model."
+    with patch.dict(
+        os.environ,
+        {
+            **SUMMARY_ENV,
+            "CUSTOM_API_KEY": "custom-secret",
+            "CUSTOM_URL": "https://api.example.test/v1",
+            "CUSTOM_SUMMARY_MODEL": "agents-a1",
+            "NB_SUMMARY_CACHE_FALLBACK_MODELS": "gemma4-e4b",
+        },
+    ):
+        gen = SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
+
+    fallback_key = gen._cache_key(
+        "test/doc.py",
+        content,
+        None,
+        None,
+        model_name="gemma4-e4b",
+    )
+    (gen.cache_dir / f"{fallback_key}.json").write_text(
+        json.dumps(
+            {
+                "summary": "Gemma cached summary.",
+                "weight": 1.1,
+                "model": "gemma4-e4b",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with patch.object(gen, "_invoke_model") as invoke:
+        result = gen.summarize(doc_id="test/doc.py", content=content)
+
+    invoke.assert_not_called()
+    assert result.cached is True
+    assert result.model == "gemma4-e4b"
+    assert result.summary == "Gemma cached summary."
+
+
+def test_custom_summary_invokes_current_model_when_fallback_cache_missing(summary_cache_dir):
+    with patch.dict(
+        os.environ,
+        {
+            **SUMMARY_ENV,
+            "CUSTOM_API_KEY": "custom-secret",
+            "CUSTOM_URL": "https://api.example.test/v1",
+            "CUSTOM_SUMMARY_MODEL": "agents-a1",
+            "NB_SUMMARY_CACHE_FALLBACK_MODELS": "gemma4-e4b",
+        },
+    ):
+        gen = SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
+
+    with patch.object(
+        gen,
+        "_invoke_model",
+        return_value={"summary": "Agents fallback summary.", "weight": 1.0, "model": "agents-a1"},
+    ) as invoke:
+        result = gen.summarize(doc_id="test/missing.py", content="No Gemma cache exists.")
+
+    invoke.assert_called_once()
+    assert result.cached is False
+    assert result.model == "agents-a1"
 
 
 # ---------------------------------------------------------------------------

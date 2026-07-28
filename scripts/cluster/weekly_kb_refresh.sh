@@ -55,6 +55,7 @@ set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
+PRIMARY_SUMMARY_MODEL="${CUSTOM_SUMMARY_MODEL:-${CUSTOM_MODEL:-}}"
 
 for _ in $(seq 1 72); do
     if ! pgrep -u "$(id -u)" -f '[n]ancy-brain build' >/dev/null; then
@@ -85,12 +86,14 @@ BUILD_COMMON=(
 if [[ -n "$FALLBACK_SUMMARY_MODEL" ]]; then
     write_status "running" "retrying uncached summaries with $FALLBACK_SUMMARY_MODEL"
     CUSTOM_SUMMARY_MODEL="$FALLBACK_SUMMARY_MODEL" \
+        NB_SUMMARY_CACHE_FALLBACK_MODELS="$PRIMARY_SUMMARY_MODEL" \
         "$REPO/.venv/bin/nancy-brain" build "${BUILD_COMMON[@]}" --summaries-only
 fi
 
 write_status "running" "building staged summary-enriched index"
 rm -rf "$EMBEDDINGS_STAGE"
-"$REPO/.venv/bin/nancy-brain" build \
+NB_SUMMARY_CACHE_FALLBACK_MODELS="$FALLBACK_SUMMARY_MODEL" \
+    "$REPO/.venv/bin/nancy-brain" build \
     "${BUILD_COMMON[@]}" \
     --articles-config config/articles.yml \
     --summaries

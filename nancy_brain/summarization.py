@@ -53,6 +53,11 @@ class SummaryGenerator:
         self.enabled = enabled and (bool(self.api_key) or self.use_local or self.use_custom)
 
         self.model_name = self.custom_model if self.use_custom else model_name
+        self.cache_fallback_models = tuple(
+            model.strip()
+            for model in os.environ.get("NB_SUMMARY_CACHE_FALLBACK_MODELS", "").split(",")
+            if model.strip() and model.strip() != self.model_name
+        )
         self.max_chars = max_chars
         self.readme_bonus_chars = readme_bonus_chars
         self.max_output_tokens = max_output_tokens
@@ -93,9 +98,16 @@ class SummaryGenerator:
         readme = self._trim_readme(repo_readme)
         cache_key = self._cache_key(doc_id, trimmed, readme, repo_readme_path)
         cache_file = self.cache_dir / f"{cache_key}.json"
-        if cache_file.exists():
+        cache_files = [cache_file]
+        cache_files.extend(
+            self.cache_dir / f"{self._cache_key(doc_id, trimmed, readme, repo_readme_path, model_name=model)}.json"
+            for model in self.cache_fallback_models
+        )
+        for candidate in cache_files:
+            if not candidate.exists():
+                continue
             try:
-                payload = json.loads(cache_file.read_text(encoding="utf-8"))
+                payload = json.loads(candidate.read_text(encoding="utf-8"))
                 return SummaryResult(
                     summary=payload["summary"],
                     weight=float(payload["weight"]),
@@ -104,7 +116,7 @@ class SummaryGenerator:
                     repo_readme_path=payload.get("repo_readme_path"),
                 )
             except Exception:
-                logger.warning("Failed to read cached summary for %s", doc_id)
+                logger.warning("Failed to read cached summary for %s from %s", doc_id, candidate)
         if self.use_local:
             payload = self._invoke_local(
                 content=trimmed, readme=readme, repo_name=repo_name, repo_description=repo_description
@@ -179,11 +191,13 @@ class SummaryGenerator:
         content: str,
         readme: Optional[str],
         readme_path: Optional[str],
+        model_name: Optional[str] = None,
     ) -> str:
         h = sha256()
-        if self.use_custom:
+        cache_model = model_name if model_name is not None else (self.model_name if self.use_custom else None)
+        if cache_model:
             h.update(b"custom\0")
-            h.update(self.model_name.encode("utf-8"))
+            h.update(cache_model.encode("utf-8"))
             h.update(b"\0")
         h.update(doc_id.encode("utf-8"))
         h.update(b"\0")
