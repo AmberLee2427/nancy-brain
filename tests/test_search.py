@@ -426,6 +426,64 @@ def test_id_match_fallback_returns_matches(tmp_path):
     assert matches, "Expected fallback to return results"
     assert any("VBMicrolensing" in match["id"] for match in matches)
     assert matches[0]["data"]["source_document"].startswith("knowledge_base/raw/microlensing_tools/VBMicrolensing")
+    assert matches[0]["score"] == pytest.approx(0.5)
+
+
+def test_id_match_fallback_ignores_natural_language_path_words(tmp_path):
+    """Ordinary query terms such as 'source' must not trigger ID matching."""
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+
+    assert search._identifier_tokens("finite source point lens microlensing parallax fit") == []
+    assert (
+        search._id_match_fallback(
+            "finite source point lens microlensing parallax fit",
+            set(),
+            limit=5,
+        )
+        == []
+    )
+
+
+def test_identifier_tokens_support_acronyms_paths_and_slugs():
+    assert Search._identifier_tokens("FSPL point lens") == ["fspl"]
+    assert Search._identifier_tokens("MulensModel finite source") == ["mulensmodel"]
+    assert Search._identifier_tokens("microlens-submit") == ["microlens", "submit"]
+    assert Search._identifier_tokens("microlensing_tools/MulensModel") == [
+        "microlensing",
+        "tools",
+        "mulensmodel",
+    ]
+
+
+def test_id_match_fallback_returns_one_result_per_source_document(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+    db_path = embeddings_path / "index" / "documents"
+
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO sections (id, text) VALUES (?, ?)",
+            (
+                "knowledge_base/raw/microlensing_tools/VBMicrolensing/README.md::chunk-1",
+                "Second chunk",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+    matches = search._id_match_fallback("VBMicrolensing", set(), limit=5)
+
+    assert len(matches) == 1
 
 
 def test_search_includes_id_fallback_results(tmp_path):
@@ -447,3 +505,64 @@ def test_search_includes_id_fallback_results(tmp_path):
     results = search.search("VBMicrolensing", limit=3)
     assert results, "Expected fallback results to be returned"
     assert any("VBMicrolensing" in r["source_document"] for r in results)
+
+
+def test_search_fallback_score_stays_below_best_semantic_score(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+    search.use_dual_embedding = False
+    search.code_embeddings = None
+    search.extension_weights = {}
+    search.model_weights = {}
+
+    mock_embeddings = Mock()
+    mock_embeddings.search.return_value = [{"id": "docs/semantic.md", "text": "Semantic result", "score": 0.72}]
+    search.general_embeddings = mock_embeddings
+
+    results = search.search("VBMicrolensing", limit=3)
+    fallback = next(result for result in results if "VBMicrolensing" in result["source_document"])
+    assert fallback["score"] == pytest.approx(0.67)
+
+
+def test_process_results_diversifies_source_documents(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    embeddings_path.mkdir()
+    search = Search(embeddings_path=embeddings_path)
+
+    results = [
+        {
+            "id": f"repo/large.md#chunk-{index:04d}",
+            "score": 1.0 - index * 0.01,
+            "text": f"chunk {index}",
+            "data": {"source_document": "repo/large.md"},
+        }
+        for index in range(5)
+    ]
+    results.extend(
+        [
+            {
+                "id": "repo/other.md#chunk-0000",
+                "score": 0.8,
+                "text": "other",
+                "data": {"source_document": "repo/other.md"},
+            },
+            {
+                "id": "repo/third.md#chunk-0000",
+                "score": 0.7,
+                "text": "third",
+                "data": {"source_document": "repo/third.md"},
+            },
+        ]
+    )
+
+    processed = search._process_and_rank_results(results, limit=5)
+
+    assert [result["source_document"] for result in processed].count("repo/large.md") == 2
+    assert {result["source_document"] for result in processed} == {
+        "repo/large.md",
+        "repo/other.md",
+        "repo/third.md",
+    }
