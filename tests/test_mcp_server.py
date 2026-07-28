@@ -201,6 +201,36 @@ async def test_mcp_server_tree_tool_flat_entries(mock_rag_service):
 
 
 @pytest.mark.asyncio
+async def test_mcp_server_tree_normalizes_path_and_indents_descendants(
+    mock_rag_service,
+):
+    server = NancyMCPServer()
+    server.rag_service = mock_rag_service
+
+    async def flat_tree(path="", max_depth=3):
+        return [
+            {"path": "microlensing_tools/RTModel", "type": "directory"},
+            {"path": "microlensing_tools/RTModel/docs", "type": "directory"},
+            {
+                "path": "microlensing_tools/RTModel/docs/guide.md",
+                "type": "file",
+            },
+        ]
+
+    server.rag_service.list_tree = flat_tree
+    result = await server._handle_tree(
+        {
+            "path": "knowledge_base/raw/microlensing_tools/RTModel/",
+            "max_depth": 2,
+        }
+    )
+
+    assert "📁 microlensing_tools/RTModel/\n" in result[0].text
+    assert "  📁 microlensing_tools/RTModel/docs/\n" in result[0].text
+    assert "    📄 microlensing_tools/RTModel/docs/guide.md\n" in result[0].text
+
+
+@pytest.mark.asyncio
 async def test_mcp_server_weights_tool(mock_rag_service):
     """Test the set_retrieval_weights tool."""
     server = NancyMCPServer()

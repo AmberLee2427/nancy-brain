@@ -2,13 +2,30 @@
 
 # import
 from typing import List, Dict, Optional
+import json
 import os
 import logging
+import sqlite3
 from pathlib import Path
+from nancy_brain.chunking import strip_chunk_suffix
 from .store import Store
 from .registry import Registry, ModelWeights
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_document_path(path: str) -> str:
+    """Convert storage-prefixed document IDs to stable user-facing paths."""
+    normalized = str(path or "").strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    normalized = normalized.strip("/")
+    if normalized == ".":
+        return ""
+    raw_prefix = "knowledge_base/raw/"
+    if normalized.startswith(raw_prefix):
+        normalized = normalized[len(raw_prefix) :]
+    return "/".join(part for part in normalized.split("/") if part)
 
 
 class RAGService:
@@ -458,97 +475,134 @@ class RAGService:
                 )
         return results
 
+    def _list_index_document_ids(self) -> List[str]:
+        """Return unique source-document IDs from the local txtai index."""
+        db_path = Path(self.embeddings_path) / "index" / "documents"
+        if not db_path.exists():
+            return []
+
+        try:
+            conn = sqlite3.connect(str(db_path))
+        except sqlite3.Error as exc:
+            logger.warning("Unable to open embeddings document index: %s", exc)
+            return []
+
+        try:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()}
+            if "id" not in columns:
+                logger.warning("Embeddings document index has no sections.id column")
+                return []
+
+            metadata_column = None
+            if "data" in columns:
+                metadata_column = "data"
+            elif "metadata" in columns:
+                metadata_column = "metadata"
+
+            select_columns = "id"
+            if metadata_column:
+                select_columns += f", {metadata_column}"
+
+            rows = conn.execute(f"SELECT {select_columns} FROM sections ORDER BY id").fetchall()
+        except sqlite3.Error as exc:
+            logger.warning("Unable to enumerate embeddings document index: %s", exc)
+            return []
+        finally:
+            conn.close()
+
+        doc_ids = set()
+        for row in rows:
+            index_id = str(row[0] or "").strip()
+            if not index_id:
+                continue
+
+            source_document = None
+            if len(row) > 1 and row[1]:
+                try:
+                    metadata = json.loads(row[1])
+                    if isinstance(metadata, dict):
+                        source_document = metadata.get("source_document")
+                except (TypeError, ValueError):
+                    pass
+
+            doc_id = source_document or strip_chunk_suffix(index_id)
+            normalized = normalize_document_path(doc_id)
+            if normalized:
+                doc_ids.add(normalized)
+
+        return sorted(doc_ids)
+
     async def list_tree(self, prefix: str = "", depth: int = 2, max_entries: int = 500) -> List[Dict]:
-        """List document IDs under a prefix as a tree structure."""
-        # Build excluded-prefix set from env var (comma-separated), e.g. "summaries/,knowledge_base/raw/"
-        _excluded_raw = os.environ.get("TREE_EXCLUDED_PREFIXES", "summaries/")
-        excluded_prefixes = tuple(p.strip() for p in _excluded_raw.split(",") if p.strip())
+        """List indexed documents under a prefix as a deterministic tree."""
+        normalized_prefix = normalize_document_path(prefix)
+        depth = max(0, int(depth))
+        max_entries = max(0, int(max_entries))
+        if max_entries == 0:
+            return []
 
-        # Lazily initialize search and prefer registry fallback if embeddings unavailable
-        self._ensure_search_loaded()
-        if not self.search or not getattr(self.search, "general_embeddings", None):
-            # Fallback to registry-based approach if search/embeddings not available
-            doc_ids = self.registry.list_ids(prefix)
-        else:
-            try:
-                # Get all document IDs from the search index by doing a broad search
-                # txtai doesn't have a direct "list all IDs" method, so we search for common terms
-                all_results = []
+        doc_ids = self._list_index_document_ids()
+        if not doc_ids:
+            doc_ids = [normalize_document_path(doc_id) for doc_id in self.registry.list_ids()]
+            doc_ids = sorted({doc_id for doc_id in doc_ids if doc_id})
 
-                # Try several broad searches to get as many document IDs as possible
-                search_terms = ["the", "and", "a", "import", "def", "class", "README", "docs"]
-                seen_ids = set()
-
-                for term in search_terms:
-                    try:
-                        results = self.search.general_embeddings.search(term, limit=2000)
-                        for result in results:
-                            doc_id = result.get("id", "")
-                            if doc_id and doc_id not in seen_ids:
-                                if not prefix or doc_id.startswith(prefix):
-                                    all_results.append(doc_id)
-                                    seen_ids.add(doc_id)
-                    except Exception:
-                        # Skip documents that can't be parsed
-                        continue
-
-                    # Stop if we have enough diverse results
-                    if len(seen_ids) > 1000:
-                        break
-
-                # Filter by prefix
-                if prefix:
-                    doc_ids = [doc_id for doc_id in all_results if doc_id.startswith(prefix)]
-                else:
-                    doc_ids = all_results
-
-            except Exception:
-                # Fallback to registry-based approach if search fails
-                doc_ids = self.registry.list_ids(prefix)
-
-        # Convert flat list to tree structure
+        excluded_raw = os.environ.get("TREE_EXCLUDED_PREFIXES", "summaries/")
+        excluded_prefixes = tuple(
+            normalize_document_path(value) for value in excluded_raw.split(",") if normalize_document_path(value)
+        )
         if excluded_prefixes:
-            doc_ids = [d for d in doc_ids if not d.startswith(excluded_prefixes)]
+            doc_ids = [
+                doc_id
+                for doc_id in doc_ids
+                if not any(
+                    doc_id == excluded or doc_id.startswith(excluded.rstrip("/") + "/")
+                    for excluded in excluded_prefixes
+                )
+            ]
 
-        tree_entries = []
-        seen_paths = set()
+        if normalized_prefix:
+            matching_ids = [
+                doc_id
+                for doc_id in doc_ids
+                if doc_id == normalized_prefix or doc_id.startswith(normalized_prefix + "/")
+            ]
+        else:
+            matching_ids = doc_ids
 
-        # First pass: collect ALL paths (not limited by max_entries) to properly detect directories
-        all_paths = set()
-        for doc_id in doc_ids:
+        if not matching_ids:
+            return []
+
+        path_types: Dict[str, str] = {}
+        file_ids = set(matching_ids)
+        for doc_id in matching_ids:
             parts = doc_id.split("/")
-            for i in range(1, min(len(parts), depth + 1) + 1):  # Go one level deeper to detect directories
-                path = "/".join(parts[:i])
-                all_paths.add(path)
+            for index in range(1, len(parts)):
+                path_types["/".join(parts[:index])] = "directory"
+            path_types.setdefault(doc_id, "file")
 
-        # Second pass: build tree entries (limited by max_entries for display)
-        entries_added = 0
-        for doc_id in doc_ids:
-            if entries_added >= max_entries:
-                break
+        def relative_depth(path: str) -> int:
+            if not normalized_prefix:
+                return len(path.split("/"))
+            if path == normalized_prefix:
+                return 0
+            relative = path[len(normalized_prefix) :].strip("/")
+            return len(relative.split("/")) if relative else 0
 
-            parts = doc_id.split("/")
-            for i in range(1, min(len(parts), depth) + 1):
-                path = "/".join(parts[:i])
-                if path not in seen_paths:
-                    seen_paths.add(path)
+        visible_paths = [
+            path
+            for path in path_types
+            if (not normalized_prefix or path == normalized_prefix or path.startswith(normalized_prefix + "/"))
+            and relative_depth(path) <= depth
+        ]
+        visible_paths.sort(key=str.casefold)
 
-                    # Check if this path has any children (making it a directory)
-                    is_directory = any(other_path.startswith(path + "/") for other_path in all_paths)
-
-                    tree_entries.append(
-                        {
-                            "path": path,
-                            "type": "directory" if is_directory else "file",
-                            "doc_id": doc_id if i == len(parts) else None,
-                        }
-                    )
-                    entries_added += 1
-
-                    if entries_added >= max_entries:
-                        break
-
-        return tree_entries
+        return [
+            {
+                "path": path,
+                "type": path_types[path],
+                "doc_id": path if path in file_ids else None,
+            }
+            for path in visible_paths[:max_entries]
+        ]
 
     async def set_weight(
         self,

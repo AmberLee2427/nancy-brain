@@ -28,7 +28,7 @@ from mcp import types
 from mcp.server import InitializationOptions, NotificationOptions, Server
 
 from nancy_brain.chunking import strip_chunk_suffix
-from rag_core.service import RAGService
+from rag_core.service import RAGService, normalize_document_path
 
 logger = logging.getLogger(__name__)
 
@@ -598,6 +598,7 @@ class NancyMCPServer:
         if path:
             response_text += f" (path: {path})"
         response_text += ":**\n\n"
+        normalized_path = normalize_document_path(path)
 
         def format_tree(items, indent=0):
             formatted = ""
@@ -610,10 +611,13 @@ class NancyMCPServer:
                         item_type = item.get("type", "file")
                         is_dir = item_type in ("dir", "directory")
                         if item_path:
-                            rel_path = item_path
-                            if path and item_path.startswith(path.rstrip("/") + "/"):
-                                rel_path = item_path[len(path.rstrip("/") + "/") :]
-                            rel_depth = rel_path.count("/")
+                            if normalized_path and item_path == normalized_path:
+                                rel_depth = 0
+                            elif normalized_path and item_path.startswith(normalized_path.rstrip("/") + "/"):
+                                rel_path = item_path[len(normalized_path.rstrip("/") + "/") :]
+                                rel_depth = len(rel_path.split("/"))
+                            else:
+                                rel_depth = item_path.count("/")
                             prefix = "  " * rel_depth
                         label = item_path or "unknown"
                         if is_dir:

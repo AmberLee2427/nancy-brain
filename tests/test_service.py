@@ -1,4 +1,6 @@
 import os
+import json
+import sqlite3
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -9,6 +11,57 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from rag_core.service import RAGService
+
+
+def _write_tree_index(embeddings_path: Path):
+    index_dir = embeddings_path / "index"
+    index_dir.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(index_dir / "documents")
+    try:
+        conn.execute(
+            """
+            CREATE TABLE sections (
+                indexid INTEGER PRIMARY KEY AUTOINCREMENT,
+                id TEXT,
+                text TEXT,
+                data TEXT
+            )
+            """
+        )
+        rows = [
+            (
+                "knowledge_base/raw/microlens_submit/microlens-submit/README.md::chunk-0",
+                "README first chunk",
+                {"source_document": ("knowledge_base/raw/microlens_submit/" "microlens-submit/README.md")},
+            ),
+            (
+                "knowledge_base/raw/microlens_submit/microlens-submit/README.md::chunk-1",
+                "README second chunk",
+                {"source_document": ("knowledge_base/raw/microlens_submit/" "microlens-submit/README.md")},
+            ),
+            (
+                "knowledge_base/raw/microlens_submit/microlens-submit/docs/guide.md::chunk-0",
+                "Guide",
+                {"source_document": ("knowledge_base/raw/microlens_submit/" "microlens-submit/docs/guide.md")},
+            ),
+            (
+                "knowledge_base/raw/microlens_submit/microlens-submit-extra/README.md::chunk-0",
+                "Different repository",
+                None,
+            ),
+            (
+                "summaries/knowledge_base/raw/microlens_submit/microlens-submit/README.md",
+                "Summary",
+                None,
+            ),
+        ]
+        conn.executemany(
+            "INSERT INTO sections (id, text, data) VALUES (?, ?, ?)",
+            [(doc_id, text, json.dumps(data) if data is not None else None) for doc_id, text, data in rows],
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def test_service_methods(tmp_path):
@@ -383,5 +436,104 @@ def test_list_tree_structure(tmp_path):
         # Test with prefix filter
         tree_src = await service.list_tree(prefix="cat1/repo1/src")
         assert len(tree_src) >= 0
+
+    asyncio.run(test_tree())
+
+
+def test_list_tree_uses_index_without_raw_files(tmp_path):
+    """TREE enumerates indexed source documents and resolves paths consistently."""
+    cfg_file = tmp_path / "repositories.yml"
+    cfg_file.write_text("{}")
+    embeddings_path = tmp_path / "embeddings"
+    _write_tree_index(embeddings_path)
+    weights_path = tmp_path / "weights.yaml"
+    weights_path.write_text("extensions: {}")
+
+    service = RAGService(
+        embeddings_path=embeddings_path,
+        config_path=cfg_file,
+        weights_path=weights_path,
+    )
+    service.registry.list_ids = Mock(side_effect=AssertionError("TREE should enumerate the index"))
+
+    import asyncio
+
+    async def test_tree():
+        short_tree = await service.list_tree(
+            prefix="microlens_submit/microlens-submit",
+            depth=2,
+        )
+        full_tree = await service.list_tree(
+            prefix=("knowledge_base/raw/microlens_submit/" "microlens-submit/"),
+            depth=2,
+        )
+
+        assert short_tree == full_tree
+        assert short_tree == [
+            {
+                "path": "microlens_submit/microlens-submit",
+                "type": "directory",
+                "doc_id": None,
+            },
+            {
+                "path": "microlens_submit/microlens-submit/docs",
+                "type": "directory",
+                "doc_id": None,
+            },
+            {
+                "path": "microlens_submit/microlens-submit/docs/guide.md",
+                "type": "file",
+                "doc_id": "microlens_submit/microlens-submit/docs/guide.md",
+            },
+            {
+                "path": "microlens_submit/microlens-submit/README.md",
+                "type": "file",
+                "doc_id": "microlens_submit/microlens-submit/README.md",
+            },
+        ]
+        assert all(not entry["path"].startswith("knowledge_base/raw/") for entry in short_tree)
+        assert not any("microlens-submit-extra" in entry["path"] for entry in short_tree)
+        assert not (tmp_path / "knowledge_base" / "raw").exists()
+
+    asyncio.run(test_tree())
+
+
+def test_list_tree_root_and_depth_are_relative_to_prefix(tmp_path):
+    cfg_file = tmp_path / "repositories.yml"
+    cfg_file.write_text("{}")
+    embeddings_path = tmp_path / "embeddings"
+    _write_tree_index(embeddings_path)
+    weights_path = tmp_path / "weights.yaml"
+    weights_path.write_text("extensions: {}")
+
+    service = RAGService(
+        embeddings_path=embeddings_path,
+        config_path=cfg_file,
+        weights_path=weights_path,
+    )
+
+    import asyncio
+
+    async def test_tree():
+        root = await service.list_tree(prefix=".", depth=1)
+        assert root == [
+            {
+                "path": "microlens_submit",
+                "type": "directory",
+                "doc_id": None,
+            }
+        ]
+
+        requested_directory_only = await service.list_tree(
+            prefix="microlens_submit/microlens-submit",
+            depth=0,
+        )
+        assert requested_directory_only == [
+            {
+                "path": "microlens_submit/microlens-submit",
+                "type": "directory",
+                "doc_id": None,
+            }
+        ]
 
     asyncio.run(test_tree())
