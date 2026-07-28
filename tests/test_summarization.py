@@ -503,10 +503,40 @@ def test_invoke_custom_openai_compatible_request(generator_custom):
     assert mock_requests.post.call_args.args[0] == "https://api.example.test/v1/chat/completions"
     assert kwargs["headers"]["Authorization"] == "Bearer custom-secret"
     assert kwargs["json"]["model"] == "summary-model"
+    assert kwargs["json"]["max_tokens"] == 1024
     assert kwargs["json"]["temperature"] == 0
     assert "target content" in kwargs["json"]["messages"][0]["content"]
     assert "repository context" in kwargs["json"]["messages"][0]["content"]
     assert "custom-secret" not in json.dumps(kwargs["json"])
+
+
+def test_invoke_custom_retries_truncated_json(generator_custom):
+    gen = generator_custom
+    mock_requests = MagicMock()
+    truncated_response = MagicMock()
+    truncated_response.json.return_value = {"choices": [{"message": {"content": '{"summary": "truncated'}}]}
+    complete_response = MagicMock()
+    complete_response.json.return_value = {
+        "choices": [{"message": {"content": '{"summary": "Recovered summary", "weight": 1.3}'}}]
+    }
+    mock_requests.post.side_effect = [truncated_response, complete_response]
+
+    with patch.dict("sys.modules", {"requests": mock_requests}):
+        result = gen._invoke_model(
+            prompt="summarize",
+            content="target content",
+            readme=None,
+            readme_path=None,
+        )
+
+    assert result == {
+        "summary": "Recovered summary",
+        "weight": 1.3,
+        "model": "summary-model",
+    }
+    assert mock_requests.post.call_count == 2
+    assert mock_requests.post.call_args_list[0].kwargs["json"]["max_tokens"] == 1024
+    assert mock_requests.post.call_args_list[1].kwargs["json"]["max_tokens"] == 4096
 
 
 def test_invoke_custom_connection_error(generator_custom):

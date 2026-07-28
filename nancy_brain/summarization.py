@@ -323,39 +323,66 @@ class SummaryGenerator:
                     header += f" ({readme_path})"
                 full_content += f"\n\n{header}:\n{readme}"
 
-            response = requests.post(
-                f"{self.custom_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.custom_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model_name,
-                    "max_tokens": self.max_output_tokens,
-                    "temperature": 0,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": f"{prompt}\n\n{full_content}",
-                        }
-                    ],
-                },
-                timeout=180,
-            )
-            response.raise_for_status()
-            message_content = response.json()["choices"][0]["message"]["content"]
-            if isinstance(message_content, list):
-                message_content = "".join(
-                    block.get("text", "")
-                    for block in message_content
-                    if isinstance(block, dict) and block.get("type") == "text"
+            retry_tokens = int(
+                os.environ.get(
+                    "CUSTOM_SUMMARY_RETRY_MAX_TOKENS",
+                    str(max(4096, self.max_output_tokens)),
                 )
-            if not isinstance(message_content, str):
-                raise ValueError("custom summary response content is not text")
+            )
+            token_budgets = [self.max_output_tokens]
+            if retry_tokens > self.max_output_tokens:
+                token_budgets.append(retry_tokens)
 
-            payload = json.loads(self._strip_markdown_json(message_content.strip()))
-            payload.setdefault("model", self.model_name)
-            return payload
+            last_decode_error: Optional[json.JSONDecodeError] = None
+            for attempt, max_tokens in enumerate(token_budgets, start=1):
+                response = requests.post(
+                    f"{self.custom_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.custom_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self.model_name,
+                        "max_tokens": max_tokens,
+                        "temperature": 0,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": f"{prompt}\n\n{full_content}",
+                            }
+                        ],
+                    },
+                    timeout=180,
+                )
+                response.raise_for_status()
+                message_content = response.json()["choices"][0]["message"]["content"]
+                if isinstance(message_content, list):
+                    message_content = "".join(
+                        block.get("text", "")
+                        for block in message_content
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    )
+                if not isinstance(message_content, str):
+                    raise ValueError("custom summary response content is not text")
+
+                try:
+                    payload = json.loads(self._strip_markdown_json(message_content.strip()))
+                except json.JSONDecodeError as exc:
+                    last_decode_error = exc
+                    if attempt < len(token_budgets):
+                        logger.info(
+                            "Retrying truncated custom summary with %d output tokens",
+                            token_budgets[attempt],
+                        )
+                        continue
+                    raise
+
+                payload.setdefault("model", self.model_name)
+                return payload
+
+            if last_decode_error is not None:
+                raise last_decode_error
+            return None
         except Exception as exc:
             self.last_error = exc
             msg = str(exc).lower()
