@@ -457,6 +457,26 @@ def test_identifier_tokens_support_acronyms_paths_and_slugs():
         "tools",
         "mulensmodel",
     ]
+    assert Search._is_identifier_query("FSPL")
+    assert Search._is_identifier_query("VBMicrolensing documentation")
+    assert Search._is_identifier_query("microlensing_tools/MulensModel")
+    assert not Search._is_identifier_query("FSPL point lens parallax fitting")
+    assert not Search._is_identifier_query("MulensModel finite source parallax parameters")
+
+
+def test_mixed_acronym_query_does_not_add_path_fallback(tmp_path):
+    embeddings_path = tmp_path / "embeddings"
+    _build_minimal_index(embeddings_path)
+
+    search = object.__new__(Search)
+    search.embeddings_path = embeddings_path
+
+    matches = search._id_match_fallback(
+        "VBMicrolensing finite source fitting example",
+        set(),
+        limit=5,
+    )
+    assert matches == []
 
 
 def test_id_match_fallback_returns_one_result_per_source_document(tmp_path):

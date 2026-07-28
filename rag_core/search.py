@@ -270,6 +270,20 @@ class Search:
 
         return tokens
 
+    @classmethod
+    def _is_identifier_query(cls, query: str) -> bool:
+        """Return whether path matching should participate in this query."""
+        stripped = (query or "").strip()
+        if not stripped:
+            return False
+        if "/" in stripped or "\\" in stripped:
+            return True
+        if not re.search(r"\s", stripped) and any(separator in stripped for separator in ("-", "_")):
+            return True
+
+        significant_tokens = [piece for piece in re.split(r"[\s/\\,_-]+", stripped) if len(piece.strip()) >= 3]
+        return bool(cls._identifier_tokens(stripped)) and len(significant_tokens) <= 2
+
     def _id_match_fallback(
         self,
         query: str,
@@ -281,9 +295,9 @@ class Search:
         if not query or limit <= 0:
             return []
 
-        tokens = self._identifier_tokens(query)
-        if not tokens:
+        if not self._is_identifier_query(query):
             return []
+        tokens = self._identifier_tokens(query)
 
         db_path = self.embeddings_path / "index" / "documents"
         if not db_path.exists():
