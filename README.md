@@ -90,7 +90,7 @@ Nancy Brain uses the [`chunky-files`](https://pypi.org/project/chunky-files/) pa
 
 To adjust chunks per file programmatically, supply a custom `ChunkerConfig` through the build pipeline. For advanced semantic chunkers (Tree-sitter, language-specific splits), install extras: `pip install chunky-files[tree]`.
 
-### Optional: Document summaries (local or Anthropic)
+### Optional: Document summaries
 
 Opt in to generate document-level summaries and suggested search weights during a build:
 
@@ -113,7 +113,18 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 nancy-brain build --summaries
 ```
 
-`NB_USE_LOCAL_SUMMARY=true` forces local summaries, even if `ANTHROPIC_API_KEY` is set.
+Use an OpenAI-compatible endpoint:
+
+```bash
+export NB_USE_LOCAL_SUMMARY=false
+export CUSTOM_API_KEY="..."
+export CUSTOM_URL="https://api.example.test/v1"
+export CUSTOM_SUMMARY_MODEL="summary-model"
+nancy-brain build --summaries
+```
+
+`CUSTOM_MODEL` is used when `CUSTOM_SUMMARY_MODEL` is unset. Backend precedence is local,
+then custom, then Anthropic. `NB_USE_LOCAL_SUMMARY=true` therefore forces local summaries.
 Summaries are cached under `knowledge_base/cache/summaries/` using the document content hash, so reruns only
 recompute changed files. Suggested weights are written to `knowledge_base/embeddings/auto_model_weights.json`
 for review before merging into your active `model_weights.yml`.
@@ -227,8 +238,12 @@ Common knobs you can export (or place in `config/.env`) to tune builds and the a
 | `NB_TEXT_EMBEDDING_MODEL` | Override text embedding model path | sentence-transformers/all-MiniLM-L6-v2 |
 | `NB_CODE_EMBEDDING_MODEL` | Override code embedding model path | inherits `CODE_EMBEDDING_MODEL` |
 | `SKIP_PDF_PROCESSING` | Skip PDF downloads/extraction during build | false |
-| `NB_USE_LOCAL_SUMMARY` | Force local summaries when true (overrides `ANTHROPIC_API_KEY`) | false |
-| `ANTHROPIC_API_KEY` | Anthropic key for summaries when local mode is off | unset |
+| `NB_USE_LOCAL_SUMMARY` | Force local summaries when true | false |
+| `CUSTOM_API_KEY` | API key for an OpenAI-compatible summary endpoint | unset |
+| `CUSTOM_URL` | OpenAI-compatible base URL, including `/v1` when required | unset |
+| `CUSTOM_SUMMARY_MODEL` | Model used for summaries on the custom endpoint | `CUSTOM_MODEL` |
+| `CUSTOM_MODEL` | Fallback custom model when no summary-specific model is set | unset |
+| `ANTHROPIC_API_KEY` | Anthropic key used when local and custom modes are unavailable | unset |
 | `ENABLE_DOC_SUMMARIES` | Toggle summaries in builds by default | false |
 | `NB_SUMMARY_MODEL` | Local HuggingFace model for summaries | `Qwen/Qwen2.5-Coder-0.5B-Instruct` |
 | `NB_MIN_SUMMARY_CHARS` | Skip summarising files shorter than this (chars) | 200 |

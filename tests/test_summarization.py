@@ -8,6 +8,15 @@ from unittest.mock import patch, MagicMock
 
 from nancy_brain.summarization import SummaryGenerator, SummaryResult
 
+SUMMARY_ENV = {
+    "ANTHROPIC_API_KEY": "",
+    "NB_USE_LOCAL_SUMMARY": "",
+    "CUSTOM_API_KEY": "",
+    "CUSTOM_URL": "",
+    "CUSTOM_MODEL": "",
+    "CUSTOM_SUMMARY_MODEL": "",
+}
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -21,21 +30,37 @@ def summary_cache_dir(tmp_path):
 @pytest.fixture
 def generator_disabled(summary_cache_dir):
     """A generator with no API key and no local mode -> disabled."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": ""}):
+    with patch.dict(os.environ, SUMMARY_ENV):
         return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
 @pytest.fixture
 def generator_with_key(summary_cache_dir):
     """A generator with a fake API key -> enabled (Anthropic mode)."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fake-key", "NB_USE_LOCAL_SUMMARY": ""}):
+    with patch.dict(os.environ, {**SUMMARY_ENV, "ANTHROPIC_API_KEY": "fake-key"}):
         return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
 @pytest.fixture
 def generator_local(summary_cache_dir):
     """A generator in local mode."""
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": "true"}):
+    with patch.dict(os.environ, {**SUMMARY_ENV, "NB_USE_LOCAL_SUMMARY": "true"}):
+        return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
+
+
+@pytest.fixture
+def generator_custom(summary_cache_dir):
+    """A generator using an OpenAI-compatible endpoint."""
+    with patch.dict(
+        os.environ,
+        {
+            **SUMMARY_ENV,
+            "CUSTOM_API_KEY": "custom-secret",
+            "CUSTOM_URL": "https://api.example.test/v1/",
+            "CUSTOM_MODEL": "fallback-model",
+            "CUSTOM_SUMMARY_MODEL": "summary-model",
+        },
+    ):
         return SummaryGenerator(cache_dir=summary_cache_dir, enabled=True)
 
 
@@ -45,29 +70,66 @@ def generator_local(summary_cache_dir):
 
 
 def test_init_disabled_when_no_key(summary_cache_dir):
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": ""}):
+    with patch.dict(os.environ, SUMMARY_ENV):
         gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.enabled is False
 
 
 def test_init_enabled_with_key(summary_cache_dir):
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key", "NB_USE_LOCAL_SUMMARY": ""}):
+    with patch.dict(os.environ, {**SUMMARY_ENV, "ANTHROPIC_API_KEY": "test-key"}):
         gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.enabled is True
     assert summary_cache_dir.exists()
 
 
 def test_init_local_mode(summary_cache_dir):
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "NB_USE_LOCAL_SUMMARY": "true"}):
+    with patch.dict(os.environ, {**SUMMARY_ENV, "NB_USE_LOCAL_SUMMARY": "true"}):
         gen = SummaryGenerator(cache_dir=summary_cache_dir)
     assert gen.use_local is True
     assert gen.enabled is True
 
 
 def test_init_disabled_flag(summary_cache_dir):
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key", "NB_USE_LOCAL_SUMMARY": ""}):
+    with patch.dict(os.environ, {**SUMMARY_ENV, "ANTHROPIC_API_KEY": "key"}):
         gen = SummaryGenerator(cache_dir=summary_cache_dir, enabled=False)
     assert gen.enabled is False
+
+
+def test_init_custom_mode(generator_custom):
+    assert generator_custom.enabled is True
+    assert generator_custom.use_custom is True
+    assert generator_custom.custom_url == "https://api.example.test/v1"
+    assert generator_custom.model_name == "summary-model"
+
+
+def test_local_mode_overrides_custom(summary_cache_dir):
+    with patch.dict(
+        os.environ,
+        {
+            **SUMMARY_ENV,
+            "NB_USE_LOCAL_SUMMARY": "true",
+            "CUSTOM_API_KEY": "custom-secret",
+            "CUSTOM_URL": "https://api.example.test/v1",
+            "CUSTOM_SUMMARY_MODEL": "summary-model",
+        },
+    ):
+        gen = SummaryGenerator(cache_dir=summary_cache_dir)
+    assert gen.use_local is True
+    assert gen.use_custom is False
+
+
+def test_incomplete_custom_config_does_not_enable(summary_cache_dir):
+    with patch.dict(
+        os.environ,
+        {
+            **SUMMARY_ENV,
+            "CUSTOM_API_KEY": "custom-secret",
+            "CUSTOM_URL": "https://api.example.test/v1",
+        },
+    ):
+        gen = SummaryGenerator(cache_dir=summary_cache_dir)
+    assert gen.enabled is False
+    assert gen.use_custom is False
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +346,14 @@ def test_cache_key_with_readme_path(generator_with_key):
     assert k1 != k2
 
 
+def test_custom_cache_key_includes_model(generator_custom):
+    gen = generator_custom
+    first = gen._cache_key("doc/x.py", "content", None, None)
+    gen.model_name = "replacement-summary-model"
+    second = gen._cache_key("doc/x.py", "content", None, None)
+    assert first != second
+
+
 # ---------------------------------------------------------------------------
 # _build_prompt
 # ---------------------------------------------------------------------------
@@ -404,6 +474,56 @@ def test_invoke_model_with_readme(generator_with_key):
             readme_path="README.md",
         )
     assert result is not None
+
+
+def test_invoke_custom_openai_compatible_request(generator_custom):
+    gen = generator_custom
+    mock_requests = MagicMock()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": '```json\n{"summary": "Gemma summary", "weight": 1.4}\n```'}}]
+    }
+    mock_requests.post.return_value = mock_response
+
+    with patch.dict("sys.modules", {"requests": mock_requests}):
+        result = gen._invoke_model(
+            prompt="summarize",
+            content="target content",
+            readme="repository context",
+            readme_path="README.md",
+        )
+
+    assert result == {
+        "summary": "Gemma summary",
+        "weight": 1.4,
+        "model": "summary-model",
+    }
+    mock_response.raise_for_status.assert_called_once_with()
+    _, kwargs = mock_requests.post.call_args
+    assert mock_requests.post.call_args.args[0] == "https://api.example.test/v1/chat/completions"
+    assert kwargs["headers"]["Authorization"] == "Bearer custom-secret"
+    assert kwargs["json"]["model"] == "summary-model"
+    assert kwargs["json"]["temperature"] == 0
+    assert "target content" in kwargs["json"]["messages"][0]["content"]
+    assert "repository context" in kwargs["json"]["messages"][0]["content"]
+    assert "custom-secret" not in json.dumps(kwargs["json"])
+
+
+def test_invoke_custom_connection_error(generator_custom):
+    gen = generator_custom
+    mock_requests = MagicMock()
+    mock_requests.post.side_effect = ConnectionError("connection refused")
+
+    with patch.dict("sys.modules", {"requests": mock_requests}):
+        result = gen._invoke_model(
+            prompt="summarize",
+            content="content",
+            readme=None,
+            readme_path=None,
+        )
+
+    assert result is None
+    assert gen.last_error_type == "connection"
 
 
 # ---------------------------------------------------------------------------

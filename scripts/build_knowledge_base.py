@@ -1315,7 +1315,7 @@ if __name__ == "__main__":
         dest="summaries",
         action="store_true",
         default=DEFAULT_SUMMARIES_ENABLED,
-        help="Generate document summaries for each document (local if NB_USE_LOCAL_SUMMARY=true; otherwise Anthropic)",
+        help="Generate document summaries for each document (local, custom OpenAI-compatible, or Anthropic)",
     )
     parser.add_argument(
         "--no-summaries",
@@ -1412,7 +1412,7 @@ if __name__ == "__main__":
                     elif configured:
                         logger.info(
                             "  ℹ️  Summaries configured but disabled "
-                            "(check NB_USE_LOCAL_SUMMARY, ANTHROPIC_API_KEY, or local model dependencies)."
+                            "(check local, custom OpenAI-compatible, or Anthropic summary configuration)."
                         )
             total_failures = (
                 sum(len(v) for k, v in indexing_failures.items() if k.startswith("failed"))

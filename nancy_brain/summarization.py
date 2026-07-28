@@ -1,4 +1,4 @@
-"""Document summarization helpers using Anthropic Claude models."""
+"""Document summarization helpers for local and hosted models."""
 
 from __future__ import annotations
 
@@ -41,15 +41,18 @@ class SummaryGenerator:
         max_output_tokens: int = 1024,
     ) -> None:
         self.api_key = os.environ.get("ANTHROPIC_API_KEY")
+        self.custom_api_key = os.environ.get("CUSTOM_API_KEY")
+        self.custom_url = os.environ.get("CUSTOM_URL", "").rstrip("/")
+        self.custom_model = os.environ.get("CUSTOM_SUMMARY_MODEL") or os.environ.get("CUSTOM_MODEL")
 
         # NB_USE_LOCAL_SUMMARY explicitly controls local mode and overrides API-key availability.
         local_setting = os.environ.get("NB_USE_LOCAL_SUMMARY", "").lower()
         self.use_local = local_setting in ("true", "1", "yes", "force", "forced")
+        self.use_custom = bool(not self.use_local and self.custom_api_key and self.custom_url and self.custom_model)
 
-        # Enabled if we have an API key OR if we are using local mode
-        self.enabled = enabled and (bool(self.api_key) or self.use_local)
+        self.enabled = enabled and (bool(self.api_key) or self.use_local or self.use_custom)
 
-        self.model_name = model_name
+        self.model_name = self.custom_model if self.use_custom else model_name
         self.max_chars = max_chars
         self.readme_bonus_chars = readme_bonus_chars
         self.max_output_tokens = max_output_tokens
@@ -60,9 +63,11 @@ class SummaryGenerator:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
             if self.use_local:
-                logger.info("SummaryGenerator enabled in LOCAL mode (using distilbart-cnn-12-6)")
+                logger.info("SummaryGenerator enabled in local mode")
+            elif self.use_custom:
+                logger.info("SummaryGenerator enabled using custom model: %s", self.model_name)
             else:
-                logger.info(f"SummaryGenerator enabled using Anthropic model: {model_name}")
+                logger.info("SummaryGenerator enabled using Anthropic model: %s", model_name)
         else:
             logger.info("SummaryGenerator disabled (missing API key or flag)")
 
@@ -176,6 +181,10 @@ class SummaryGenerator:
         readme_path: Optional[str],
     ) -> str:
         h = sha256()
+        if self.use_custom:
+            h.update(b"custom\0")
+            h.update(self.model_name.encode("utf-8"))
+            h.update(b"\0")
         h.update(doc_id.encode("utf-8"))
         h.update(b"\0")
         h.update(content.encode("utf-8"))
@@ -251,6 +260,13 @@ class SummaryGenerator:
     ) -> Optional[Dict[str, object]]:
         if self.use_local:
             return self._invoke_local(content, readme)
+        if self.use_custom:
+            return self._invoke_custom(
+                prompt=prompt,
+                content=content,
+                readme=readme,
+                readme_path=readme_path,
+            )
 
         client = self._create_client()
         if client is None:
@@ -286,6 +302,66 @@ class SummaryGenerator:
             if "connection" in msg or "connect" in msg or "timeout" in msg:
                 self.last_error_type = "connection"
             logger.warning("Anthropic summarization failed: %s", exc)
+            return None
+
+    def _invoke_custom(
+        self,
+        *,
+        prompt: str,
+        content: str,
+        readme: Optional[str],
+        readme_path: Optional[str],
+    ) -> Optional[Dict[str, object]]:
+        """Call an OpenAI-compatible chat completions endpoint."""
+        try:
+            import requests
+
+            full_content = f"Full document:\n{content}"
+            if readme:
+                header = "Repository README excerpt"
+                if readme_path:
+                    header += f" ({readme_path})"
+                full_content += f"\n\n{header}:\n{readme}"
+
+            response = requests.post(
+                f"{self.custom_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.custom_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model_name,
+                    "max_tokens": self.max_output_tokens,
+                    "temperature": 0,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": f"{prompt}\n\n{full_content}",
+                        }
+                    ],
+                },
+                timeout=180,
+            )
+            response.raise_for_status()
+            message_content = response.json()["choices"][0]["message"]["content"]
+            if isinstance(message_content, list):
+                message_content = "".join(
+                    block.get("text", "")
+                    for block in message_content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+            if not isinstance(message_content, str):
+                raise ValueError("custom summary response content is not text")
+
+            payload = json.loads(self._strip_markdown_json(message_content.strip()))
+            payload.setdefault("model", self.model_name)
+            return payload
+        except Exception as exc:
+            self.last_error = exc
+            msg = str(exc).lower()
+            if "connection" in msg or "connect" in msg or "timeout" in msg:
+                self.last_error_type = "connection"
+            logger.warning("Custom summarization with %s failed: %s", self.model_name, exc)
             return None
 
     def _invoke_local(
