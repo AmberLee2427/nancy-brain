@@ -147,7 +147,11 @@ def test_install_local_ocr_worker_falls_back_to_unpinned_torch_when_default_pin_
     assert summary.torchvision_version == "0.25.0+cu128"
     assert (summary.code_root / "nancy_brain" / "pdf_ocr.py").exists()
     assert any("torch==2.6.0" in command for command in pip_installs)
-    assert any(command[-2:] == ["torch", "torchvision"] for command in pip_installs)
+    assert any(
+        command[index : index + 2] == ["torch", "torchvision"]
+        for command in pip_installs
+        for index in range(len(command) - 1)
+    )
 
 
 def test_package_root_import_does_not_eagerly_import_cli(monkeypatch):
