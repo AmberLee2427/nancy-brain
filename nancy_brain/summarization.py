@@ -323,14 +323,20 @@ class SummaryGenerator:
                     header += f" ({readme_path})"
                 full_content += f"\n\n{header}:\n{readme}"
 
-            retry_tokens = int(
+            custom_max_tokens = int(
                 os.environ.get(
-                    "CUSTOM_SUMMARY_RETRY_MAX_TOKENS",
+                    "CUSTOM_SUMMARY_MAX_TOKENS",
                     str(max(4096, self.max_output_tokens)),
                 )
             )
-            token_budgets = [self.max_output_tokens]
-            if retry_tokens > self.max_output_tokens:
+            retry_tokens = int(
+                os.environ.get(
+                    "CUSTOM_SUMMARY_RETRY_MAX_TOKENS",
+                    str(max(8192, custom_max_tokens)),
+                )
+            )
+            token_budgets = [custom_max_tokens]
+            if retry_tokens > custom_max_tokens:
                 token_budgets.append(retry_tokens)
 
             last_decode_error: Optional[json.JSONDecodeError] = None

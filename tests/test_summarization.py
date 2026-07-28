@@ -503,7 +503,7 @@ def test_invoke_custom_openai_compatible_request(generator_custom):
     assert mock_requests.post.call_args.args[0] == "https://api.example.test/v1/chat/completions"
     assert kwargs["headers"]["Authorization"] == "Bearer custom-secret"
     assert kwargs["json"]["model"] == "summary-model"
-    assert kwargs["json"]["max_tokens"] == 1024
+    assert kwargs["json"]["max_tokens"] == 4096
     assert kwargs["json"]["temperature"] == 0
     assert "target content" in kwargs["json"]["messages"][0]["content"]
     assert "repository context" in kwargs["json"]["messages"][0]["content"]
@@ -535,8 +535,8 @@ def test_invoke_custom_retries_truncated_json(generator_custom):
         "model": "summary-model",
     }
     assert mock_requests.post.call_count == 2
-    assert mock_requests.post.call_args_list[0].kwargs["json"]["max_tokens"] == 1024
-    assert mock_requests.post.call_args_list[1].kwargs["json"]["max_tokens"] == 4096
+    assert mock_requests.post.call_args_list[0].kwargs["json"]["max_tokens"] == 4096
+    assert mock_requests.post.call_args_list[1].kwargs["json"]["max_tokens"] == 8192
 
 
 def test_invoke_custom_connection_error(generator_custom):
