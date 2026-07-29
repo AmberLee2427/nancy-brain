@@ -77,14 +77,14 @@ You should see `INF Registered tunnel connection`. You can now access the Admin 
 Nancy Brain issues per-user MCP keys via an invite-code endpoint. Keep invite codes in `.env` and share them out-of-band.
 
 ```bash
-curl -X POST https://nancy-brain.malpas.nz/v2/api-keys/request \
+curl -X POST https://nancy-api.your-domain.com/v2/api-keys/request \
   -H "Content-Type: application/json" \
   -d '{"invite_code":"code1","contact":"you@example.com"}'
 ```
 
 Use the key with MCP endpoints:
 ```bash
-curl -H "X-API-Key: <key>" "https://nancy-brain.malpas.nz/search?query=roman&limit=3"
+curl -H "X-API-Key: <key>" "https://nancy-api.your-domain.com/search?query=roman&limit=3"
 ```
 
 ### Legacy: CLI/File-Based Tunnel

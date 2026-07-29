@@ -1,5 +1,13 @@
 # Claude Desktop Integration
 
+!!! warning "Local and remote setup are different"
+    This page describes a local Nancy Brain process. Claude Desktop remote
+    connectors must be added through **Settings > Connectors**, not through
+    `claude_desktop_config.json`, and require authless or OAuth authentication.
+    The hosted microlensing service currently uses API keys; see
+    [nancy.rges-pit.com/connect/claude](https://nancy.rges-pit.com/connect/claude/)
+    for supported clients.
+
 Nancy Brain integrates seamlessly with Claude Desktop through the Model Context Protocol (MCP), giving you AI-powered access to your knowledge bases directly in conversations with Claude.
 
 ## Overview

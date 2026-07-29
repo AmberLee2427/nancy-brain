@@ -2,9 +2,15 @@
 
 Nancy Brain can be used as a local MCP (Model Context Protocol) server with Gemini Code Assist, allowing you to interact with your knowledge base directly within your IDE.
 
+!!! info "Using the shared microlensing service?"
+    This page documents a locally built instance. Hosted-service connection
+    details and generic MCP settings are maintained at
+    [nancy.rges-pit.com](https://nancy.rges-pit.com/).
+
 ## Prerequisites
 
-Before you begin, ensure you have [installed Nancy Brain](https://amberlee2427.github.io/nancy-brain/installation/) and built your knowledge base.
+Before you begin, ensure you have [installed Nancy Brain](../installation.md)
+and built your knowledge base.
 
 ## Configuration
 
@@ -19,18 +25,20 @@ To connect Gemini Code Assist to the Nancy Brain MCP server, you need to configu
             "nancy-brain": {
                 "command": "/path/to/your/conda/env/bin/python",
                 "args": [
-                    "/path/to/your/nancy-brain/run_mcp_server.py"
-                ],
-                "env": {
-                    "PYTHONPATH": "/path/to/your/nancy-brain",
-                    "KMP_DUPLICATE_LIB_OK": "TRUE"
-                }
+                    "/path/to/your/nancy-brain/connectors/mcp_server/server.py",
+                    "/path/to/your/project/config/repositories.yml",
+                    "/path/to/your/project/knowledge_base/embeddings",
+                    "--weights",
+                    "/path/to/your/project/config/index_weights.yaml"
+                ]
             }
         }
     }
     ```
 
-    **Important:** Replace `/path/to/your/conda/env/bin/python` with the absolute path to the Python executable in your Conda environment where `nancy-brain` is installed. Also, replace `/path/to/your/nancy-brain/` with the absolute path to your `nancy-brain` project directory.
+    Replace every placeholder with an absolute path. The server script comes
+    from the Nancy Brain source checkout; the configuration, embeddings, and
+    weights paths belong to the knowledge-base project you built.
 
 3.  Save the `settings.json` file.
 4.  In your IDE, open the command palette and select **Developer: Reload Window** to apply the changes.

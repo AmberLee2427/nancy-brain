@@ -58,7 +58,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/AmberLee2427/nancy-brain"
-Documentation = "https://github.com/AmberLee2427/nancy-brain/blob/main/README.md"
+Documentation = "https://nancy-docs.malpas.nz/"
 Repository = "https://github.com/AmberLee2427/nancy-brain"
 Issues = "https://github.com/AmberLee2427/nancy-brain/issues"
 

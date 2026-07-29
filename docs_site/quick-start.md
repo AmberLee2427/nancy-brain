@@ -1,6 +1,11 @@
 # Quick Start
 
-Get up and running with Nancy Brain in under 5 minutes.
+Build and query your own Nancy Brain knowledge base.
+
+!!! tip "You may not need to build anything"
+    Microlensing researchers who only want to use the shared corpus should
+    follow the hosted-service guide at
+    [nancy.rges-pit.com](https://nancy.rges-pit.com/).
 
 ## Installation
 

@@ -1,17 +1,24 @@
 # Nancy Brain
 
-Turn your GitHub repositories and research papers into AI-searchable knowledge bases with just a few commands.
+Build and operate an MCP-accessible knowledge base from repositories, research
+papers, documentation, and notebooks.
 
-## ✨ What is Nancy Brain?
+!!! info "Looking for the shared microlensing knowledge base?"
+    These are the package and self-hosting docs. To connect an AI client to the
+    existing Nancy microlensing service, use
+    [nancy.rges-pit.com](https://nancy.rges-pit.com/). You do not need to
+    install this package or build an index.
+
+## What is Nancy Brain?
 
 Nancy Brain is a powerful tool that helps researchers, developers, and teams create searchable knowledge bases from:
 
-- 📚 **GitHub repositories** - Index code, documentation, and READMEs
-- 📄 **PDF articles** - Research papers, documentation, reports
-- 🔍 **Smart search** - Semantic search powered by AI embeddings
-- 🛠️ **Multiple interfaces** - CLI, web UI, API, and integrations
+- **Repositories** - Index code, documentation, and READMEs
+- **PDF articles** - Process papers, documentation, and reports
+- **Semantic retrieval** - Search an indexed corpus and retrieve precise passages
+- **MCP and HTTP** - Serve the resulting knowledge base to agents and applications
 
-## 🚀 Quick Start
+## Quick start
 
 ```bash
 # Install
@@ -28,29 +35,29 @@ nancy-brain build
 nancy-brain search "machine learning algorithms"
 ```
 
-## 🎯 Perfect For
+## Choose the right path
 
-- **Researchers** - Index academic papers and related code repositories
-- **ML Engineers** - Create searchable knowledge bases of ML frameworks
-- **Development Teams** - Make tribal knowledge discoverable
-- **Students** - Build personal knowledge bases from coursework
+| Goal | Documentation |
+| --- | --- |
+| Connect to the hosted microlensing corpus | [Nancy for RGES-PIT](https://nancy.rges-pit.com/) |
+| Build your own index | [Quick Start](quick-start.md) |
+| Connect a client to your own server | [Integrations](integrations/vscode-mcp.md) |
+| Deploy a persistent server | [Self-Hosting Guide](deployment/self-hosted.md) |
 
-## 🔌 Integrations
+## Interfaces
 
 Nancy Brain works seamlessly with your existing tools:
 
-- **VS Code** - Via Model Context Protocol (MCP)
-- **Claude Desktop** - Direct integration
-- **Slack** - Team knowledge bot
-- **Custom GPTs** - OpenAI integration
+- **MCP** - Streamable HTTP for remote clients and stdio for local clients
+- **HTTP API** - Search, retrieve, tree, weighting, and status endpoints
+- **CLI** - Build, inspect, and query indexes
+- **Web UI** - Administrative inspection and build controls
 
-## 📖 Next Steps
+## Next steps
 
 - [Installation Guide](installation.md) - Get up and running
 - [VS Code Integration](integrations/vscode-mcp.md) - Code alongside your knowledge base
 - [Research Workflow](tutorials/research-workflow.md) - Academic use cases
 - [API Reference](api/cli.md) - Complete CLI documentation
 
----
-
-*Nancy Brain is named after Nancy Grace Roman, the "Mother of Hubble" - helping you explore the universe of knowledge.*
+Nancy Brain is named after Nancy Grace Roman, the "Mother of Hubble."

@@ -1,4 +1,10 @@
-# Privacy Policy
+# Hosted Service Privacy Policy
+
+!!! note
+    This policy applies to Amber's hosted Nancy service, not to every
+    installation of the open-source Nancy Brain package. Current hosted-service
+    documentation and policy are maintained at
+    [nancy.rges-pit.com/privacy](https://nancy.rges-pit.com/privacy/).
 
 Effective date: 2026-01-19
 

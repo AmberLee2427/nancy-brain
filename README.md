@@ -1,10 +1,15 @@
 <p align="center">
-  <a href="https://amberlee2427.github.io/nancy-brain/"><img src="https://github.com/AmberLee2427/nancy-brain/blob/main/docs_site/nancy-brain.png" alt="logo" width=40%></a>
+  <a href="https://nancy-docs.malpas.nz/"><img src="https://github.com/AmberLee2427/nancy-brain/blob/main/docs_site/nancy-brain.png" alt="logo" width=40%></a>
 </p>
 
 # Nancy Brain
 
-[Pages](https://amberlee2427.github.io/nancy-brain/) [Read the Docs](https://nancy-brain.readthedocs.io/en/latest/)
+[Documentation](https://nancy-docs.malpas.nz/) · [Hosted microlensing service](https://nancy.rges-pit.com/)
+
+Nancy Brain is the package for building and serving knowledge bases. If you
+only want to connect an MCP client to the shared microlensing corpus, use the
+[hosted Nancy guide](https://nancy.rges-pit.com/); no package installation or
+local index build is required.
 
 **Turn any GitHub repository into a searchable knowledge base for AI agents.**
 
