@@ -8,20 +8,20 @@ docs_dir: docs_site
 
 theme:
   name: material
+  logo: nancy-brain.png
+  favicon: nancy-brain.png
   palette:
-    # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
-      accent: purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -33,6 +33,9 @@ theme:
     - search.highlight
     - search.share
     - content.code.copy
+
+extra_css:
+  - stylesheets/nancy-package-20260729.css
 
 plugins:
   - search

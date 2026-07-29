@@ -104,7 +104,8 @@ docs = [
     "mkdocs-material>=9.0.0",
     "mkdocstrings[python]>=0.20.0",
     "mkdocs-autorefs>=0.4.1",
-    "mkdocs-click>=0.8.0"
+    "mkdocs-click>=0.8.0",
+    "Pygments<2.20"
 ]
 
 [build-system]
