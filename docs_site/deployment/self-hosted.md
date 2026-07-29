@@ -26,6 +26,9 @@ This guide covers deploying Nancy Brain on a self-hosted server using Docker and
     # .env
     MCP_API_KEY=your-secure-random-string
     MCP_INVITE_CODES=code1,code2,code3
+    MCP_RATE_LIMIT_PER_MINUTE=600
+    MCP_IP_RATE_LIMIT_PER_MINUTE=1200
+    MCP_KEY_ISSUE_RATE_LIMIT_PER_HOUR=5
     NB_SECRET_KEY=another-secure-random-string
     TUNNEL_TOKEN=ey...  # Optional: see Cloudflare section below
     ```
@@ -86,6 +89,11 @@ Use the key with MCP endpoints:
 ```bash
 curl -H "X-API-Key: <key>" "https://nancy-api.your-domain.com/search?query=roman&limit=3"
 ```
+
+Each key receives its own persistent retrieval weights. Personal keys cannot
+trigger `/rebuild`; that endpoint requires the master `MCP_API_KEY`. The
+default request limits are intentionally generous and can be disabled with
+`0`, but internet-facing deployments should retain some abuse protection.
 
 ### Legacy: CLI/File-Based Tunnel
 

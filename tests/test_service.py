@@ -251,6 +251,33 @@ def test_search_docs_with_weights(tmp_path):
     asyncio.run(test_weights())
 
 
+def test_search_docs_uses_only_supplied_caller_weights(tmp_path):
+    """Caller-scoped weights must not leak into a later caller's search."""
+    config = {"cat1": [{"name": "repo1", "url": "https://github.com/user/repo1.git"}]}
+    cfg_file = tmp_path / "repositories.yml"
+    cfg_file.write_text(yaml.safe_dump(config))
+    embeddings_path = tmp_path / "embeddings"
+    embeddings_path.mkdir()
+    weights_path = tmp_path / "weights.yaml"
+    weights_path.write_text("extensions: {}")
+    service = RAGService(embeddings_path=embeddings_path, config_path=cfg_file, weights_path=weights_path)
+    service.search.search = Mock(return_value=[{"id": "cat1/repo1/test.py", "text": "Test", "score": 0.8}])
+    service.search.general_embeddings = object()
+
+    import asyncio
+
+    async def test_isolation():
+        first = await service.search_docs(
+            "test",
+            runtime_weights={"cat1/repo1/test.py": 1.8},
+        )
+        second = await service.search_docs("test", runtime_weights={})
+        assert first[0]["model_score"] == 1.8
+        assert second[0]["model_score"] == 1.0
+
+    asyncio.run(test_isolation())
+
+
 def test_search_docs_threshold_filter(tmp_path):
     """Test search_docs with threshold filtering."""
     config = {"cat1": [{"name": "repo1", "url": "https://github.com/user/repo1.git"}]}

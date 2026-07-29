@@ -230,7 +230,9 @@ Categories become path prefixes inside the knowledge base (e.g. `cat1/repoA/...`
 - `path_includes`: if substring appears in doc_id, multiplier is applied multiplicatively.
 
 ### 3.3 Model Weights (`config/model_weights.yaml`)
-Optional static per-document multipliers (legacy / seed). Runtime updates via `/weight` endpoint or MCP `set_weight` tool override or augment in-memory weights.
+Optional static per-document multipliers (legacy / seed). Hosted `/weight`
+updates and MCP `set_weight` calls are persisted per API key; local stdio
+updates remain process-local.
 
 ### 3.4 Environment Variables
 Common knobs you can export (or place in `config/.env`) to tune builds and the admin UI:
@@ -260,6 +262,9 @@ Common knobs you can export (or place in `config/.env`) to tune builds and the a
 | `NB_ACCESS_EXPIRE_MINUTES` | Access token lifetime | 60 |
 | `NB_REFRESH_EXPIRE_MINUTES` | Refresh token lifetime | 1440 |
 | `NB_USERS_DB` | SQLite users DB path | users.db |
+| `MCP_RATE_LIMIT_PER_MINUTE` | Hosted requests allowed per API key per minute; `0` disables | 600 |
+| `MCP_IP_RATE_LIMIT_PER_MINUTE` | Hosted requests allowed per source IP per minute; `0` disables | 1200 |
+| `MCP_KEY_ISSUE_RATE_LIMIT_PER_HOUR` | Invite-based key issuances allowed per source IP per hour; `0` disables | 5 |
 | `OMP_NUM_THREADS` / `MKL_NUM_THREADS` / `NUMEXPR_MAX_THREADS` | Cap CPU threading for heavy libs | unset |
 | `TOKENIZERS_PARALLELISM` | Suppress HF tokenizer warning | false |
 

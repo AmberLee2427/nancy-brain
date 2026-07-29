@@ -10,7 +10,12 @@ services:
     environment:
       - MCP_PORT=8000
       - MCP_API_KEY=${MCP_API_KEY}    # Generate a random strong key
+      - MCP_INVITE_CODES=${MCP_INVITE_CODES}
+      - MCP_RATE_LIMIT_PER_MINUTE=${MCP_RATE_LIMIT_PER_MINUTE:-600}
+      - MCP_IP_RATE_LIMIT_PER_MINUTE=${MCP_IP_RATE_LIMIT_PER_MINUTE:-1200}
+      - MCP_KEY_ISSUE_RATE_LIMIT_PER_HOUR=${MCP_KEY_ISSUE_RATE_LIMIT_PER_HOUR:-5}
       - NB_SECRET_KEY=${NB_SECRET_KEY} # Generate a random strong key for UI JWT tokens
+      - NB_USERS_DB=/app/data/users.db
       - NB_USE_LOCAL_SUMMARY=true      # True forces local summaries, even if ANTHROPIC_API_KEY is set
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} # Used only when NB_USE_LOCAL_SUMMARY=false
       - PYTHONUNBUFFERED=1
@@ -19,6 +24,7 @@ services:
       - ./config:/app/config:ro
       - ./knowledge_base:/app/knowledge_base
       - ./rag_core:/app/rag_core         # Optional: for hot-reloading dev
+      - nancy-users:/app/data
       - nancy-brain-cache:/app/cache
     restart: unless-stopped
     healthcheck:
@@ -64,4 +70,6 @@ services:
 
 volumes:
   nancy-brain-cache:
+    driver: local
+  nancy-users:
     driver: local

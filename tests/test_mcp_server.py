@@ -20,7 +20,14 @@ def mock_rag_service():
     mock = Mock()
 
     # Mock async methods
-    async def mock_search_docs(query, limit=6, toolkit=None, doctype=None, threshold=0.0):
+    async def mock_search_docs(
+        query,
+        limit=6,
+        toolkit=None,
+        doctype=None,
+        threshold=0.0,
+        runtime_weights=None,
+    ):
         return [
             {
                 "id": "microlensing_tools/MulensModel/README.md",
@@ -604,7 +611,14 @@ async def test_handle_search_no_results(mock_rag_service):
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
 
-    async def empty_search(query, limit=6, toolkit=None, doctype=None, threshold=0.0):
+    async def empty_search(
+        query,
+        limit=6,
+        toolkit=None,
+        doctype=None,
+        threshold=0.0,
+        runtime_weights=None,
+    ):
         return []
 
     server.rag_service.search_docs = empty_search

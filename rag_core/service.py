@@ -331,8 +331,9 @@ class RAGService:
         toolkit: str = None,
         doctype: str = None,
         threshold: float = 0.0,
+        runtime_weights: Optional[Dict[str, float]] = None,
     ) -> List[Dict]:
-        """Search for documents with optional filtering."""
+        """Search for documents with optional filtering and caller-scoped weights."""
         # Ensure search is loaded before proceeding
         self._ensure_search_loaded()
         if not self.search or not getattr(self.search, "general_embeddings", None):
@@ -356,12 +357,16 @@ class RAGService:
             self.search.extension_weights = {}
             self.search.model_weights = {}
 
-        if self._weights:
-            # Merge runtime weights, overriding file-based values
-            self.search.model_weights.update(self._weights)
+        effective_runtime_weights = self._weights if runtime_weights is None else runtime_weights
+        if effective_runtime_weights:
+            # Merge caller-scoped runtime weights, overriding file-based values.
+            self.search.model_weights.update(effective_runtime_weights)
 
         # Get initial search results
-        results = self.search.search(query, limit * 2)  # Get more to allow for filtering
+        raw_results = self.search.search(query, limit * 2)  # Get more to allow for filtering
+        # Search backends and test doubles may reuse result dictionaries. Never
+        # write caller-specific scores back into an object another caller can see.
+        results = [dict(result) for result in raw_results]
 
         # Ensure results have expected scoring fields so downstream code can rely on them.
         for r in results:
@@ -618,8 +623,8 @@ class RAGService:
             m = float(multiplier)
         except Exception:
             m = 1.0
-        # Clamp similar to search logic expectations
-        m = max(0.1, min(m, 10.0))
+        # Keep local/stdio behavior aligned with the hosted API contract.
+        m = max(0.5, min(m, 2.0))
         self._weights[doc_id] = m
         # Reflect in search if it is already loaded (so next call sees it)
         try:

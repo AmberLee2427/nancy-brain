@@ -13,6 +13,7 @@ import secrets
 import sqlite3
 import sys
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 
 # Fix OpenMP issue before importing any ML libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -31,6 +32,7 @@ from nancy_brain.chunking import strip_chunk_suffix
 from rag_core.service import RAGService, normalize_document_path
 
 logger = logging.getLogger(__name__)
+_request_principal: ContextVar[Optional[str]] = ContextVar("nancy_request_principal", default=None)
 
 
 class NancyMCPServer:
@@ -173,7 +175,13 @@ class NancyMCPServer:
                             "weight": {
                                 "type": "number",
                                 "description": "Weight value (higher = more priority)",
-                                "minimum": 0.0,
+                                "minimum": 0.5,
+                                "maximum": 2.0,
+                            },
+                            "ttl_days": {
+                                "type": "integer",
+                                "description": "Optional number of days before this preference expires",
+                                "minimum": 0,
                             },
                         },
                         "anyOf": [
@@ -415,12 +423,20 @@ class NancyMCPServer:
         doctype = args.get("doctype")
         threshold = args.get("threshold", 0.0)
 
+        principal = _request_principal.get()
+        runtime_weights = None
+        if principal:
+            from connectors.http_api import auth
+
+            runtime_weights = auth.get_principal_weights(principal)
+
         results = await self.rag_service.search_docs(
             query=query,
             limit=limit,
             toolkit=toolkit,
             doctype=doctype,
             threshold=threshold,
+            runtime_weights=runtime_weights,
         )
 
         if not results:
@@ -672,10 +688,26 @@ class NancyMCPServer:
                 )
             ]
 
-        await self.rag_service.set_weight(doc_id, weight, namespace or "global", ttl_days)
-
-        # Show the actual clamped weight
         clamped_weight = max(0.5, min(weight, 2.0))
+        principal = _request_principal.get()
+        if principal:
+            from connectors.http_api import auth
+
+            clamped_weight = auth.set_principal_weight(
+                principal,
+                doc_id,
+                clamped_weight,
+                ttl_days=ttl_days,
+            )
+            scope_label = "Personal API key"
+        else:
+            await self.rag_service.set_weight(
+                doc_id,
+                clamped_weight,
+                namespace or "global",
+                ttl_days,
+            )
+            scope_label = "Local server process"
 
         response_text = "⚖️ **Weight Updated:**\n"
         target_label = "Namespace Prefix" if namespace_only else "Document"
@@ -685,7 +717,7 @@ class NancyMCPServer:
             response_text += f"Actual Weight: `{clamped_weight}` (clamped to safe range 0.5-2.0)\n"
         else:
             response_text += f"Applied Weight: `{weight}`\n"
-        response_text += f"Namespace: `{namespace or 'global'}`\n"
+        response_text += f"Scope: `{scope_label}`\n"
         if ttl_days:
             response_text += f"TTL: `{ttl_days}` days\n"
         response_text += "\nThis will adjust the document's ranking in future searches."
@@ -882,11 +914,26 @@ async def main():
             from starlette.responses import JSONResponse
             from typing import Optional
             from connectors.http_api import auth
+            from connectors.http_api.rate_limit import SlidingWindowRateLimiter
 
             # Initialize user tables
             auth.create_user_table()
             auth.create_refresh_table()
             auth.create_api_key_table()
+            auth.create_api_key_weight_table()
+
+            key_rate_limiter = SlidingWindowRateLimiter(
+                limit=int(os.environ.get("MCP_RATE_LIMIT_PER_MINUTE", "600")),
+                window_seconds=60,
+            )
+            ip_rate_limiter = SlidingWindowRateLimiter(
+                limit=int(os.environ.get("MCP_IP_RATE_LIMIT_PER_MINUTE", "1200")),
+                window_seconds=60,
+            )
+            issue_rate_limiter = SlidingWindowRateLimiter(
+                limit=int(os.environ.get("MCP_KEY_ISSUE_RATE_LIMIT_PER_HOUR", "5")),
+                window_seconds=3600,
+            )
 
             streamable_http_manager = StreamableHTTPSessionManager(app=server.server, stateless=False)
             streamable_http_app = StreamableHTTPASGIApp(streamable_http_manager)
@@ -916,7 +963,64 @@ async def main():
                             response = JSONResponse({"detail": "Invalid or missing API key"}, status_code=401)
                             await response(scope, receive, send)
                             return
-                    await streamable_http_app(scope, receive, send)
+                    principal_token = _request_principal.set(auth.api_key_principal(provided) if provided else None)
+                    try:
+                        await streamable_http_app(scope, receive, send)
+                    finally:
+                        _request_principal.reset(principal_token)
+
+            class HostedRateLimitMiddleware:
+                """Apply generous abuse limits without charging health probes."""
+
+                def __init__(self, wrapped_app):
+                    self.app = wrapped_app
+
+                @staticmethod
+                def _headers(scope):
+                    return {
+                        key.decode("latin1").lower(): value.decode("latin1") for key, value in scope.get("headers", [])
+                    }
+
+                @staticmethod
+                def _client_ip(scope, headers):
+                    return headers.get("cf-connecting-ip") or (scope.get("client") or ("unknown", 0))[0]
+
+                async def _reject(self, scope, receive, send, retry_after):
+                    response = JSONResponse(
+                        {"detail": "Rate limit exceeded"},
+                        status_code=429,
+                        headers={"Retry-After": str(retry_after)},
+                    )
+                    await response(scope, receive, send)
+
+                async def __call__(self, scope, receive, send):
+                    if scope.get("type") != "http" or scope.get("path") == "/health":
+                        await self.app(scope, receive, send)
+                        return
+
+                    headers = self._headers(scope)
+                    client_ip = self._client_ip(scope, headers)
+                    allowed, retry_after = ip_rate_limiter.check(client_ip)
+                    if not allowed:
+                        await self._reject(scope, receive, send, retry_after)
+                        return
+
+                    if scope.get("path") == "/v2/api-keys/request":
+                        allowed, retry_after = issue_rate_limiter.check(client_ip)
+                        if not allowed:
+                            await self._reject(scope, receive, send, retry_after)
+                            return
+
+                    auth_header = headers.get("authorization", "")
+                    bearer = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else None
+                    provided = headers.get("x-api-key") or bearer
+                    identity = auth.api_key_principal(provided) if provided else f"ip:{client_ip}"
+                    allowed, retry_after = key_rate_limiter.check(identity)
+                    if not allowed:
+                        await self._reject(scope, receive, send, retry_after)
+                        return
+
+                    await self.app(scope, receive, send)
 
             @asynccontextmanager
             async def lifespan(_app):
@@ -924,6 +1028,7 @@ async def main():
                     yield
 
             app = FastAPI(lifespan=lifespan)
+            app.add_middleware(HostedRateLimitMiddleware)
             app.mount("/mcp", MCPAuthApp())
 
             # --- Authentication Endpoints ---
@@ -1005,9 +1110,9 @@ async def main():
                 expected_key = os.environ.get("MCP_API_KEY")
                 if provided:
                     if expected_key and secrets.compare_digest(provided, expected_key):
-                        return provided
+                        return auth.api_key_principal(provided)
                     if auth.is_api_key_valid(provided):
-                        return provided
+                        return auth.api_key_principal(provided)
                     raise HTTPException(status_code=401, detail="Invalid API key")
                 if expected_key or auth.any_api_keys_exist():
                     raise HTTPException(status_code=401, detail="Missing API key")
@@ -1022,7 +1127,7 @@ async def main():
                 return status
 
             @app.get("/search")
-            async def search(query: str = "", limit: int = 5, api_key: str = Depends(verify_api_key)):
+            async def search(query: str = "", limit: int = 5, principal_id: str = Depends(verify_api_key)):
                 def _to_json_safe(value):
                     if isinstance(value, dict):
                         return {k: _to_json_safe(v) for k, v in value.items()}
@@ -1035,7 +1140,11 @@ async def main():
                             return value
                     return value
 
-                results = await server.rag_service.search_docs(query=query, limit=limit)
+                results = await server.rag_service.search_docs(
+                    query=query,
+                    limit=limit,
+                    runtime_weights=auth.get_principal_weights(principal_id),
+                )
                 # Promote common chunk metadata fields to top-level for convenience
                 for r in results:
                     data = r.get("data") if isinstance(r.get("data"), dict) else {}
@@ -1143,30 +1252,49 @@ async def main():
                     return JSONResponse({"error": str(exc)}, status_code=500)
 
             @app.post("/weight")
-            async def weight(request: Request, api_key: str = Depends(verify_api_key)):
+            async def weight(request: Request, principal_id: str = Depends(verify_api_key)):
                 # Compatibility endpoint for older GPT action schemas.
                 data = await request.json()
                 doc_id = data.get("doc_id") or data.get("path")
                 if not doc_id:
                     raise HTTPException(status_code=400, detail="doc_id or path is required")
                 multiplier = float(data.get("multiplier", 1.0))
-                namespace = data.get("namespace", "global")
                 ttl_days = data.get("ttl_days")
-                await server.rag_service.set_weight(
-                    doc_id=str(doc_id),
-                    multiplier=multiplier,
-                    namespace=str(namespace),
-                    ttl_days=ttl_days,
-                )
-                return {"status": "success", "doc_id": str(doc_id), "multiplier": multiplier}
+                if principal_id:
+                    multiplier = auth.set_principal_weight(
+                        principal_id=principal_id,
+                        doc_id=str(doc_id),
+                        multiplier=multiplier,
+                        ttl_days=ttl_days,
+                    )
+                    scope = "personal_api_key"
+                else:
+                    await server.rag_service.set_weight(
+                        doc_id=str(doc_id),
+                        multiplier=multiplier,
+                        namespace="local",
+                        ttl_days=ttl_days,
+                    )
+                    multiplier = max(0.5, min(multiplier, 2.0))
+                    scope = "local_server_process"
+                return {
+                    "status": "success",
+                    "doc_id": str(doc_id),
+                    "multiplier": multiplier,
+                    "scope": scope,
+                }
 
             @app.post("/embeddings/sql")
-            async def embeddings_sql(request: Request, api_key: str = Depends(verify_api_key)):
+            async def embeddings_sql(request: Request, principal_id: str = Depends(verify_api_key)):
                 data = await request.json()
                 sql = data.get("sql", "")
                 # Reuse search_docs as a lightweight fallback for SQL-like queries
                 try:
-                    rows = await server.rag_service.search_docs(query=sql, limit=500)
+                    rows = await server.rag_service.search_docs(
+                        query=sql,
+                        limit=500,
+                        runtime_weights=auth.get_principal_weights(principal_id),
+                    )
                 except Exception:
                     rows = []
                 return {"rows": rows}
@@ -1177,7 +1305,7 @@ async def main():
                 return {"github_url": meta.github_url}
 
             @app.post("/rebuild")
-            async def rebuild_embeddings(request: Request, api_key: str = Depends(verify_api_key)):
+            async def rebuild_embeddings(request: Request, _admin_key: str = Depends(_require_admin_api_key)):
                 """Trigger a rebuild of the embeddings index"""
                 import subprocess
 
