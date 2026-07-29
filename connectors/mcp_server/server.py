@@ -157,7 +157,12 @@ class NancyMCPServer:
                 ),
                 types.Tool(
                     name="set_retrieval_weights",
-                    description="Set retrieval weights to prioritize certain namespaces or document types",
+                    description=(
+                        "Set a persistent retrieval preference for this authenticated API key. "
+                        "It affects only future searches made with the same key and never changes "
+                        "another user's ranking. Use it for broadly useful or unhelpful sources, "
+                        "not one-query relevance."
+                    ),
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -699,7 +704,7 @@ class NancyMCPServer:
                 clamped_weight,
                 ttl_days=ttl_days,
             )
-            scope_label = "Personal API key"
+            scope_label = "This authenticated API key only"
         else:
             await self.rag_service.set_weight(
                 doc_id,
@@ -720,7 +725,11 @@ class NancyMCPServer:
         response_text += f"Scope: `{scope_label}`\n"
         if ttl_days:
             response_text += f"TTL: `{ttl_days}` days\n"
-        response_text += "\nThis will adjust the document's ranking in future searches."
+        response_text += "\nThis will adjust the document's ranking in future searches"
+        if principal:
+            response_text += " made with this API key; other users are unaffected."
+        else:
+            response_text += " in this local server process."
 
         return [types.TextContent(type="text", text=response_text)]
 
