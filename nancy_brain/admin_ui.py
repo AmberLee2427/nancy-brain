@@ -102,9 +102,11 @@ def _inject_brand_shell():
             padding-top: 1.5rem;
         }}
 
-        [data-testid="stSidebar"] h1 {{
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebarUserContent"] h1 {{
             font-family: var(--nb-display);
-            font-size: 1.25rem;
+            font-size: 2.3rem !important;
+            line-height: 1 !important;
             letter-spacing: -0.02em;
         }}
 
