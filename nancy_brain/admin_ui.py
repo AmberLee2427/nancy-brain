@@ -255,7 +255,7 @@ def _inject_brand_shell():
 
         @media (max-width: 700px) {{
             [data-testid="stMainBlockContainer"] {{
-                padding-top: 1rem;
+                padding-top: 4.5rem;
             }}
 
             .nb-admin-hero {{
