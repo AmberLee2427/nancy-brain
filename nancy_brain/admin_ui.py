@@ -1,6 +1,9 @@
 """Nancy Brain Web UI - Simple admin interface for knowledge base management."""
 
 import asyncio
+import base64
+from functools import lru_cache
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +14,7 @@ import sys
 import os
 import logging
 import traceback
+from PIL import Image
 
 # Add package root to path
 package_root = Path(__file__).parent.parent
@@ -30,6 +34,251 @@ except Exception:
     from nancy_brain.utils_weights import validate_weights_config
 
 from nancy_brain.weights_persistence import load_model_weights, save_model_weights, set_model_weight
+
+
+@lru_cache(maxsize=4)
+def _asset_data_uri(filename: str) -> str:
+    """Return a compact cached rendition of a bundled brand asset."""
+
+    path = package_root / "site" / filename
+    try:
+        with Image.open(path) as image:
+            image.thumbnail((320, 320), Image.Resampling.LANCZOS)
+            output = BytesIO()
+            image.save(output, format="WEBP", quality=88, method=6)
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    except OSError:
+        return ""
+    return f"data:image/webp;base64,{encoded}"
+
+
+def _inject_brand_shell():
+    """Apply the shared Nancy visual system without changing widget behavior."""
+
+    logo_uri = _asset_data_uri("nancy-brain.png")
+    st.markdown(
+        f"""
+        <style>
+        :root {{
+            --nb-ink: #210b2d;
+            --nb-ink-soft: #32103f;
+            --nb-panel: rgba(49, 25, 58, 0.78);
+            --nb-orchid: #a84496;
+            --nb-rose: #ef91b7;
+            --nb-starlight: #fff3dc;
+            --nb-text: #fff8f0;
+            --nb-muted: rgba(255, 248, 240, 0.68);
+            --nb-line: rgba(255, 225, 238, 0.14);
+            --nb-display: "Avenir Next Condensed", "Gill Sans", sans-serif;
+            --nb-body: "Avenir Next", "Segoe UI", sans-serif;
+        }}
+
+        html, body, [class*="css"] {{
+            font-family: var(--nb-body);
+        }}
+
+        [data-testid="stAppViewContainer"] {{
+            color: var(--nb-text);
+            background:
+                radial-gradient(circle at 88% 8%, rgba(168, 68, 150, 0.16), transparent 27rem),
+                linear-gradient(90deg, transparent 49.85%, rgba(239, 145, 183, 0.035) 50%, transparent 50.15%),
+                #130d18;
+            background-size: auto, 5rem 100%, auto;
+        }}
+
+        [data-testid="stHeader"] {{
+            background: rgba(19, 13, 24, 0.84);
+            border-bottom: 1px solid var(--nb-line);
+        }}
+
+        [data-testid="stSidebar"] {{
+            background:
+                linear-gradient(180deg, rgba(168, 68, 150, 0.1), transparent 16rem),
+                #1d1223;
+            border-right: 1px solid var(--nb-line);
+        }}
+
+        [data-testid="stSidebar"] > div:first-child {{
+            padding-top: 1.5rem;
+        }}
+
+        [data-testid="stSidebar"] h1 {{
+            font-family: var(--nb-display);
+            font-size: 1.25rem;
+            letter-spacing: -0.02em;
+        }}
+
+        [data-testid="stMainBlockContainer"] {{
+            max-width: 88rem;
+            padding-top: 2.2rem;
+            padding-bottom: 5rem;
+        }}
+
+        h1, h2, h3 {{
+            font-family: var(--nb-display) !important;
+            letter-spacing: -0.035em !important;
+        }}
+
+        h1 {{
+            font-size: clamp(2.2rem, 5vw, 4rem) !important;
+            line-height: 0.98 !important;
+        }}
+
+        h2 {{
+            margin-top: 1.8rem !important;
+            padding-bottom: 0.55rem;
+            border-bottom: 1px solid var(--nb-line);
+        }}
+
+        .nb-admin-hero {{
+            position: relative;
+            display: grid;
+            grid-template-columns: 6.5rem minmax(0, 1fr);
+            gap: 1.4rem;
+            align-items: center;
+            margin-bottom: 2.2rem;
+            padding: 1.4rem 1.6rem;
+            overflow: hidden;
+            background: rgba(49, 25, 58, 0.64);
+            border: 1px solid var(--nb-line);
+            border-radius: 1rem;
+            box-shadow: 0 20px 55px rgba(0, 0, 0, 0.24);
+        }}
+
+        .nb-admin-hero::after {{
+            position: absolute;
+            right: -4%;
+            bottom: -58%;
+            width: 48%;
+            height: 100%;
+            border: 2px solid rgba(255, 243, 220, 0.45);
+            border-color: rgba(255, 243, 220, 0.45) transparent transparent;
+            border-radius: 50%;
+            transform: rotate(-8deg);
+            content: "";
+        }}
+
+        .nb-admin-hero img {{
+            width: 6.5rem;
+            height: 6.5rem;
+            object-fit: cover;
+            border-radius: 0.85rem;
+        }}
+
+        .nb-admin-hero__copy {{
+            position: relative;
+            z-index: 1;
+        }}
+
+        .nb-admin-hero__eyebrow {{
+            margin: 0 0 0.25rem;
+            color: var(--nb-rose);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }}
+
+        .nb-admin-hero h1 {{
+            margin: 0;
+            color: var(--nb-text);
+            font-size: clamp(2rem, 4vw, 3.4rem) !important;
+        }}
+
+        .nb-admin-hero p:last-child {{
+            margin: 0.35rem 0 0;
+            color: var(--nb-muted);
+        }}
+
+        [data-testid="stForm"],
+        [data-testid="stExpander"],
+        [data-testid="stMetric"],
+        [data-testid="stFileUploader"] {{
+            background: var(--nb-panel);
+            border: 1px solid var(--nb-line);
+            border-radius: 0.75rem;
+        }}
+
+        [data-testid="stForm"] {{
+            padding: 1.1rem;
+        }}
+
+        .stButton > button,
+        .stDownloadButton > button,
+        [data-testid="stFormSubmitButton"] > button {{
+            min-height: 2.65rem;
+            color: var(--nb-starlight);
+            font-weight: 700;
+            background: transparent;
+            border: 1px solid rgba(239, 145, 183, 0.58);
+            border-radius: 999px;
+        }}
+
+        .stButton > button:hover,
+        .stDownloadButton > button:hover,
+        [data-testid="stFormSubmitButton"] > button:hover {{
+            color: #24102e;
+            background: var(--nb-starlight);
+            border-color: var(--nb-starlight);
+        }}
+
+        input,
+        textarea,
+        [data-baseweb="select"] > div {{
+            color: var(--nb-text) !important;
+            background: rgba(12, 8, 15, 0.76) !important;
+            border-color: var(--nb-line) !important;
+            border-radius: 0.55rem !important;
+        }}
+
+        [data-testid="stAlert"] {{
+            border: 1px solid var(--nb-line);
+            border-radius: 0.65rem;
+        }}
+
+        [data-baseweb="tab-list"] {{
+            gap: 0.4rem;
+            border-bottom: 1px solid var(--nb-line);
+        }}
+
+        [data-baseweb="tab"] {{
+            padding-right: 1rem;
+            padding-left: 1rem;
+            border-radius: 0.55rem 0.55rem 0 0;
+        }}
+
+        code {{
+            border-radius: 0.25rem;
+        }}
+
+        @media (max-width: 700px) {{
+            [data-testid="stMainBlockContainer"] {{
+                padding-top: 1rem;
+            }}
+
+            .nb-admin-hero {{
+                grid-template-columns: 4.5rem minmax(0, 1fr);
+                gap: 0.9rem;
+                padding: 1rem;
+            }}
+
+            .nb-admin-hero img {{
+                width: 4.5rem;
+                height: 4.5rem;
+            }}
+        }}
+        </style>
+        <section class="nb-admin-hero">
+          <img src="{logo_uri}" alt="Nancy Brain logo">
+          <div class="nb-admin-hero__copy">
+            <p class="nb-admin-hero__eyebrow">Operator console</p>
+            <h1>Nancy Brain</h1>
+            <p>Search, tune, and maintain the microlensing knowledge service.</p>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _discover_project_root() -> Path:
@@ -180,13 +429,10 @@ def run_ui():
     st.set_page_config(page_title="Nancy Brain Admin", page_icon="🧠", layout="wide")
 
     _init_session_state_safe()
-
-    # Main UI
-    st.title("🧠 Nancy Brain Admin")
-    st.markdown("*Turn GitHub repos into AI-searchable knowledge bases*")
+    _inject_brand_shell()
 
     # Sidebar navigation + auth
-    st.sidebar.title("Navigation")
+    st.sidebar.title("Nancy Brain")
     allow_insecure = os.environ.get("NB_ALLOW_INSECURE", "false").lower() in ("1", "true", "yes")
 
     with st.sidebar.expander("🔒 Authentication", expanded=True):
@@ -214,16 +460,16 @@ def run_ui():
         if allow_insecure:
             st.info("NB_ALLOW_INSECURE is set: auth bypass enabled")
 
-    page = st.sidebar.selectbox(
-        "Choose a page:",
-        ["🔍 Search", "⚖️ Weights", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"],
-    )
-
     is_authenticated = bool(st.session_state.nb_token) or allow_insecure
 
     if not is_authenticated:
         st.warning("You must be logged in to use the admin UI. Use the sidebar to login.")
         return
+
+    page = st.sidebar.selectbox(
+        "Choose a page:",
+        ["🔍 Search", "⚖️ Weights", "📚 Repository Management", "🏗️ Build Knowledge Base", "📊 Status"],
+    )
 
     if page == "🔍 Search":
         st.header("🔍 Search Knowledge Base")
