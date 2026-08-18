@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # --- Config (from environment) ---
 SECRET_KEY = os.environ.get("NB_SECRET_KEY", "nancy-brain-dev-key")
@@ -96,8 +96,33 @@ def create_api_key_table():
     conn.close()
 
 
+def create_api_key_weight_table():
+    conn = get_db()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS api_key_weights (
+            principal_id TEXT NOT NULL,
+            doc_id TEXT NOT NULL,
+            multiplier REAL NOT NULL,
+            expires_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (principal_id, doc_id)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
 def _hash_api_key(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def api_key_principal(api_key: str) -> str:
+    """Return a stable, non-secret identifier for an API key."""
+    if not api_key:
+        raise ValueError("api_key is required")
+    return _hash_api_key(api_key)
 
 
 def _normalize_optional(value: Optional[str]) -> Optional[str]:
@@ -162,6 +187,70 @@ def any_api_keys_exist() -> bool:
     try:
         row = conn.execute("SELECT 1 FROM api_keys WHERE revoked = 0 LIMIT 1").fetchone()
         return row is not None
+    finally:
+        conn.close()
+
+
+def set_principal_weight(
+    principal_id: str,
+    doc_id: str,
+    multiplier: float,
+    ttl_days: Optional[int] = None,
+) -> float:
+    """Persist one principal's retrieval preference and return the clamped value."""
+    if not principal_id:
+        raise ValueError("principal_id is required")
+    if not doc_id:
+        raise ValueError("doc_id is required")
+
+    value = max(0.5, min(float(multiplier), 2.0))
+    expires_at = None
+    if ttl_days is not None:
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=max(int(ttl_days), 0))).strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO api_key_weights
+                (principal_id, doc_id, multiplier, expires_at, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(principal_id, doc_id) DO UPDATE SET
+                multiplier = excluded.multiplier,
+                expires_at = excluded.expires_at,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (principal_id, doc_id, value, expires_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return value
+
+
+def get_principal_weights(principal_id: str) -> dict[str, float]:
+    """Load active retrieval preferences for one API-key principal."""
+    if not principal_id:
+        return {}
+
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            DELETE FROM api_key_weights
+            WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP
+            """
+        )
+        rows = conn.execute(
+            """
+            SELECT doc_id, multiplier
+            FROM api_key_weights
+            WHERE principal_id = ?
+            """,
+            (principal_id,),
+        ).fetchall()
+        conn.commit()
+        return {str(row["doc_id"]): float(row["multiplier"]) for row in rows}
     finally:
         conn.close()
 

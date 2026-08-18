@@ -118,7 +118,14 @@ class Search:
     def _single_embedding_search(self, query: str, limit: int) -> List[Dict[str, str]]:
         """Perform search with single embedding model (backward compatibility)."""
         results = self.general_embeddings.search(query, limit * 50)
-        fallback = self._id_match_fallback(query, {r.get("id") for r in results}, limit * 2)
+        semantic_scores = [float(r.get("score", 0.0)) for r in results]
+        fallback_score = max(semantic_scores, default=0.55) - 0.05
+        fallback = self._id_match_fallback(
+            query,
+            {r.get("id") for r in results},
+            limit * 2,
+            score=max(0.0, fallback_score),
+        )
         if fallback:
             results.extend(fallback)
         # Attach highlights computed from query
@@ -238,47 +245,99 @@ class Search:
         # Send all merged results - let _process_and_rank_results do the reweighting and limiting
         return self._process_and_rank_results(merged_results, limit, dual_scores=True)
 
-    def _id_match_fallback(self, query: str, existing_ids: Set[str], limit: int) -> List[Dict]:
-        """Fallback that surfaces documents whose IDs contain query tokens (repo names, paths, etc.)."""
+    @staticmethod
+    def _identifier_tokens(query: str) -> List[str]:
+        """Return path-like query tokens worth matching against document IDs."""
+        if not query:
+            return []
+
+        stripped = query.strip()
+        path_like = "/" in stripped or "\\" in stripped
+        slug_like = not re.search(r"\s", stripped) and any(separator in stripped for separator in ("-", "_"))
+        tokens = []
+        for piece in re.split(r"[\s/\\,_-]+", stripped):
+            piece = piece.strip()
+            if len(piece) < 3:
+                continue
+
+            acronym = piece.isupper() and any(character.isalpha() for character in piece)
+            camel_case = any(character.isupper() for character in piece[1:])
+            contains_digit = any(character.isdigit() for character in piece)
+            if path_like or slug_like or acronym or camel_case or contains_digit:
+                token = piece.lower()
+                if token not in tokens:
+                    tokens.append(token)
+
+        return tokens
+
+    @classmethod
+    def _is_identifier_query(cls, query: str) -> bool:
+        """Return whether path matching should participate in this query."""
+        stripped = (query or "").strip()
+        if not stripped:
+            return False
+        if "/" in stripped or "\\" in stripped:
+            return True
+        if not re.search(r"\s", stripped) and any(separator in stripped for separator in ("-", "_")):
+            return True
+
+        significant_tokens = [piece for piece in re.split(r"[\s/\\,_-]+", stripped) if len(piece.strip()) >= 3]
+        return bool(cls._identifier_tokens(stripped)) and len(significant_tokens) <= 2
+
+    def _id_match_fallback(
+        self,
+        query: str,
+        existing_ids: Set[str],
+        limit: int,
+        score: float = 0.5,
+    ) -> List[Dict]:
+        """Surface one document per identifier-like path match."""
         if not query or limit <= 0:
             return []
-        tokens = []
-        for piece in re.split(r"[\\s/\\\\,_-]+", query):
-            token = piece.strip().lower()
-            if len(token) >= 3:
-                tokens.append(token)
-        if not tokens:
+
+        if not self._is_identifier_query(query):
             return []
+        tokens = self._identifier_tokens(query)
+
         db_path = self.embeddings_path / "index" / "documents"
         if not db_path.exists():
             return []
+
         matches: List[Dict] = []
         seen = set(existing_ids or set())
+        seen_documents = {strip_chunk_suffix(doc_id) for doc_id in seen if doc_id}
         try:
             conn = sqlite3.connect(str(db_path))
         except Exception:
             return []
         try:
-            for tok in tokens[:3]:  # limit the LIKE scans
+            for tok in tokens[:3]:
                 like = f"%{tok}%"
                 try:
                     cursor = conn.execute(
-                        "SELECT id, text FROM sections WHERE lower(id) LIKE ? ORDER BY entry DESC LIMIT ?",
-                        (like, limit * 2),
+                        "SELECT id, text FROM sections WHERE lower(id) LIKE ? ORDER BY id LIMIT ?",
+                        (like, limit * 20),
                     )
                 except Exception:
                     continue
                 for doc_id, text in cursor.fetchall():
-                    if not doc_id or doc_id in seen:
+                    if not doc_id:
+                        continue
+                    base_doc_id = strip_chunk_suffix(doc_id)
+                    if doc_id in seen or base_doc_id in seen_documents:
                         continue
                     seen.add(doc_id)
-                    base_doc_id = strip_chunk_suffix(doc_id)
+                    seen_documents.add(base_doc_id)
                     matches.append(
                         {
                             "id": doc_id,
                             "text": text or "",
-                            "score": 0.95,
-                            "data": {"source_document": base_doc_id, "match_reason": "id_substring"},
+                            "score": score,
+                            "data": {
+                                "source_document": base_doc_id,
+                                "match_reason": "identifier_path",
+                                "matched_identifier": tok,
+                            },
                         }
                     )
                     if len(matches) >= limit:
@@ -379,9 +438,28 @@ class Search:
         # Sort by adjusted_score, descending
         formatted_results.sort(key=lambda r: r["adjusted_score"], reverse=True)
 
+        # Keep one large file from monopolizing the result set while still
+        # allowing a second independently relevant passage from that file.
+        diversified_results = []
+        source_counts: Dict[str, int] = {}
+        for result in formatted_results:
+            source_document = result["source_document"]
+            count = source_counts.get(source_document, 0)
+            if count >= 2:
+                continue
+            diversified_results.append(result)
+            source_counts[source_document] = count + 1
+            if len(diversified_results) >= limit:
+                break
+
         # Log search results
         dual_info = " (dual embedding)" if dual_scores else ""
-        logger.info(f"Found {len(formatted_results)} results{dual_info} (sorted by adjusted_score)")
+        logger.info(
+            "Found %d results%s; returning %d after source diversification",
+            len(formatted_results),
+            dual_info,
+            len(diversified_results),
+        )
 
         # Compute lightweight highlights (offsets) for each result based on the query
         def compute_highlights(text: str, query: str) -> List[Dict]:
@@ -460,7 +538,7 @@ class Search:
 
         # If query not available in this scope, we can't compute highlights; skip.
         # The UI will prefer highlights if provided by the service layer. We add empty highlights here.
-        for r in formatted_results:
+        for r in diversified_results:
             r.setdefault("highlights", [])
 
-        return formatted_results[:limit]
+        return diversified_results

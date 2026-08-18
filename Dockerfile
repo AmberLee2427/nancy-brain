@@ -22,7 +22,11 @@ COPY scripts ./scripts
 COPY hatch_hooks.py ./
 COPY run_mcp_server.py ./
 
-# Install Python dependencies
+# This VM is CPU-only. Install the CPU wheel first so the broad torch
+# dependency below doesn't pull several gigabytes of unused CUDA libraries.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install the remaining Python dependencies
 RUN pip install --no-cache-dir -e .
 
 # Pre-download local summarization model so it is ready at runtime
