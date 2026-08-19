@@ -26,7 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from mcp import stdio_server
 from mcp import types
-from mcp.server import InitializationOptions, NotificationOptions, Server
+from mcp.server import NotificationOptions
+from mcp.server.lowlevel import Server
 
 from nancy_brain.chunking import strip_chunk_suffix
 from rag_core.service import RAGService, normalize_document_path
@@ -39,17 +40,18 @@ class NancyMCPServer:
     """Nancy Brain MCP Server implementation."""
 
     def __init__(self):
-        self.server = Server("nancy-brain")
         self.rag_service: Optional[RAGService] = None
-        self._setup_handlers()
+        self.server = Server(
+            "nancy-brain",
+            version="1.0.0",
+            on_list_tools=self._list_tools,
+            on_call_tool=self._call_tool,
+        )
 
-    def _setup_handlers(self):
-        """Set up MCP server handlers."""
-
-        @self.server.list_tools()
-        async def handle_list_tools() -> list[types.Tool]:
-            """List available tools."""
-            return [
+    async def _list_tools(self, _context=None, _params=None) -> types.ListToolsResult:
+        """List the tools exposed through both modern and legacy MCP."""
+        return types.ListToolsResult(
+            tools=[
                 types.Tool(
                     name="search_knowledge_base",
                     description="Search Nancy's knowledge base for relevant documents and code",
@@ -201,37 +203,43 @@ class NancyMCPServer:
                     inputSchema={"type": "object", "properties": {}},
                 ),
             ]
+        )
 
-        @self.server.call_tool()
-        async def handle_call_tool(
-            name: str, arguments: Dict[str, Any]
-        ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-            """Handle tool calls."""
-            if not self.rag_service:
-                return [
+    async def _call_tool(self, _context=None, params=None) -> types.CallToolResult:
+        """Dispatch a tool call from either MCP protocol generation."""
+        name = params.name
+        arguments = params.arguments or {}
+        if not self.rag_service:
+            return types.CallToolResult(
+                content=[
                     types.TextContent(
                         type="text",
                         text="❌ Nancy Brain service not initialized. Please check server configuration.",
                     )
                 ]
+            )
 
-            try:
-                if name == "search_knowledge_base":
-                    return await self._handle_search(arguments)
-                elif name == "retrieve_document_passage":
-                    return await self._handle_retrieve(arguments)
-                elif name == "retrieve_multiple_passages":
-                    return await self._handle_retrieve_batch(arguments)
-                elif name == "explore_document_tree":
-                    return await self._handle_tree(arguments)
-                elif name == "set_retrieval_weights":
-                    return await self._handle_set_weights(arguments)
-                elif name == "get_system_status":
-                    return await self._handle_status(arguments)
-                else:
-                    return [types.TextContent(type="text", text=f"❌ Unknown tool: {name}")]
-            except Exception as e:
-                return [types.TextContent(type="text", text=f"❌ Error executing {name}: {str(e)}")]
+        try:
+            if name == "search_knowledge_base":
+                content = await self._handle_search(arguments)
+            elif name == "retrieve_document_passage":
+                content = await self._handle_retrieve(arguments)
+            elif name == "retrieve_multiple_passages":
+                content = await self._handle_retrieve_batch(arguments)
+            elif name == "explore_document_tree":
+                content = await self._handle_tree(arguments)
+            elif name == "set_retrieval_weights":
+                content = await self._handle_set_weights(arguments)
+            elif name == "get_system_status":
+                content = await self._handle_status(arguments)
+            else:
+                content = [types.TextContent(type="text", text=f"❌ Unknown tool: {name}")]
+            return types.CallToolResult(content=content)
+        except Exception as e:
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=f"❌ Error executing {name}: {str(e)}")],
+                isError=True,
+            )
 
     def _parse_chunk_id(self, doc_id: str):
         """Parse chunk identifiers and return (base, marker, index, width)."""
@@ -832,13 +840,9 @@ class NancyMCPServer:
             await self.server.run(
                 read_stream,
                 write_stream,
-                InitializationOptions(
-                    server_name="nancy-brain",
-                    server_version="1.0.0",
-                    capabilities=self.server.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
-                    ),
+                self.server.create_initialization_options(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
                 ),
             )
 
@@ -918,8 +922,6 @@ async def main():
         def build_http_app():
             from fastapi import FastAPI, Request, HTTPException, Header, Depends
             from fastapi.security import OAuth2PasswordRequestForm
-            from mcp.server.fastmcp.server import StreamableHTTPASGIApp
-            from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
             from starlette.responses import JSONResponse
             from typing import Optional
             from connectors.http_api import auth
@@ -944,8 +946,13 @@ async def main():
                 window_seconds=3600,
             )
 
-            streamable_http_manager = StreamableHTTPSessionManager(app=server.server, stateless=False)
-            streamable_http_app = StreamableHTTPASGIApp(streamable_http_manager)
+            # MCP 2 serves the sessionless 2026 protocol and legacy sessionful
+            # clients from the same endpoint.
+            streamable_http_app = server.server.streamable_http_app(
+                streamable_http_path="/",
+                stateless_http=False,
+                host="0.0.0.0",
+            )
 
             def _is_valid_api_key(value: Optional[str]) -> bool:
                 expected_key = os.environ.get("MCP_API_KEY")
@@ -1033,7 +1040,7 @@ async def main():
 
             @asynccontextmanager
             async def lifespan(_app):
-                async with streamable_http_manager.run():
+                async with streamable_http_app.router.lifespan_context(streamable_http_app):
                     yield
 
             app = FastAPI(lifespan=lifespan)

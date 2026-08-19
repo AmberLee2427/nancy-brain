@@ -130,6 +130,52 @@ def _parse_sse_json(body: str) -> dict:
     raise AssertionError(f"No SSE data payload found in response body: {body[:200]!r}")
 
 
+def _parse_mcp_json(response) -> dict:
+    if "application/json" in response.headers.get("Content-Type", ""):
+        return response.json()
+    return _parse_sse_json(response.text)
+
+
+def test_mcp_2026_discovery_is_sessionless(mcp_http_server):
+    """MCP 2 clients can discover and list tools without a session handshake."""
+    mcp_url = f"{mcp_http_server['base_url']}/mcp/"
+    meta = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {"name": "pytest-modern", "version": "1.0"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2026-07-28",
+        "MCP-Method": "server/discover",
+        "X-API-Key": "test-key",
+    }
+    discover = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "server/discover",
+        "params": {"_meta": meta},
+    }
+    discover_resp = requests.post(mcp_url, headers=headers, json=discover, timeout=30)
+    assert discover_resp.status_code == 200
+    assert "mcp-session-id" not in discover_resp.headers
+    assert "2026-07-28" in _parse_mcp_json(discover_resp)["result"]["supportedVersions"]
+
+    headers["MCP-Method"] = "tools/list"
+    tools_request = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {"_meta": meta},
+    }
+    tools_resp = requests.post(mcp_url, headers=headers, json=tools_request, timeout=30)
+    assert tools_resp.status_code == 200
+    assert "mcp-session-id" not in tools_resp.headers
+    tool_names = {tool["name"] for tool in _parse_mcp_json(tools_resp)["result"]["tools"]}
+    assert "search_knowledge_base" in tool_names
+
+
 def test_mcp_streamable_http_initialize_and_list_tools(mcp_http_server):
     mcp_url = f"{mcp_http_server['base_url']}/mcp/"
     headers = {
@@ -252,7 +298,7 @@ def test_personal_key_weights_are_scoped_through_mcp_and_cannot_rebuild(mcp_http
     assert weight_resp.status_code == 200
     payload = _parse_sse_json(weight_resp.text)
     assert payload["result"]["isError"] is False
-    assert "Personal API key" in payload["result"]["content"][0]["text"]
+    assert "other users are unaffected" in payload["result"]["content"][0]["text"]
 
     principal = hashlib.sha256(personal_key.encode("utf-8")).hexdigest()
     with sqlite3.connect(mcp_http_server["users_db"]) as conn:

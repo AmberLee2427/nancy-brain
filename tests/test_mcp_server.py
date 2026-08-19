@@ -1004,11 +1004,10 @@ def test_retrieve_chunk_window_chunk_without_line_info(tmp_path):
 
 @pytest.mark.asyncio
 async def test_list_tools_handler():
-    """handle_list_tools closure returns all expected tools."""
+    """The low-level MCP 2 handler returns all expected tools."""
     server = NancyMCPServer()
-    handler = server.server.request_handlers[mcp_types.ListToolsRequest]
-    result = await handler(mcp_types.ListToolsRequest(method="tools/list"))
-    tool_names = {t.name for t in result.root.tools}
+    result = await server._list_tools()
+    tool_names = {t.name for t in result.tools}
     assert "search_knowledge_base" in tool_names
     assert "retrieve_document_passage" in tool_names
     assert "explore_document_tree" in tool_names
@@ -1020,13 +1019,9 @@ async def test_list_tools_handler():
 async def test_call_tool_handler_no_service():
     """handle_call_tool returns 'not initialized' error when rag_service is None."""
     server = NancyMCPServer()
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(name="search_knowledge_base", arguments={"query": "test"}),
-    )
-    result = await handler(req)
-    assert "not initialized" in result.root.content[0].text
+    params = mcp_types.CallToolRequestParams(name="search_knowledge_base", arguments={"query": "test"})
+    result = await server._call_tool(params=params)
+    assert "not initialized" in result.content[0].text
 
 
 @pytest.mark.asyncio
@@ -1034,13 +1029,9 @@ async def test_call_tool_handler_unknown_tool(mock_rag_service):
     """handle_call_tool returns 'Unknown tool' for unrecognized tool names."""
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(name="nonexistent_tool", arguments={}),
-    )
-    result = await handler(req)
-    assert "Unknown tool" in result.root.content[0].text
+    params = mcp_types.CallToolRequestParams(name="nonexistent_tool", arguments={})
+    result = await server._call_tool(params=params)
+    assert "Unknown tool" in result.content[0].text
 
 
 @pytest.mark.asyncio
@@ -1053,13 +1044,10 @@ async def test_call_tool_handler_exception(mock_rag_service):
         raise RuntimeError("Unexpected crash")
 
     server._handle_search = raise_error
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(name="search_knowledge_base", arguments={"query": "test"}),
-    )
-    result = await handler(req)
-    assert "Error executing" in result.root.content[0].text
+    params = mcp_types.CallToolRequestParams(name="search_knowledge_base", arguments={"query": "test"})
+    result = await server._call_tool(params=params)
+    assert result.is_error is True
+    assert "Error executing" in result.content[0].text
 
 
 def test_fetch_section_row_metadata_column(tmp_path):
@@ -1177,16 +1165,12 @@ async def test_call_tool_handler_retrieve(mock_rag_service):
     """handle_call_tool dispatches retrieve_document_passage correctly."""
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="retrieve_document_passage",
-            arguments={"doc_id": "microlensing_tools/MulensModel/README.md"},
-        ),
+    params = mcp_types.CallToolRequestParams(
+        name="retrieve_document_passage",
+        arguments={"doc_id": "microlensing_tools/MulensModel/README.md"},
     )
-    result = await handler(req)
-    assert result.root.content[0].type == "text"
+    result = await server._call_tool(params=params)
+    assert result.content[0].type == "text"
 
 
 @pytest.mark.asyncio
@@ -1194,16 +1178,12 @@ async def test_call_tool_handler_retrieve_batch(mock_rag_service):
     """handle_call_tool dispatches retrieve_multiple_passages correctly."""
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="retrieve_multiple_passages",
-            arguments={"items": [{"doc_id": "doc.md"}]},
-        ),
+    params = mcp_types.CallToolRequestParams(
+        name="retrieve_multiple_passages",
+        arguments={"items": [{"doc_id": "doc.md"}]},
     )
-    result = await handler(req)
-    assert result.root.content[0].type == "text"
+    result = await server._call_tool(params=params)
+    assert result.content[0].type == "text"
 
 
 @pytest.mark.asyncio
@@ -1211,16 +1191,12 @@ async def test_call_tool_handler_explore_tree(mock_rag_service):
     """handle_call_tool dispatches explore_document_tree correctly."""
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="explore_document_tree",
-            arguments={"path": "microlensing_tools", "max_depth": 2},
-        ),
+    params = mcp_types.CallToolRequestParams(
+        name="explore_document_tree",
+        arguments={"path": "microlensing_tools", "max_depth": 2},
     )
-    result = await handler(req)
-    assert result.root.content[0].type == "text"
+    result = await server._call_tool(params=params)
+    assert result.content[0].type == "text"
 
 
 @pytest.mark.asyncio
@@ -1229,16 +1205,12 @@ async def test_call_tool_handler_set_weights(mock_rag_service):
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
     server.rag_service.set_weight = AsyncMock(return_value=True)
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="set_retrieval_weights",
-            arguments={"doc_id": "some/doc.py", "weight": 1.3},
-        ),
+    params = mcp_types.CallToolRequestParams(
+        name="set_retrieval_weights",
+        arguments={"doc_id": "some/doc.py", "weight": 1.3},
     )
-    result = await handler(req)
-    assert "Weight Updated" in result.root.content[0].text
+    result = await server._call_tool(params=params)
+    assert "Weight Updated" in result.content[0].text
 
 
 @pytest.mark.asyncio
@@ -1246,16 +1218,9 @@ async def test_call_tool_handler_get_system_status(mock_rag_service):
     """handle_call_tool dispatches get_system_status correctly."""
     server = NancyMCPServer()
     server.rag_service = mock_rag_service
-    handler = server.server.request_handlers[mcp_types.CallToolRequest]
-    req = mcp_types.CallToolRequest(
-        method="tools/call",
-        params=mcp_types.CallToolRequestParams(
-            name="get_system_status",
-            arguments={},
-        ),
-    )
-    result = await handler(req)
-    assert "Nancy Brain System Status" in result.root.content[0].text
+    params = mcp_types.CallToolRequestParams(name="get_system_status", arguments={})
+    result = await server._call_tool(params=params)
+    assert "Nancy Brain System Status" in result.content[0].text
 
 
 @pytest.mark.asyncio
