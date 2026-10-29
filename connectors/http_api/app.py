@@ -141,8 +141,8 @@ app = FastAPI(
     title="Nancy RAG API",
     description="REST API for Nancy's knowledge base search and retrieval",
     version="2.0.0",
-    openapi_version="3.0.3",
 )
+app.openapi_version = "3.0.3"
 auth.create_user_table()  # Ensure user table exists at startup
 auth.create_refresh_table()  # Ensure refresh token table exists
 auth.create_api_key_table()  # Ensure API key table exists

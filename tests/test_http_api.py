@@ -7,6 +7,11 @@ from fastapi.testclient import TestClient
 from connectors.http_api.app import app, initialize_rag_service, get_rag_service
 
 
+def test_http_openapi_version():
+    """Preserve schema version without a removed FastAPI constructor argument."""
+    assert app.openapi_version == "3.0.3"
+
+
 @pytest.fixture(autouse=True)
 def reset_app_state():
     """Reset the app's global state before and after each test."""
