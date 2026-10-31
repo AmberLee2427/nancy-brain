@@ -1,0 +1,1 @@
+Shared RGES-PIT visual style: Lato prose, Roboto Slab headings, DM Mono code. Fonts are bundled under the adjacent licenses (SIL OFL for Lato/DM Mono; Apache 2.0 for Roboto Slab). Family colour and geometry rules support Sphinx, MkDocs Material, Gladius and MLDB.

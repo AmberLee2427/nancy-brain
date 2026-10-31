@@ -1,7 +1,7 @@
 <section class="nancy-hero">
   <div>
     <p class="nancy-kicker">Open-source MCP knowledge infrastructure</p>
-    <h1>Build knowledge<br>your tools can<br>actually use.</h1>
+    <h1>Build knowledge your tools can actually use.</h1>
     <p class="nancy-hero__lede">
       Turn repositories, papers, documentation, and notebooks into a searchable
       knowledge base for agents, applications, and research teams.
@@ -57,19 +57,19 @@ nancy-brain search "machine learning algorithms"
     <span class="nancy-path__number">01 / BUILD</span>
     <h3>Create an index</h3>
     <p>Install the package, configure source repositories, and build a local knowledge base.</p>
-    <a href="quick-start/">Follow the quick start →</a>
+    <a href="quick-start/">Follow the quick start&nbsp;→</a>
   </article>
   <article class="nancy-path">
     <span class="nancy-path__number">02 / CONNECT</span>
     <h3>Give agents access</h3>
     <p>Connect VS Code, Claude Desktop, Gemini, or another MCP-capable client.</p>
-    <a href="integrations/vscode-mcp/">Browse integrations →</a>
+    <a href="integrations/vscode-mcp/">Browse integrations&nbsp;→</a>
   </article>
   <article class="nancy-path">
     <span class="nancy-path__number">03 / OPERATE</span>
     <h3>Run it persistently</h3>
     <p>Deploy the MCP and HTTP service with authentication, monitoring, and an admin UI.</p>
-    <a href="deployment/self-hosted/">Read the deployment guide →</a>
+    <a href="deployment/self-hosted/">Read the deployment guide&nbsp;→</a>
   </article>
 </div>
 
